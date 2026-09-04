@@ -1,0 +1,28 @@
+Starting solver...
+tolerance=1e-6
+iteration 1: residual=6.000000e-01
+iteration 2: residual=3.600000e-01
+iteration 3: residual=2.160000e-01
+iteration 4: residual=1.296000e-01
+iteration 5: residual=7.776000e-02
+iteration 6: residual=4.665600e-02
+iteration 7: residual=2.799360e-02
+iteration 8: residual=1.679616e-02
+iteration 9: residual=1.007770e-02
+iteration 10: residual=6.046618e-03
+iteration 11: residual=3.627971e-03
+iteration 12: residual=2.176782e-03
+iteration 13: residual=1.306069e-03
+iteration 14: residual=7.836416e-04
+iteration 15: residual=4.701850e-04
+iteration 16: residual=2.821110e-04
+iteration 17: residual=1.692666e-04
+iteration 18: residual=1.015600e-04
+iteration 19: residual=6.093597e-05
+iteration 20: residual=3.656158e-05
+iteration 21: residual=2.193695e-05
+iteration 22: residual=1.316217e-05
+iteration 23: residual=7.897302e-06
+iteration 24: residual=4.738381e-06
+iteration 25: residual=8.7e-07
+converged: residual below tolerance

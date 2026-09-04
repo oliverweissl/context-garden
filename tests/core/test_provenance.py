@@ -5,7 +5,7 @@ def test_provenance_record_to_dict():
     record = ProvenanceRecord(
         claim="convergence check passes",
         sources=[Source(type="file", uri="src/solver.cpp", content_hash="abc123")],
-        generated_by="numerical-sentinel",
+        generated_by="trellis",
     )
     data = record.to_dict()
 
@@ -13,7 +13,7 @@ def test_provenance_record_to_dict():
     assert data["sources"] == [
         {"type": "file", "uri": "src/solver.cpp", "content_hash": "abc123"}
     ]
-    assert data["generated_by"] == "numerical-sentinel"
+    assert data["generated_by"] == "trellis"
     assert "created_at" in data
 
 

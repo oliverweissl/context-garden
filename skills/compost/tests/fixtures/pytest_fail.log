@@ -1,0 +1,384 @@
+============================= test session starts ==============================
+collected 44 items
+
+test_solver_00 PASSED
+test_solver_01 PASSED
+test_solver_02 PASSED
+test_solver_03 PASSED
+test_solver_04 PASSED
+test_solver_05 PASSED
+test_solver_06 PASSED
+test_solver_07 FAILED
+test_solver_08 FAILED
+test_solver_09 FAILED
+test_solver_10 FAILED
+test_solver_11 FAILED
+test_solver_12 FAILED
+test_solver_13 FAILED
+test_solver_14 FAILED
+test_solver_15 FAILED
+test_solver_16 FAILED
+test_solver_17 FAILED
+test_solver_18 FAILED
+test_solver_19 FAILED
+test_solver_20 FAILED
+test_solver_21 FAILED
+test_solver_22 FAILED
+test_solver_23 FAILED
+test_solver_24 FAILED
+test_solver_25 FAILED
+test_solver_26 FAILED
+test_solver_27 FAILED
+test_solver_28 FAILED
+test_solver_29 FAILED
+test_solver_30 FAILED
+test_solver_31 FAILED
+test_solver_32 FAILED
+test_solver_33 FAILED
+test_solver_34 FAILED
+test_solver_35 FAILED
+test_solver_36 FAILED
+test_solver_37 FAILED
+test_solver_38 FAILED
+test_solver_39 FAILED
+test_solver_40 FAILED
+test_solver_41 FAILED
+test_solver_42 FAILED
+test_solver_43 FAILED
+
+=================================== FAILURES ====================================
+________________________________ test_solver_07 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_08 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_09 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_10 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_11 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_12 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_13 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_14 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_15 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_16 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_17 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_18 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_19 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_20 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_21 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_22 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_23 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_24 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_25 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_26 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_27 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_28 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_29 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_30 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_31 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: teardown handle already closed
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_32 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_33 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_34 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_35 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_36 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_37 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_38 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_39 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_40 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: teardown handle already closed
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_41 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_42 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: incompatible matrix dimensions
+
+solver.cpp:184: RuntimeError
+
+________________________________ test_solver_43 _________________________________
+
+    def test_body():
+>       result = solver.run()
+E       RuntimeError: solver not initialized
+
+solver.cpp:184: RuntimeError
+
+=========================== short test summary info ============================
+FAILED tests/test_solver.py::test_solver_07 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_08 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_09 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_10 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_11 - RuntimeError: solver not initialized
+FAILED tests/test_solver.py::test_solver_12 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_13 - RuntimeError: solver not initialized
+FAILED tests/test_solver.py::test_solver_14 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_15 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_16 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_17 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_18 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_19 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_20 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_21 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_22 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_23 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_24 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_25 - RuntimeError: solver not initialized
+FAILED tests/test_solver.py::test_solver_26 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_27 - RuntimeError: solver not initialized
+FAILED tests/test_solver.py::test_solver_28 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_29 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_30 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_31 - RuntimeError: teardown handle already closed
+FAILED tests/test_solver.py::test_solver_32 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_33 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_34 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_35 - RuntimeError: solver not initialized
+FAILED tests/test_solver.py::test_solver_36 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_37 - RuntimeError: solver not initialized
+FAILED tests/test_solver.py::test_solver_38 - RuntimeError: solver not initialized
+FAILED tests/test_solver.py::test_solver_39 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_40 - RuntimeError: teardown handle already closed
+FAILED tests/test_solver.py::test_solver_41 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_42 - RuntimeError: incompatible matrix dimensions
+FAILED tests/test_solver.py::test_solver_43 - RuntimeError: solver not initialized
+===================== 7 passed, 37 failed in 4.21s ======================

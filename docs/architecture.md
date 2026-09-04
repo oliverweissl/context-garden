@@ -13,7 +13,7 @@ benchmarks/  evaluation infrastructure and datasets
 
 `skills/<skill-name>/` directories are the units actually distributed to end users through Git-based Skill installers. Every one of them must eventually be independently installable — see the critical rule below.
 
-`tests/` covers `src/context_garden` and repository-level structural validation of Skills. It is never packaged or copied alongside a Skill.
+`tests/` covers `src/context_garden` and repository-level structural validation of Skills. It never contains *implementation* code for a Skill. Each self-contained Skill does carry its own `tests/smoke_test.sh` + fixtures and a `validate.md` — that's deliberate: an installer copying only `skills/<name>/` still gets a working self-check, consistent with the self-containment rule below.
 
 `benchmarks/` hosts the evaluation harness and, eventually, fixtures and results comparing a baseline agent against agent + Context Garden component.
 
@@ -83,3 +83,16 @@ Repositories that use Context Garden Skills accumulate project-local state under
 ```
 
 `config.yaml` is the only file in this directory meant to be shared/committed; everything else is generated local state and should be gitignored (see the root `.gitignore`).
+
+## LLM-assist levels
+
+Every Skill's tooling is deterministic and offline by construction (principle #5). A Skill *may* additionally expose an opt-in `llm_assist` level (`none` default, `slight`, `lot`) in `config.yaml`:
+
+```yaml
+llm_assist:
+  level: none   # none | slight | lot
+```
+
+This never means the tooling calls an LLM API itself — that would contradict principle #5. It means: some workflow step that already requires an agent's judgment (and today is done freehand, reading a tool's output and hand-editing a file) can instead be packaged as a structured request/answer file pair for whichever agent is already driving the CLI. The level controls how much of that judgment step is structured this way, not whether a model is involved — an agent is always the one making the call, at every level. Any Skill's deterministic validation of the result (its own equivalent of "does this still pass") runs unchanged regardless of level, so a structured answer never gets a lighter bar than a freehand edit.
+
+`weeder`'s `suggest`/`apply-suggestion` subcommands are the reference implementation (see `skills/weeder/references/llm-assist.md`). Not every Skill needs this: `trellis` deliberately excludes it (its value is being a correctness gate independent of LLM judgment), and a Skill with no genuine judgment-requiring step (e.g. `pruner`, `compost`) has nothing for a level to gate.

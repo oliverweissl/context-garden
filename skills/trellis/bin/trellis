@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Thin wrapper so `trellis` can be invoked without spelling out the python path.
+# Requires numpy in whatever `python3` resolves to -- see SKILL.md.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec python3 "$DIR/scripts/trellis.py" "$@"

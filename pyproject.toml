@@ -9,7 +9,7 @@ description = "Context Garden trims the weeds from your agent's context so the i
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
-authors = [{ name = "Context Garden contributors" }]
+authors = [{ name = "Oliver WEißl" }]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
@@ -40,6 +40,10 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Skills are self-contained, independently authored code (see docs/architecture.md,
+# "Skill self-containment") and keep their own style; the monorepo lint config
+# does not reach into them.
+extend-exclude = ["skills"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

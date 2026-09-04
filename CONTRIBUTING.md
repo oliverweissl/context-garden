@@ -1,6 +1,6 @@
 # Contributing to Context Garden
 
-Thanks for your interest in contributing. The repository is in early bootstrap: infrastructure and placeholders exist, but the five planned Skills (`context-cache`, `context-slice`, `tracefold`, `numerical-sentinel`, `skill-debloater`) are not yet implemented. Please open an issue before starting substantial work on a Skill so scope and specification can be agreed on first.
+Thanks for your interest in contributing. All five planned Skills are implemented: `seedbank`, `pruner`, `compost`, `trellis`, and `weeder`. Please open an issue before starting substantial work on a Skill so scope and specification can be agreed on first.
 
 ## Development setup
 
@@ -17,7 +17,7 @@ Requires Python >= 3.11.
 
 - `src/context_garden/` — shared runtime library (event schema, artifact storage, provenance, token accounting, local state).
 - `skills/<name>/` — one directory per distributable Agent Skill. Must remain self-contained (see below).
-- `tests/` — all repository tests. Never shipped inside a Skill.
+- `tests/` — repository-level tests (`src/context_garden` + cross-skill structural checks). Each Skill also carries its own `tests/smoke_test.sh` + fixtures for self-validation — see `docs/skill-development.md`.
 - `benchmarks/` — evaluation fixtures, harness, and results.
 - `docs/` — architecture and process documentation.
 - `scripts/` — repository-level tooling (`validate-skills`, `build-skills`, `benchmark`).

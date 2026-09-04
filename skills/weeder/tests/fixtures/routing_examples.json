@@ -1,0 +1,15 @@
+{
+  "positive": [
+    "I want to delete this old data file, can you help me clean it up safely?",
+    "Should I delete these stale CSV files from the data directory?",
+    "Help me remove some unused data files but make sure nothing important is lost."
+  ],
+  "negative": [
+    "What's the weather like today?",
+    "Write a short poem about autumn.",
+    "Explain how binary search trees work."
+  ],
+  "ambiguous": [
+    {"prompt": "clean up this repository", "expected": "either"}
+  ]
+}

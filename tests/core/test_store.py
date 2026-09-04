@@ -45,7 +45,7 @@ def test_store_persists_across_reopen(tmp_path):
         store.record_event(
             Event(
                 event=EventType.SKILL_EXECUTION,
-                resource=Resource(type="skill", uri="context-slice"),
+                resource=Resource(type="skill", uri="pruner"),
                 purpose="select_relevant_files",
             )
         )

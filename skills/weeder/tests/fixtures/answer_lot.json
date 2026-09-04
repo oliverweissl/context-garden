@@ -1,0 +1,16 @@
+{
+  "description_shorten": {
+    "new_description": "Manage data files in a repository with a confirmation-gated delete workflow. Use before deleting any tracked or untracked data file."
+  },
+  "duplicate_consolidation": [
+    {
+      "group_index": 0,
+      "keep_member_index": 1,
+      "canonical_text": "You must never delete a data file without explicit user confirmation first, since accidental deletion has historically been the most common and costly mistake users of this skill have made, and it cannot be undone once the file is gone."
+    }
+  ],
+  "unnecessary_removal": [
+    {"heading": "Bloated Skill", "text_to_remove": "This skill is designed to help you manage data files in a repository."},
+    {"heading": "Bloated Skill", "text_to_remove": "As an AI assistant, it's important to note that you should always be careful with destructive operations."}
+  ]
+}

@@ -1,0 +1,24 @@
+Starting solver...
+tolerance=1e-6
+iteration 1: residual=7.200000e-01
+iteration 2: residual=5.184000e-01
+iteration 3: residual=3.732480e-01
+iteration 4: residual=2.687386e-01
+iteration 5: residual=1.934918e-01
+iteration 6: residual=1.393141e-01
+iteration 7: residual=1.003061e-01
+iteration 8: residual=7.222041e-02
+iteration 9: residual=5.199870e-02
+iteration 10: residual=3.743906e-02
+iteration 11: residual=2.695612e-02
+iteration 12: residual=1.940841e-02
+iteration 13: residual=1.397406e-02
+iteration 14: residual=1.006132e-02
+iteration 15: residual=7.244150e-03
+iteration 16: residual=5.215788e-03
+iteration 17: residual=3.755367e-03
+iteration 18: residual=2.703865e-03
+iteration 19: residual=1.946782e-03
+iteration 20: residual=1.2e-04
+WARNING: slow convergence detected, consider preconditioning
+solver did not reach target tolerance after 20 iterations

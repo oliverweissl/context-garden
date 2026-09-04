@@ -1,0 +1,8 @@
+srun: job 883012 queued and waiting for resources
+srun: job 883012 has been allocated resources
+Running simulation with 4 MPI ranks...
+step 1/500 complete
+step 2/500 complete
+slurmstepd: error: Detected 1 oom-kill event(s) in step 883012.batch cgroup.
+slurmstepd: error: *** JOB 883012 ON node042 CANCELLED AT 2026-09-03T22:14:02 DUE TO OOM ***
+MaxRSS=64200000K

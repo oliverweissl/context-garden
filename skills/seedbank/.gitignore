@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.seedbank/
+AGENTS.md
