@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Entry point for Context Garden component benchmarks.
+
+Intended to discover fixtures under benchmarks/fixtures/, run each against
+a baseline agent and a baseline+component agent, and emit records matching
+the schema documented in docs/benchmarking.md.
+
+No fixtures exist yet, so this currently runs (and succeeds on) an empty
+benchmark suite.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+FIXTURES_DIR = REPO_ROOT / "benchmarks" / "fixtures"
+
+
+def discover_fixtures() -> list[Path]:
+    if not FIXTURES_DIR.is_dir():
+        return []
+    return sorted(p for p in FIXTURES_DIR.iterdir() if p.is_dir())
+
+
+def main() -> int:
+    fixtures = discover_fixtures()
+    if not fixtures:
+        print("No benchmark fixtures yet -- running empty suite. OK.")
+        return 0
+
+    print(f"Discovered {len(fixtures)} fixture(s), but no runner is implemented yet.")
+    for fixture in fixtures:
+        print(f"  - {fixture.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

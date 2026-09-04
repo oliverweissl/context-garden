@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Build distributable, self-contained Skills.
+
+Intended pipeline (once a Skill requires it):
+
+    source implementation
+            |
+            v
+    bundle required runtime
+            |
+            v
+    skills/<name>/
+            |
+            v
+    self-contained distributable skill (e.g. dist/<name>/)
+
+No Skill currently needs shared-runtime bundling, so this is a no-op that
+reports what it would build. Implement bundling logic when the first real
+Skill requires code from context_garden.core.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SKILLS_DIR = REPO_ROOT / "skills"
+
+
+def main() -> int:
+    if not SKILLS_DIR.is_dir():
+        print(f"error: {SKILLS_DIR} does not exist", file=sys.stderr)
+        return 1
+
+    skill_dirs = sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir())
+    buildable = [d for d in skill_dirs if (d / "SKILL.md").exists()]
+
+    if not buildable:
+        print("No Skills with a SKILL.md yet -- nothing to build.")
+        return 0
+
+    for skill_dir in buildable:
+        print(f"NOTE: {skill_dir.name} has a SKILL.md but bundling is not implemented yet.")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

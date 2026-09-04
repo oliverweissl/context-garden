@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+
+# Packaging
+*.whl
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Context Garden runtime state (project-local, generated).
+# Keep config.yaml shareable; ignore everything else under it.
+.context-garden/*
+!.context-garden/config.yaml
+
+# Benchmark results are generated artifacts, not source.
+benchmarks/results/*
+!benchmarks/results/.gitkeep
