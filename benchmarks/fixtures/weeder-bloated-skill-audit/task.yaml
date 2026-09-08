@@ -1,0 +1,40 @@
+task_id: weeder-bloated-skill-audit
+component: weeder
+level: file
+skill_relevance: [weeder]
+# weeder's token payoff lands in every future invocation of the skill it
+# just shrank, not in the task where it's invoked -- unmeasurable
+# per-task. See docs/benchmarking.md.
+# Not run by a plain `scripts/benchmark run` -- pass --task
+# weeder-bloated-skill-audit or --component weeder explicitly.
+run_by_default: false
+description: >
+  A single oversized SKILL.md for a synthetic "logsweep" skill: a long
+  background section, three inline usage examples, a generic
+  over-broad routing description, and one constraint (never touch the
+  original log file) stated twice in different wording. Tests whether
+  the agent reduces its always-loaded token footprint the way weeder's
+  own workflow specifies, without losing an instruction.
+notes: >
+  Verification reuses this repository's *own* weeder CLI
+  (skills/weeder/scripts/weeder.py, not a copy inside the fixture) to
+  score the agent's result against the same bar weeder's SKILL.md sets
+  for itself: `weeder audit`'s always_loaded_tokens reduction, and
+  `weeder test-function`'s 100% constraint-preservation ratio.
+base_ref: worktree
+overlay: overlay
+prompt: |
+  examples/demo-skill/SKILL.md is oversized: it has a long background
+  section, three inline usage examples, and a constraint restated twice
+  in different words (once under "Workflow" step 1, once under
+  "Important"). Reduce its always-loaded token footprint -- without
+  losing any instruction or constraint -- by moving the background and
+  examples into examples/demo-skill/references/ (leaving a one-line
+  pointer in SKILL.md) and consolidating the duplicated constraint into
+  a single statement. Edit examples/demo-skill/SKILL.md in place.
+verify:
+  type: weeder_audit
+  before: overlay/examples/demo-skill
+  after: examples/demo-skill
+  min_reduction_pct: 20
+  min_preserved_ratio: 1.0

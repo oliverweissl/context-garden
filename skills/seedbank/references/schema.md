@@ -102,6 +102,12 @@ Runs invalidation, then writes the hot section + warm-scope pointers to
 each target file (default: just `AGENTS.md`) and one `.seedbank/warm/<scope>.md`
 per warm scope that has at least one active fact.
 
+For Claude Code specifically, prefer a one-time `@AGENTS.md` import line
+in a committed `CLAUDE.md` (see SKILL.md's "In the target repository")
+over adding `CLAUDE.md` to `--targets` — Claude Code never reads
+`AGENTS.md` on its own, and the import keeps one source of truth instead
+of two full copies that both need regenerating on every `compile`.
+
 ## `seedbank status` / `seedbank stats [--json]`
 
 `status`: tracked-key count, active/hot/warm/stale fact counts, hot-budget
@@ -110,8 +116,7 @@ attention. `stats`: per-fact and total **estimated tokens avoided** —
 defined as `max(0, retrieval_cost_accumulated_before_promotion -
 persistent_token_cost)`, i.e. the rediscovery cost that was already sunk
 before promotion, now amortized into one small persistent fact. This is a
-conservative, already-realized number; it does not project future savings
-(see `validate.md` for why, and for the honest limitation this implies).
+conservative, already-realized number; it does not project future savings.
 
 ## `seedbank import <file>`
 

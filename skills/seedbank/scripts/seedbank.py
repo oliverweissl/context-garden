@@ -8,6 +8,7 @@ mistake/fact or promotes a candidate; this tool does the deterministic
 bookkeeping (frequency, cost, hashing, scoring, tiering, invalidation,
 compilation) around that.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,6 +39,7 @@ KINDS = ("read", "search", "run", "mistake", "fact")
 
 # ---------------------------------------------------------------- keystats update
 
+
 def _blank_stats(kind: str, scope: str) -> dict:
     return {
         "kind": kind,
@@ -54,8 +56,16 @@ def _blank_stats(kind: str, scope: str) -> dict:
     }
 
 
-def update_keystats(store: Store, key: str, kind: str, scope: str, sources: list[str],
-                     retrieval_cost: int, failure_cost: int, representation: str | None) -> dict:
+def update_keystats(
+    store: Store,
+    key: str,
+    kind: str,
+    scope: str,
+    sources: list[str],
+    retrieval_cost: int,
+    failure_cost: int,
+    representation: str | None,
+) -> dict:
     stats_all = store.load_keystats()
     stats = stats_all.get(key) or _blank_stats(kind, scope)
     stats["access_count"] += 1
@@ -82,14 +92,21 @@ def update_keystats(store: Store, key: str, kind: str, scope: str, sources: list
 
 # ---------------------------------------------------------------- observe
 
+
 def cmd_observe_read(args, store: Store) -> int:
     path = args.path
     text = Path(path).read_text(errors="replace") if Path(path).exists() else ""
     cost = estimate_tokens(text)
     key = args.key or f"read:{path}"
     obs = {
-        "id": None, "ts": now(), "kind": "read", "key": key,
-        "sources": [path], "task": args.task, "cost": cost, "failure_cost": 0,
+        "id": None,
+        "ts": now(),
+        "kind": "read",
+        "key": key,
+        "sources": [path],
+        "task": args.task,
+        "cost": cost,
+        "failure_cost": 0,
     }
     store.append_observation(obs)
     stats = update_keystats(store, key, "read", args.scope, [path], cost, 0, None)
@@ -101,8 +118,14 @@ def cmd_observe_search(args, store: Store) -> int:
     cost = args.cost if args.cost is not None else SEARCH_DEFAULT_COST
     key = args.key or f"search:{args.pattern}"
     obs = {
-        "id": None, "ts": now(), "kind": "search", "key": key,
-        "sources": [], "task": args.task, "cost": cost, "failure_cost": 0,
+        "id": None,
+        "ts": now(),
+        "kind": "search",
+        "key": key,
+        "sources": [],
+        "task": args.task,
+        "cost": cost,
+        "failure_cost": 0,
     }
     store.append_observation(obs)
     stats = update_keystats(store, key, "search", args.scope, [], cost, 0, None)
@@ -115,7 +138,9 @@ def cmd_observe_run(args, store: Store) -> int:
     if cmd_list and cmd_list[0] == "--":
         cmd_list = cmd_list[1:]
     if not cmd_list:
-        print("error: no command given (usage: seedbank observe run -- <command...>)", file=sys.stderr)
+        print(
+            "error: no command given (usage: seedbank observe run -- <command...>)", file=sys.stderr
+        )
         return 2
     command_str = " ".join(cmd_list)
     proc = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -124,8 +149,14 @@ def cmd_observe_run(args, store: Store) -> int:
     failure_cost = 0 if proc.returncode == 0 else FAILURE_COST_RUN
     key = args.key or f"run:{command_str}"
     obs = {
-        "id": None, "ts": now(), "kind": "run", "key": key, "sources": [],
-        "task": args.task, "cost": cost, "failure_cost": failure_cost,
+        "id": None,
+        "ts": now(),
+        "kind": "run",
+        "key": key,
+        "sources": [],
+        "task": args.task,
+        "cost": cost,
+        "failure_cost": failure_cost,
         "exit_code": proc.returncode,
     }
     store.append_observation(obs)
@@ -133,7 +164,12 @@ def cmd_observe_run(args, store: Store) -> int:
     status = "ok" if proc.returncode == 0 else f"FAILED (exit {proc.returncode})"
     print(f"observed run: {key} [{status}] (access_count={stats['access_count']})")
     if text:
-        sys.stdout.write(text if len(text) < 2000 else text[:2000] + "\n... (truncated; not stored raw by seedbank -- use compost for that)\n")
+        sys.stdout.write(
+            text
+            if len(text) < 2000
+            else text[:2000]
+            + "\n... (truncated; not stored raw by seedbank -- use compost for that)\n"
+        )
     return proc.returncode
 
 
@@ -144,8 +180,15 @@ def cmd_observe_declared(args, store: Store, kind: str) -> int:
     failure_cost = args.failure_cost if args.failure_cost is not None else default_failure
     sources = args.source or []
     obs = {
-        "id": None, "ts": now(), "kind": kind, "key": key, "sources": sources,
-        "task": None, "cost": 0, "failure_cost": failure_cost, "representation": representation,
+        "id": None,
+        "ts": now(),
+        "kind": kind,
+        "key": key,
+        "sources": sources,
+        "task": None,
+        "cost": 0,
+        "failure_cost": failure_cost,
+        "representation": representation,
     }
     store.append_observation(obs)
     stats = update_keystats(store, key, kind, args.scope, sources, 0, failure_cost, representation)
@@ -155,6 +198,7 @@ def cmd_observe_declared(args, store: Store, kind: str) -> int:
 
 
 # ---------------------------------------------------------------- candidates / promote / demote
+
 
 def _active_fact_keys(facts: dict) -> set[str]:
     return {f["key"] for f in facts["facts"].values() if not f.get("stale")}
@@ -171,17 +215,19 @@ def build_candidates(store: Store, threshold: float, show_all: bool) -> list[dic
         pcost = candidate_persistent_cost(stats, estimate_tokens)
         value = compute_value(stats, pcost)
         if show_all or value >= threshold:
-            out.append({
-                "key": key,
-                "kind": stats["kind"],
-                "scope": stats.get("scope", "general"),
-                "access_count": stats["access_count"],
-                "total_retrieval_cost": stats["total_retrieval_cost"],
-                "total_failure_cost": stats["total_failure_cost"],
-                "stability": stability(stats.get("hash_changes", 0)),
-                "representation": stats.get("representation"),
-                "value": round(value, 3),
-            })
+            out.append(
+                {
+                    "key": key,
+                    "kind": stats["kind"],
+                    "scope": stats.get("scope", "general"),
+                    "access_count": stats["access_count"],
+                    "total_retrieval_cost": stats["total_retrieval_cost"],
+                    "total_failure_cost": stats["total_failure_cost"],
+                    "stability": stability(stats.get("hash_changes", 0)),
+                    "representation": stats.get("representation"),
+                    "value": round(value, 3),
+                }
+            )
     out.sort(key=lambda c: -c["value"])
     return out
 
@@ -198,11 +244,15 @@ def cmd_candidates(args, store: Store) -> int:
         return 0
     print(f"{'value':>7}  {'n':>3}  {'kind':<8} {'scope':<12} key")
     for c in candidates:
-        print(f"{c['value']:>7.2f}  {c['access_count']:>3}  {c['kind']:<8} {c['scope']:<12} {c['key']}")
+        print(
+            f"{c['value']:>7.2f}  {c['access_count']:>3}  {c['kind']:<8} {c['scope']:<12} {c['key']}"
+        )
         if c["representation"]:
             print(f"         representation: {c['representation']}")
         else:
-            print("         representation: (none yet -- supply one with `seedbank promote --representation`)")
+            print(
+                "         representation: (none yet -- supply one with `seedbank promote --representation`)"
+            )
     return 0
 
 
@@ -210,11 +260,14 @@ def cmd_promote(args, store: Store) -> int:
     keystats = store.load_keystats()
     stats = keystats.get(args.key)
     if not stats:
-        print(f"error: no observations for key '{args.key}' (see `seedbank candidates`)", file=sys.stderr)
+        print(
+            f"error: no observations for key '{args.key}' (see `seedbank candidates`)",
+            file=sys.stderr,
+        )
         return 1
     representation = args.representation or stats.get("representation")
     if not representation:
-        print("error: no representation available -- pass --representation \"...\"", file=sys.stderr)
+        print('error: no representation available -- pass --representation "..."', file=sys.stderr)
         return 1
 
     facts = store.load_facts()
@@ -224,9 +277,19 @@ def cmd_promote(args, store: Store) -> int:
     if tier == "hot":
         config = store.load_config()
         budget = args.budget if args.budget is not None else config["hot_budget"]
-        current_hot = [f for f in facts["facts"].values() if f["tier"] == "hot" and not f.get("stale")]
+        current_hot = [
+            f for f in facts["facts"].values() if f["tier"] == "hot" and not f.get("stale")
+        ]
         current_total = sum(f["persistent_token_cost"] for f in current_hot)
         if current_total + pcost > budget:
+            if pcost > budget:
+                print(
+                    f"error: this fact alone costs {pcost} tokens, more than the entire "
+                    f"hot budget ({budget}) -- no amount of evicting existing hot facts "
+                    f"can make room. Raise --budget or use --tier warm.",
+                    file=sys.stderr,
+                )
+                return 1
             evicted = _evict_to_budget(facts, budget - pcost, protect_keys={args.key})
             if evicted is None:
                 print(
@@ -263,7 +326,7 @@ def cmd_promote(args, store: Store) -> int:
     }
     facts["facts"][fid] = fact
     store.save_facts(facts)
-    print(f"promoted {fid} [{tier}] scope={scope} cost={pcost}tok: \"{representation}\"")
+    print(f'promoted {fid} [{tier}] scope={scope} cost={pcost}tok: "{representation}"')
     return 0
 
 
@@ -323,6 +386,7 @@ def cmd_demote(args, store: Store) -> int:
 
 # ---------------------------------------------------------------- invalidate
 
+
 def cmd_invalidate(args, store: Store) -> int:
     facts = store.load_facts()
     if args.confirm:
@@ -339,7 +403,9 @@ def cmd_invalidate(args, store: Store) -> int:
         fact["last_verified"] = now()
         fact["confidence"] = min(1.0, fact.get("confidence", 0.8) + 0.05)
         store.save_facts(facts)
-        print(f"revalidated {args.confirm}: stale cleared, hashes refreshed, confidence={fact['confidence']:.2f}")
+        print(
+            f"revalidated {args.confirm}: stale cleared, hashes refreshed, confidence={fact['confidence']:.2f}"
+        )
         return 0
 
     changed = 0
@@ -371,6 +437,7 @@ def cmd_invalidate(args, store: Store) -> int:
 
 # ---------------------------------------------------------------- gc
 
+
 def cmd_gc(args, store: Store) -> int:
     facts = store.load_facts()
     config = store.load_config()
@@ -380,7 +447,9 @@ def cmd_gc(args, store: Store) -> int:
         for fid in evicted:
             print(f"evicted (over hot budget): {fid} -> warm")
     elif evicted is None:
-        print("warning: hot tier over budget and nothing evictable (all --critical)", file=sys.stderr)
+        print(
+            "warning: hot tier over budget and nothing evictable (all --critical)", file=sys.stderr
+        )
 
     removed_stale = 0
     if args.purge_stale:
@@ -391,27 +460,36 @@ def cmd_gc(args, store: Store) -> int:
 
     store.save_facts(facts)
     removed_obs = store.prune_observations(keep_per_key=args.keep_per_key)
-    print(f"gc: {removed_obs} raw observation(s) pruned (aggregates preserved), {removed_stale} stale fact(s) purged")
+    print(
+        f"gc: {removed_obs} raw observation(s) pruned (aggregates preserved), {removed_stale} stale fact(s) purged"
+    )
     return 0
 
 
 # ---------------------------------------------------------------- compile
+
 
 def cmd_compile(args, store: Store, repo_root: Path) -> int:
     cmd_invalidate(argparse.Namespace(confirm=None), store)
     facts = store.load_facts()
     targets = args.targets.split(",") if args.targets else ["AGENTS.md"]
     report = sb_compile.compile_outputs(facts, repo_root, targets)
-    print(f"compiled {report['hot_fact_count']} hot fact(s) [{report['hot_tokens']} tok] "
-          f"+ {report['warm_fact_count']} warm fact(s)")
+    print(
+        f"compiled {report['hot_fact_count']} hot fact(s) [{report['hot_tokens']} tok] "
+        f"+ {report['warm_fact_count']} warm fact(s)"
+    )
     for path in report["written"]:
         print(f"  wrote {path}")
     if report["stale_excluded"]:
-        print(f"excluded {len(report['stale_excluded'])} stale fact(s) (not exposed): {', '.join(report['stale_excluded'])}", file=sys.stderr)
+        print(
+            f"excluded {len(report['stale_excluded'])} stale fact(s) (not exposed): {', '.join(report['stale_excluded'])}",
+            file=sys.stderr,
+        )
     return 0
 
 
 # ---------------------------------------------------------------- status / stats
+
 
 def cmd_status(args, store: Store) -> int:
     keystats = store.load_keystats()
@@ -424,7 +502,9 @@ def cmd_status(args, store: Store) -> int:
     candidates = build_candidates(store, config["promote_threshold"], show_all=False)
 
     print(f"tracked keys:        {len(keystats)}")
-    print(f"active facts:        {len(facts)}  (hot={len(hot)}, warm={len(warm)}, stale={len(stale)})")
+    print(
+        f"active facts:        {len(facts)}  (hot={len(hot)}, warm={len(warm)}, stale={len(stale)})"
+    )
     print(f"hot budget usage:    {hot_tokens} / {config['hot_budget']} tokens")
     print(f"candidates >= threshold ({config['promote_threshold']}): {len(candidates)}")
     if stale:
@@ -446,20 +526,30 @@ def cmd_stats(args, store: Store) -> int:
         rows.append((f["id"], avoided, f["tier"], f["representation"]))
     rows.sort(key=lambda r: -r[1])
     if args.json:
-        print(json.dumps({"total_tokens_avoided": total_avoided, "facts": [
-            {"id": r[0], "tokens_avoided": r[1], "tier": r[2], "representation": r[3]} for r in rows
-        ]}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "total_tokens_avoided": total_avoided,
+                    "facts": [
+                        {"id": r[0], "tokens_avoided": r[1], "tier": r[2], "representation": r[3]}
+                        for r in rows
+                    ],
+                },
+                indent=2,
+            )
+        )
         return 0
     print(f"estimated tokens avoided so far: {total_avoided}")
     print("(one-time savings already realized by promoting: pre-promotion rediscovery cost")
     print(" minus the persistent cost of keeping the compact fact around; does not yet count")
-    print(" future avoided rediscoveries -- see validate.md for the full definition)")
+    print(" future avoided rediscoveries)")
     for fid, avoided, tier, rep in rows:
         print(f"  {fid} [{tier}] ~{avoided} tok avoided: {rep[:70]}")
     return 0
 
 
 # ---------------------------------------------------------------- import
+
 
 def cmd_import(args, store: Store) -> int:
     text = Path(args.file).read_text(errors="replace")
@@ -475,16 +565,28 @@ def cmd_import(args, store: Store) -> int:
             if not rep:
                 continue
             key = f"imported:{hashlib.sha1(rep.encode()).hexdigest()[:12]}"
-            obs = {"id": None, "ts": now(), "kind": "imported", "key": key, "sources": [args.file],
-                   "task": None, "cost": 0, "failure_cost": 0, "representation": rep}
+            obs = {
+                "id": None,
+                "ts": now(),
+                "kind": "imported",
+                "key": key,
+                "sources": [args.file],
+                "task": None,
+                "cost": 0,
+                "failure_cost": 0,
+                "representation": rep,
+            }
             store.append_observation(obs)
             update_keystats(store, key, "imported", scope, [], 0, 0, rep)
             count += 1
-    print(f"imported {count} candidate bullet(s) from {args.file} (review with `seedbank candidates`, then promote)")
+    print(
+        f"imported {count} candidate bullet(s) from {args.file} (review with `seedbank candidates`, then promote)"
+    )
     return 0
 
 
 # ---------------------------------------------------------------- CLI wiring
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="seedbank")
@@ -537,14 +639,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_promote.add_argument("--representation", default=None)
     p_promote.add_argument("--tier", choices=["hot", "warm"], default="warm")
     p_promote.add_argument("--scope", default=None)
-    p_promote.add_argument("--critical", action="store_true", help="protect from value-based eviction")
+    p_promote.add_argument(
+        "--critical", action="store_true", help="protect from value-based eviction"
+    )
     p_promote.add_argument("--budget", type=int, default=None)
 
     p_demote = sub.add_parser("demote", help="lower a fact's tier, or remove it (--tier cold)")
     p_demote.add_argument("fact_id")
     p_demote.add_argument("--tier", choices=["warm", "cold"], required=True)
 
-    p_inval = sub.add_parser("invalidate", help="scan facts for changed sources, or confirm one is still valid")
+    p_inval = sub.add_parser(
+        "invalidate", help="scan facts for changed sources, or confirm one is still valid"
+    )
     p_inval.add_argument("--confirm", default=None, metavar="FACT_ID")
 
     p_gc = sub.add_parser("gc", help="enforce hot budget, purge stale facts, prune observation log")
@@ -552,14 +658,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_gc.add_argument("--keep-per-key", type=int, default=5)
 
     p_compile = sub.add_parser("compile", help="write AGENTS.md (+ warm/*.md) from active facts")
-    p_compile.add_argument("--targets", default=None, help="comma-separated output filenames (default: AGENTS.md)")
+    p_compile.add_argument(
+        "--targets", default=None, help="comma-separated output filenames (default: AGENTS.md)"
+    )
 
     sub.add_parser("status", help="quick health summary")
 
     p_stats = sub.add_parser("stats", help="report estimated tokens avoided")
     p_stats.add_argument("--json", action="store_true")
 
-    p_import = sub.add_parser("import", help="seed candidates from an existing AGENTS.md/CLAUDE.md-style file")
+    p_import = sub.add_parser(
+        "import", help="seed candidates from an existing AGENTS.md/CLAUDE.md-style file"
+    )
     p_import.add_argument("file")
 
     return p

@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "context-garden"
-version = "0.1.0"
-description = "Context Garden trims the weeds from your agent's context so the important information can thrive."
+version = "0.2.0"
+description = "Self-contained Agent Skills that cut an agent's context usage."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
-authors = [{ name = "Oliver WEißl" }]
+authors = [{ name = "Oliver Weißl" }]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
@@ -32,7 +32,10 @@ Homepage = "https://github.com/context-garden/context-garden"
 Issues = "https://github.com/context-garden/context-garden/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/context_garden"]
+# No library code to ship -- this project is dev tooling (pytest/ruff config
+# + the `dev` extra) plus benchmarks/ and skills/, neither of which is a
+# Python package. Metadata-only wheel.
+bypass-selection = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

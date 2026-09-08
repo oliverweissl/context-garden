@@ -8,6 +8,7 @@ references/classification.md): it's cheap, deterministic, and good enough
 to drive progressive-disclosure refactoring, but a well-named heading with
 off-topic content, or vice versa, will be misclassified.
 """
+
 from __future__ import annotations
 
 import re
@@ -17,15 +18,23 @@ FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 HEADING_RE = re.compile(r"^(#{1,2})\s+(.*)$")
 
 CATEGORIES = (
-    "routing_metadata", "mandatory_instructions", "workflow", "constraints",
-    "examples", "background", "external_reference",
+    "routing_metadata",
+    "mandatory_instructions",
+    "workflow",
+    "constraints",
+    "examples",
+    "background",
+    "external_reference",
 )
 
 _CATEGORY_PATTERNS = [
     ("examples", re.compile(r"\bexamples?\b", re.I)),
     ("background", re.compile(r"\b(background|motivation|why|rationale|history)\b", re.I)),
     ("external_reference", re.compile(r"\b(references?|see also|further reading|links?)\b", re.I)),
-    ("constraints", re.compile(r"\b(constraints?|rules?|invariants?|guarantees?|safety|limitations?)\b", re.I)),
+    (
+        "constraints",
+        re.compile(r"\b(constraints?|rules?|invariants?|guarantees?|safety|limitations?)\b", re.I),
+    ),
     ("workflow", re.compile(r"\b(workflow|steps?|process|usage|how to|getting started)\b", re.I)),
 ]
 
@@ -39,7 +48,7 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
     if not m:
         return {}, text
     fm_text = m.group(1)
-    body = text[m.end():]
+    body = text[m.end() :]
     fm: dict[str, str] = {}
     current_key = None
     for line in fm_text.splitlines():

@@ -6,6 +6,7 @@ Layout under the store root (default ./.compost):
     runs/<run_id>/raw.txt   verbatim captured output (never mutated, never discarded)
     runs/<run_id>/meta.json parsed summary + internal event index for this run
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -5,6 +5,7 @@ the module most directly responsible for catching UC1-style regressions
 (a stencil bug that quietly drops a scheme from 2nd-order to 1st-order
 while individual test tolerances still happen to pass).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -26,9 +27,16 @@ def observed_order(params, errors) -> float | None:
     return float(order)
 
 
-def convergence_check(solve_fn, param_values, reference=None, expected_order: float | None = None,
-                       tol_order: float = 0.3, error_fn=None, name: str = "convergence",
-                       param_label: str = "h") -> CheckResult:
+def convergence_check(
+    solve_fn,
+    param_values,
+    reference=None,
+    expected_order: float | None = None,
+    tol_order: float = 0.3,
+    error_fn=None,
+    name: str = "convergence",
+    param_label: str = "h",
+) -> CheckResult:
     """Runs solve_fn(param) for each value in param_values, computes an
     error at each against `reference`, fits the observed order via
     log-log regression, and compares to `expected_order`.
@@ -59,11 +67,15 @@ def convergence_check(solve_fn, param_values, reference=None, expected_order: fl
     else:
         if len(outputs) < 3:
             return CheckResult(
-                name=name, status=Status.WARN.value, category="numerical",
-                metric={"observed_order": None}, expected=expected_order, observed=None,
+                name=name,
+                status=Status.WARN.value,
+                category="numerical",
+                metric={"observed_order": None},
+                expected=expected_order,
+                observed=None,
                 evidence={param_label: param_values},
                 notes="Self-referential convergence needs >=3 resolutions (2 to compare + 1 as reference); "
-                      "pass an explicit `reference` to use only 2, or add another resolution.",
+                "pass an explicit `reference` to use only 2, or add another resolution.",
             )
         finest = outputs[-1]
         errors = [err_fn(out, finest) for out in outputs[:-1]]
@@ -74,15 +86,25 @@ def convergence_check(solve_fn, param_values, reference=None, expected_order: fl
 
     if order is None:
         return CheckResult(
-            name=name, status=Status.WARN.value, category="numerical",
-            metric={"observed_order": None}, expected=expected_order, observed=None, evidence=evidence,
+            name=name,
+            status=Status.WARN.value,
+            category="numerical",
+            metric={"observed_order": None},
+            expected=expected_order,
+            observed=None,
+            evidence=evidence,
             notes="Could not fit an observed order (need >=2 points with positive, nonzero error).",
         )
 
     if expected_order is None:
         return CheckResult(
-            name=name, status=Status.PASS.value, category="numerical",
-            metric={"observed_order": order}, expected=None, observed=order, evidence=evidence,
+            name=name,
+            status=Status.PASS.value,
+            category="numerical",
+            metric={"observed_order": order},
+            expected=None,
+            observed=order,
+            evidence=evidence,
             notes="No expected_order given -- reporting the observed order only, not judging it.",
         )
 
@@ -91,16 +113,25 @@ def convergence_check(solve_fn, param_values, reference=None, expected_order: fl
         status, notes = Status.PASS, ""
     elif diff <= tol_order * 2:
         status = Status.WARN
-        notes = (f"Observed order {order:.2f} deviates from expected {expected_order} by more than "
-                  f"tol_order={tol_order} but less than 2x that.")
+        notes = (
+            f"Observed order {order:.2f} deviates from expected {expected_order} by more than "
+            f"tol_order={tol_order} but less than 2x that."
+        )
     else:
         status = Status.FAIL
-        notes = (f"Observed order {order:.2f} is a significant deviation from expected {expected_order} "
-                  "-- likely a discretization/stencil bug (this is exactly the class of regression "
-                  "that passing unit tests at a single resolution will not catch).")
+        notes = (
+            f"Observed order {order:.2f} is a significant deviation from expected {expected_order} "
+            "-- likely a discretization/stencil bug (this is exactly the class of regression "
+            "that passing unit tests at a single resolution will not catch)."
+        )
 
     return CheckResult(
-        name=name, status=status.value, category="numerical",
-        metric={"observed_order": order}, expected=expected_order, observed=order,
-        evidence=evidence, notes=notes,
+        name=name,
+        status=status.value,
+        category="numerical",
+        metric={"observed_order": order},
+        expected=expected_order,
+        observed=order,
+        evidence=evidence,
+        notes=notes,
     )

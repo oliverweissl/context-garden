@@ -1,4 +1,5 @@
 """Shared utilities: token estimation, hashing, and repo file discovery."""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,9 +7,22 @@ import subprocess
 from pathlib import Path
 
 IGNORE_DIRS = {
-    ".git", ".pruner", "__pycache__", "node_modules", "build", "dist",
-    ".venv", "venv", ".mypy_cache", ".pytest_cache", ".idea", ".vscode",
-    "cmake-build-debug", "cmake-build-release", ".tox", ".seedbank",
+    ".git",
+    ".pruner",
+    "__pycache__",
+    "node_modules",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".idea",
+    ".vscode",
+    "cmake-build-debug",
+    "cmake-build-release",
+    ".tox",
+    ".seedbank",
     ".compost",
 }
 IGNORE_SUFFIXES = {".pyc", ".so", ".o", ".a", ".dylib", ".dll", ".exe"}
@@ -17,9 +31,17 @@ MAX_FILE_BYTES = 2_000_000
 PYTHON_SUFFIXES = {".py"}
 CPP_SUFFIXES = {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh"}
 CONFIG_NAMES = {
-    "cmakelists.txt", "makefile", "pyproject.toml", "setup.py", "setup.cfg",
-    "requirements.txt", "package.json", "tox.ini", "pytest.ini",
-    "conftest.py", "dockerfile",
+    "cmakelists.txt",
+    "makefile",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "requirements.txt",
+    "package.json",
+    "tox.ini",
+    "pytest.ini",
+    "conftest.py",
+    "dockerfile",
 }
 CONFIG_SUFFIXES = {".yaml", ".yml", ".toml", ".ini", ".cfg"}
 DOC_SUFFIXES = {".md", ".rst", ".txt"}
@@ -59,7 +81,10 @@ def _git_tracked_files(repo_root: Path) -> list[str] | None:
     try:
         out = subprocess.run(
             ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-            cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10,
+            cwd=repo_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -111,10 +136,15 @@ def changed_files_from_git(repo_root: Path) -> list[str]:
     try:
         out = subprocess.run(
             ["git", "diff", "--name-only", "HEAD"],
-            cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10,
+            cwd=repo_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return []
     if out.returncode != 0:
         return []
-    return [line.strip() for line in out.stdout.decode(errors="replace").splitlines() if line.strip()]
+    return [
+        line.strip() for line in out.stdout.decode(errors="replace").splitlines() if line.strip()
+    ]

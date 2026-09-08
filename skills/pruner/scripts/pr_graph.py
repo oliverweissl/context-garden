@@ -8,6 +8,7 @@ Optionally merges in externally supplied graph edges (e.g. from Graphify or
 an equivalent tool) -- see `merge_external_graph`. This is additive only;
 pruner never requires an external graph to function.
 """
+
 from __future__ import annotations
 
 from collections import deque

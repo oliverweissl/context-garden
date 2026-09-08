@@ -1,6 +1,7 @@
 """Report schema: the machine-readable evidence contract every check
 produces, and how individual CheckResults aggregate into a Report.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,8 @@ CATEGORIES = ("implementation", "numerical", "model_validation", "empirical")
 @dataclass
 class CheckResult:
     name: str
-    status: str          # PASS | WARN | FAIL
-    category: str         # one of CATEGORIES
+    status: str  # PASS | WARN | FAIL
+    category: str  # one of CATEGORIES
     metric: dict
     expected: object
     observed: object
@@ -37,6 +38,7 @@ class CheckResult:
 
     def __post_init__(self):
         from ._util import to_jsonable
+
         self.metric = to_jsonable(self.metric)
         self.expected = to_jsonable(self.expected)
         self.observed = to_jsonable(self.observed)
@@ -44,9 +46,14 @@ class CheckResult:
 
     def to_dict(self) -> dict:
         return {
-            "name": self.name, "status": self.status, "category": self.category,
-            "metric": self.metric, "expected": self.expected, "observed": self.observed,
-            "evidence": self.evidence, "notes": self.notes,
+            "name": self.name,
+            "status": self.status,
+            "category": self.category,
+            "metric": self.metric,
+            "expected": self.expected,
+            "observed": self.observed,
+            "evidence": self.evidence,
+            "notes": self.notes,
         }
 
 
@@ -94,8 +101,12 @@ class Report:
         return 1 if self.status == Status.FAIL.value else 0
 
 
-def build_report(results: list, unsupported_claims: list | None = None,
-                  remaining_risks: list | None = None, auto_gaps: bool = True) -> Report:
+def build_report(
+    results: list,
+    unsupported_claims: list | None = None,
+    remaining_risks: list | None = None,
+    auto_gaps: bool = True,
+) -> Report:
     """Aggregates CheckResults into a Report. Overall status is the worst
     of any individual check (any FAIL -> FAIL; else any WARN -> WARN; else
     PASS). With auto_gaps=True (default), automatically appends
@@ -136,5 +147,9 @@ def build_report(results: list, unsupported_claims: list | None = None,
         if _SEVERITY[s] > _SEVERITY[overall]:
             overall = s
 
-    return Report(status=overall.value, checks=list(results),
-                  unsupported_claims=unsupported_claims, remaining_risks=remaining_risks)
+    return Report(
+        status=overall.value,
+        checks=list(results),
+        unsupported_claims=unsupported_claims,
+        remaining_risks=remaining_risks,
+    )

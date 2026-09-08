@@ -4,16 +4,48 @@ overlap against symbol names/qualnames/docstrings/paths; true semantic
 understanding is out of scope for an offline, dependency-free tool (see
 references/scoring.md).
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
 _STOPWORDS = {
-    "the", "a", "an", "in", "on", "of", "to", "for", "and", "or", "is",
-    "are", "fix", "bug", "issue", "incorrect", "behavior", "when", "that",
-    "this", "with", "error", "failing", "please", "need", "update",
-    "change", "make", "should", "not", "it", "be", "at", "by", "from",
+    "the",
+    "a",
+    "an",
+    "in",
+    "on",
+    "of",
+    "to",
+    "for",
+    "and",
+    "or",
+    "is",
+    "are",
+    "fix",
+    "bug",
+    "issue",
+    "incorrect",
+    "behavior",
+    "when",
+    "that",
+    "this",
+    "with",
+    "error",
+    "failing",
+    "please",
+    "need",
+    "update",
+    "change",
+    "make",
+    "should",
+    "not",
+    "it",
+    "be",
+    "at",
+    "by",
+    "from",
 }
 _WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _CAMEL_RE = re.compile(r"[A-Z]?[a-z0-9]+|[A-Z]+(?=[A-Z]|$)")
@@ -59,7 +91,9 @@ def resolve_error_locations(error_text: str, index: dict) -> list[str]:
     for frag, line in parse_error_locations(error_text):
         frag_norm = frag.replace("\\", "/")
         for rel, entry in index["files"].items():
-            if not (rel == frag_norm or rel.endswith("/" + frag_norm) or frag_norm.endswith("/" + rel)):
+            if not (
+                rel == frag_norm or rel.endswith("/" + frag_norm) or frag_norm.endswith("/" + rel)
+            ):
                 continue
             for sym in entry["symbols"]:
                 if sym["start_line"] <= line <= sym["end_line"]:
@@ -67,7 +101,9 @@ def resolve_error_locations(error_text: str, index: dict) -> list[str]:
     return hits
 
 
-def lexical_match(name: str, doc: str, path: str, task_lower: str, task_keywords: set[str]) -> tuple[float, list[str]]:
+def lexical_match(
+    name: str, doc: str, path: str, task_lower: str, task_keywords: set[str]
+) -> tuple[float, list[str]]:
     score = 0.0
     reasons = []
     name_lower = name.lower()

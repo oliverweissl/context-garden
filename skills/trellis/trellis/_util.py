@@ -1,4 +1,5 @@
 """Internal helpers shared across check modules."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -24,8 +25,12 @@ def to_jsonable(x):
     return x
 
 
-def threshold_status(observed: float, fail_threshold: float, warn_threshold: float | None = None,
-                      higher_is_worse: bool = True) -> Status:
+def threshold_status(
+    observed: float,
+    fail_threshold: float,
+    warn_threshold: float | None = None,
+    higher_is_worse: bool = True,
+) -> Status:
     """Shared PASS/WARN/FAIL boundary logic: a value strictly worse than
     `fail_threshold` is FAIL, worse than `warn_threshold` (defaulting to
     half the distance to fail_threshold) is WARN, else PASS."""

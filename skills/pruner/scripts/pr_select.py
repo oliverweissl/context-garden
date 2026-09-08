@@ -8,6 +8,7 @@ it scored higher than the budget cutoff") than a density-optimized packing
 would be, which matters since every chunk's inclusion has to be justified
 in `reasons`. See references/scoring.md for the tradeoff.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,8 +16,19 @@ import time
 from pathlib import Path
 
 from pr_common import estimate_tokens, read_text
-from pr_graph import all_distances, bfs_distances, build_adjacency, file_of, merge_external_graph
-from pr_score import extract_keywords, graph_score, lexical_match, resolve_error_locations
+from pr_graph import (
+    all_distances,
+    bfs_distances,
+    build_adjacency,
+    file_of,
+    merge_external_graph,
+)
+from pr_score import (
+    extract_keywords,
+    graph_score,
+    lexical_match,
+    resolve_error_locations,
+)
 
 REQUIRED_THRESHOLD = 8.0
 EXACT_SEED_THRESHOLD = 9.0
@@ -32,17 +44,31 @@ def _all_chunks(index: dict) -> list[dict]:
     for rel, entry in index["files"].items():
         if entry["symbols"]:
             for sym in entry["symbols"]:
-                chunks.append({
-                    "id": sym["id"], "file": rel, "start_line": sym["start_line"],
-                    "end_line": sym["end_line"], "name": sym["name"], "doc": sym.get("doc", ""),
-                    "chunk_kind": sym["type"], "file_kind": entry["kind"],
-                })
+                chunks.append(
+                    {
+                        "id": sym["id"],
+                        "file": rel,
+                        "start_line": sym["start_line"],
+                        "end_line": sym["end_line"],
+                        "name": sym["name"],
+                        "doc": sym.get("doc", ""),
+                        "chunk_kind": sym["type"],
+                        "file_kind": entry["kind"],
+                    }
+                )
         else:
-            chunks.append({
-                "id": f"{rel}:__file__", "file": rel, "start_line": 1,
-                "end_line": max(1, entry["line_count"]), "name": Path(rel).name, "doc": "",
-                "chunk_kind": "file", "file_kind": entry["kind"],
-            })
+            chunks.append(
+                {
+                    "id": f"{rel}:__file__",
+                    "file": rel,
+                    "start_line": 1,
+                    "end_line": max(1, entry["line_count"]),
+                    "name": Path(rel).name,
+                    "doc": "",
+                    "chunk_kind": "file",
+                    "file_kind": entry["kind"],
+                }
+            )
     return chunks
 
 
@@ -51,12 +77,18 @@ def _chunk_tokens(repo_root: Path, chunk: dict) -> int:
     if text is None:
         return 1
     lines = text.splitlines()
-    snippet = "\n".join(lines[chunk["start_line"] - 1: chunk["end_line"]])
+    snippet = "\n".join(lines[chunk["start_line"] - 1 : chunk["end_line"]])
     return estimate_tokens(snippet)
 
 
-def score_all(index: dict, repo_root: Path, task: str, changed_files: list[str] | None,
-              error_text: str | None, external_graph: dict | None) -> list[dict]:
+def score_all(
+    index: dict,
+    repo_root: Path,
+    task: str,
+    changed_files: list[str] | None,
+    error_text: str | None,
+    external_graph: dict | None,
+) -> list[dict]:
     task_lower = (task or "").lower()
     task_keywords = extract_keywords(task or "")
     chunks = _all_chunks(index)
@@ -113,7 +145,11 @@ def score_all(index: dict, repo_root: Path, task: str, changed_files: list[str] 
         scored.append({**c, "score": total, "reasons": reasons, "is_seed": c["id"] in seeds})
 
     for c in scored:
-        if c["file_kind"] == "config" and c["score"] <= 0 and Path(c["file"]).name.lower() in CONFIG_PRIORITY_NAMES:
+        if (
+            c["file_kind"] == "config"
+            and c["score"] <= 0
+            and Path(c["file"]).name.lower() in CONFIG_PRIORITY_NAMES
+        ):
             c["score"] = 0.5
             c["reasons"].append("primary project configuration file (always considered)")
 
@@ -121,8 +157,15 @@ def score_all(index: dict, repo_root: Path, task: str, changed_files: list[str] 
     return scored
 
 
-def select(index: dict, repo_root: Path, task: str, budget: int, changed_files: list[str] | None = None,
-           error_text: str | None = None, external_graph: dict | None = None) -> dict:
+def select(
+    index: dict,
+    repo_root: Path,
+    task: str,
+    budget: int,
+    changed_files: list[str] | None = None,
+    error_text: str | None = None,
+    external_graph: dict | None = None,
+) -> dict:
     scored = score_all(index, repo_root, task, changed_files, error_text, external_graph)
     for c in scored:
         c["tokens"] = _chunk_tokens(repo_root, c)
@@ -164,6 +207,7 @@ def select(index: dict, repo_root: Path, task: str, budget: int, changed_files: 
 
 # ---------------------------------------------------------------- slice persistence
 
+
 def _slice_dir(store_dir: Path) -> Path:
     d = store_dir / SLICES_DIRNAME
     d.mkdir(parents=True, exist_ok=True)
@@ -183,7 +227,12 @@ def next_slice_id(store_dir: Path) -> str:
 
 
 def save_slice(store_dir: Path, slice_id: str, repo_root: Path, result: dict) -> Path:
-    record = {"slice_id": slice_id, "repo_root": str(repo_root), "created_at": time.time(), **result}
+    record = {
+        "slice_id": slice_id,
+        "repo_root": str(repo_root),
+        "created_at": time.time(),
+        **result,
+    }
     path = _slice_dir(store_dir) / f"{slice_id}.json"
     path.write_text(json.dumps(record, indent=2))
     return path
@@ -196,8 +245,9 @@ def load_slice(store_dir: Path, slice_id: str) -> dict:
     return json.loads(path.read_text())
 
 
-def expand_slice(store_dir: Path, slice_id: str, add_chunk_ids: list[str],
-                  extra_budget: int | None = None) -> dict:
+def expand_slice(
+    store_dir: Path, slice_id: str, add_chunk_ids: list[str], extra_budget: int | None = None
+) -> dict:
     """Promote specific omitted candidates (by chunk id) into the slice's
     supporting_context, without rerunning the whole scoring pass -- this is
     the "identify the missing dependency, expand just that" step, not a
@@ -224,11 +274,24 @@ def expand_slice(store_dir: Path, slice_id: str, add_chunk_ids: list[str],
     record["budget"] = budget
     path = _slice_dir(store_dir) / f"{slice_id}.json"
     path.write_text(json.dumps(record, indent=2))
-    return {"record": record, "promoted": promoted, "still_missing": still_missing, "over_budget": over_budget}
+    return {
+        "record": record,
+        "promoted": promoted,
+        "still_missing": still_missing,
+        "over_budget": over_budget,
+    }
 
 
-def add_ad_hoc_chunk(store_dir: Path, slice_id: str, repo_root: Path, file: str, start_line: int,
-                      end_line: int, reason: str, extra_budget: int | None = None) -> dict:
+def add_ad_hoc_chunk(
+    store_dir: Path,
+    slice_id: str,
+    repo_root: Path,
+    file: str,
+    start_line: int,
+    end_line: int,
+    reason: str,
+    extra_budget: int | None = None,
+) -> dict:
     """Inject a specific file:line range the scorer never surfaced at all
     (e.g. a doc file, or a range inside a huge unparsed file). Still
     budget-enforced, like expand_slice -- pass extra_budget to raise the
@@ -236,15 +299,27 @@ def add_ad_hoc_chunk(store_dir: Path, slice_id: str, repo_root: Path, file: str,
     record = load_slice(store_dir, slice_id)
     budget = record["budget"] + (extra_budget or 0)
     chunk = {
-        "id": f"{file}:{start_line}-{end_line}", "file": file, "start_line": start_line,
-        "end_line": end_line, "name": Path(file).name, "chunk_kind": "adhoc", "file_kind": "adhoc",
-        "score": None, "reasons": [reason or "manually added by agent"], "is_seed": False,
+        "id": f"{file}:{start_line}-{end_line}",
+        "file": file,
+        "start_line": start_line,
+        "end_line": end_line,
+        "name": Path(file).name,
+        "chunk_kind": "adhoc",
+        "file_kind": "adhoc",
+        "score": None,
+        "reasons": [reason or "manually added by agent"],
+        "is_seed": False,
     }
     chunk["tokens"] = _chunk_tokens(repo_root, chunk)
     if record["used_tokens"] + chunk["tokens"] > budget:
-        return {"record": record, "added": False,
-                "error": f"would need {record['used_tokens'] + chunk['tokens']} tokens (budget {budget}); "
-                         f"pass --budget-extra to allow"}
+        return {
+            "record": record,
+            "added": False,
+            "error": (
+                f"would need {record['used_tokens'] + chunk['tokens']} tokens (budget {budget}); "
+                f"pass --budget-extra to allow"
+            ),
+        }
     record["budget"] = budget
     record["supporting_context"].append(chunk)
     record["used_tokens"] += chunk["tokens"]

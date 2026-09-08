@@ -1,49 +1,44 @@
 # Skill development
 
-This document describes the conventions a Context Garden Skill follows. All five Skills are implemented: `seedbank`, `pruner`, `compost`, `trellis`, `weeder`.
+A Skill is one self-contained directory under `skills/<name>/` that an
+agent installs on its own — the whole point of `docs/architecture.md`'s
+self-containment rule. `skills/pruner/` is a good one to read end to end
+first: small `SKILL.md`, deterministic `scripts/`, a real smoke test.
 
 ## Layout
 
 ```text
 skills/<name>/
-├── SKILL.md
-├── bin/            # thin CLI wrapper(s), e.g. `bin/compost`
-├── scripts/
-├── references/
-├── tests/          # the Skill's own smoke test + fixtures (self-check)
-└── validate.md      # how to manually validate the Skill
+├── SKILL.md        # required: name + description frontmatter, then the workflow an agent follows
+├── bin/             # thin CLI wrapper(s), e.g. bin/compost
+├── scripts/         # deterministic logic — this is where the real work happens
+├── references/      # optional depth, loaded on demand (not always-loaded with SKILL.md)
+└── tests/           # the Skill's own smoke test + fixtures
 ```
 
-Only create the directories a given Skill actually needs — don't scaffold empty directories speculatively.
+Only create the directories a Skill actually needs — most don't need `references/`.
 
-## Principles
+## Rules
 
-- Keep `SKILL.md` small. It's the part loaded into context first and most often; everything that isn't needed to decide whether/how to invoke the Skill belongs elsewhere.
-- Put deterministic operations in `scripts/`, not in prose instructions. If a step has one correct answer, it should be code, not something the model reasons through each time.
-- Put detailed, optional knowledge in `references/`, loaded only when actually needed (progressive disclosure).
-- `tests/skills/` covers repository-level structural validation (does every `SKILL.md` have the required frontmatter, does it stay self-contained). A Skill's own `tests/smoke_test.sh` + fixtures + `validate.md`, bundled inside the Skill directory, is its self-check — keep that so the Skill still validates itself when copied out on its own.
-- Avoid duplicating shared implementation across Skills — see the self-containment rule below for how to reuse code without violating it.
-- Optimize for progressive context loading: a Skill should cost little to have *available*, and more only once it's actually *used*.
-- Make the Skill usable independently of the monorepo — assume an installer copies only `skills/<name>/`.
+- Keep `SKILL.md` small — deterministic logic goes in `scripts/`, optional depth in `references/`.
+  This is the "progressive disclosure" principle from `docs/architecture.md`: an agent pays for
+  `SKILL.md` on every use, but `references/*.md` only when it actually needs that depth.
+- Self-contained: never a relative path outside the Skill's own directory. An installer may copy
+  only `skills/<name>/`, so anything the Skill needs (shared code included) must live inside it.
+  Checked by `scripts/validate-skills`.
+- No duplicated shared implementation across Skills — vendor or bundle instead of importing a
+  sibling Skill's code.
+- `tests/skills/` covers repo-level structural checks (naming, frontmatter, self-containment);
+  the Skill's own `tests/smoke_test.sh` is its functional self-check, and is what travels with it
+  when it's copied out standalone into another project.
 
-## Self-containment
+## Adding a Skill
 
-A Skill must never depend on relative paths outside its own directory (e.g. `../../src/context_garden/...`). If it needs functionality from `context_garden.core`, choose one of:
-
-1. **Bundle at build time** (preferred for portable Skills) — `scripts/build-skills` copies/vendors the needed modules into the Skill directory as part of producing a distributable artifact.
-2. **Vendor manually** into the Skill's own `scripts/` if the dependency is small and stable.
-3. **Declare an external runtime dependency** on the `context-garden` package, documented explicitly in the Skill's `SKILL.md`, for Skills that are fine assuming a Python environment with it installed.
-
-`scripts/validate-skills` checks for violations of this rule.
-
-## Implementing a new Skill (once specified)
-
-1. Implement the Skill in isolation under `skills/<name>/`.
-2. Add deterministic scripts for anything that doesn't need model judgment.
-3. Add a `tests/smoke_test.sh` + fixtures inside the Skill's own directory, and a `validate.md` describing how to run it.
-4. Bundle shared runtime if required (see above).
-5. Validate self-containment with `scripts/validate-skills`.
-6. Benchmark against a baseline agent using `benchmarks/` (see `docs/benchmarking.md`).
-7. Package/release the Skill independently via `scripts/build-skills`.
-
-Repeat per component. Do not implement a Skill ahead of its specification — see the repository root `README.md` for current status.
+1. Implement under `skills/<name>/`: deterministic `scripts/` + a `SKILL.md` that tells an agent
+   when to reach for it and what workflow to follow.
+2. Add `tests/smoke_test.sh` + fixtures that exercise it end to end (see `skills/pruner/tests/`
+   for a fixture-driven example — it's caught real bugs that isolated unit tests missed).
+3. Run `scripts/validate-skills` to check self-containment and structure.
+4. Benchmark it against a baseline agent (`docs/benchmarking.md`) — the whole reason a Skill
+   earns a place in this repo is a measured win, not an assumed one.
+5. `scripts/build-skills` to package it for distribution.

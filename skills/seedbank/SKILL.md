@@ -94,6 +94,20 @@ point, it replaces a hand-maintained context file. Gitignore
 (the local profiler state) unless the team has decided to share observation
 history across contributors.
 
+**If Claude Code is one of the agents working in this repository**, also
+commit a one-line `CLAUDE.md`:
+```
+@AGENTS.md
+```
+Claude Code reads `CLAUDE.md`, never `AGENTS.md` — no automatic fallback,
+confirmed in Anthropic's own docs. The `@AGENTS.md` import line makes
+Claude Code load the same facts every other AGENTS.md-reading agent
+already gets, without a second copy to keep in sync (`seedbank compile`
+only ever needs to touch `AGENTS.md`; this stub never changes again). A
+symlink (`ln -s AGENTS.md CLAUDE.md`) works too but fails on Windows
+without admin/Developer Mode — the import line doesn't have that problem
+and is the officially documented approach either way.
+
 ## Guarantees
 
 - Nothing is promoted just because it was seen once — promotion is always

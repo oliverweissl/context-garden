@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Automated smoke test referenced by ../validate.md.
 # Copies tests/fixtures/sample_repo to a scratch dir and drives index ->
 # select -> expand for the spec's three worked use cases (bug fix, compiler
 # failure, solver convergence change). No network, no LLM calls.
@@ -39,8 +38,7 @@ key = sys.argv[1]
 print(' '.join(c['id'] for c in d[key]))
 " "$1"; }
 
-# --- parser regression checks (bugs caught during development, see
-# validate.md section 5) -----------------------------------------------
+# --- parser regression checks (bugs caught during development) --------
 parser_check=$(python3 -c "
 import sys
 sys.path.insert(0, '$DIR/scripts')

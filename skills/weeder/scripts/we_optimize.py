@@ -7,6 +7,7 @@ shortening the routing description or rewriting/merging duplicate rules,
 which need judgment and are deliberately left to the agent (see
 SKILL.md's workflow and references/routing-heuristic.md).
 """
+
 from __future__ import annotations
 
 import re
@@ -52,8 +53,12 @@ def rebuild_skill_md(frontmatter_block: str, sections: list[dict]) -> str:
     return "\n\n".join(parts) + "\n"
 
 
-def optimize_skill(skill_dir, out_dir, move_categories=DEFAULT_MOVE_CATEGORIES,
-                    min_tokens_to_move: int = MIN_TOKENS_TO_MOVE) -> dict:
+def optimize_skill(
+    skill_dir,
+    out_dir,
+    move_categories=DEFAULT_MOVE_CATEGORIES,
+    min_tokens_to_move: int = MIN_TOKENS_TO_MOVE,
+) -> dict:
     skill_dir = Path(skill_dir)
     out_dir = Path(out_dir)
     parsed = parse_skill(skill_dir)
@@ -69,13 +74,19 @@ def optimize_skill(skill_dir, out_dir, move_categories=DEFAULT_MOVE_CATEGORIES,
     new_sections = []
     for s in parsed["sections"]:
         tokens = estimate_tokens(s["content"])
-        if s["category"] in move_categories and s["heading"] is not None and tokens >= min_tokens_to_move:
+        if (
+            s["category"] in move_categories
+            and s["heading"] is not None
+            and tokens >= min_tokens_to_move
+        ):
             slug = _unique_slug(slugify(s["heading"]), taken_slugs)
             filename = f"{slug}.md"
             new_reference_files[filename] = render_section(s) + "\n"
             pointer = f"See `references/{filename}`."
             new_sections.append({**s, "content": pointer})
-            moves.append({"heading": s["heading"], "tokens_moved": tokens, "to": f"references/{filename}"})
+            moves.append(
+                {"heading": s["heading"], "tokens_moved": tokens, "to": f"references/{filename}"}
+            )
         else:
             new_sections.append(s)
 
@@ -94,13 +105,19 @@ def optimize_skill(skill_dir, out_dir, move_categories=DEFAULT_MOVE_CATEGORIES,
     # re-audit both the original dir and the freshly written output dir,
     # rather than re-deriving the same figure here with separate logic.
     from we_audit import audit_skill
+
     before_always_loaded = audit_skill(skill_dir)["always_loaded_tokens"]
     after_always_loaded = audit_skill(out_dir)["always_loaded_tokens"]
 
     return {
-        "skill_dir": str(skill_dir), "out_dir": str(out_dir),
+        "skill_dir": str(skill_dir),
+        "out_dir": str(out_dir),
         "moves": moves,
         "before_always_loaded_tokens": before_always_loaded,
         "after_always_loaded_tokens": after_always_loaded,
-        "reduction_pct": round(100 * (1 - after_always_loaded / before_always_loaded), 1) if before_always_loaded else 0.0,
+        "reduction_pct": (
+            round(100 * (1 - after_always_loaded / before_always_loaded), 1)
+            if before_always_loaded
+            else 0.0
+        ),
     }

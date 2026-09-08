@@ -16,7 +16,7 @@ Intended pipeline (once a Skill requires it):
 
 No Skill currently needs shared-runtime bundling, so this is a no-op that
 reports what it would build. Implement bundling logic when the first real
-Skill requires code from context_garden.core.
+Skill needs shared code vendored in at build time.
 """
 
 from __future__ import annotations

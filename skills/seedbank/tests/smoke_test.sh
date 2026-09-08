@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Automated smoke test referenced by ../validate.md.
 # Copies tests/fixtures/mini_repo to a scratch dir and drives the full
 # observe -> candidates -> promote -> compile -> invalidate -> gc lifecycle,
 # covering the spec's three worked use cases (build discovery, repeated

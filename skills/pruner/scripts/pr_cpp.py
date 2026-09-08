@@ -5,14 +5,30 @@ braces inside string/char literals or comments. It is good enough to
 recover function name + line range + a naive call list, which is what
 selection scoring needs. See references/scoring.md for the tradeoff.
 """
+
 from __future__ import annotations
 
 import re
 
 CONTROL_KEYWORDS = {
-    "if", "for", "while", "switch", "catch", "return", "sizeof", "else",
-    "do", "new", "delete", "throw", "static_cast", "dynamic_cast",
-    "reinterpret_cast", "const_cast", "typeof", "decltype",
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+    "return",
+    "sizeof",
+    "else",
+    "do",
+    "new",
+    "delete",
+    "throw",
+    "static_cast",
+    "dynamic_cast",
+    "reinterpret_cast",
+    "const_cast",
+    "typeof",
+    "decltype",
 }
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
 NAME_BEFORE_PAREN_RE = re.compile(r"([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)\s*\(")
@@ -20,11 +36,37 @@ CALL_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 TYPE_DECL_RE = re.compile(r"^\s*(?:struct|class|enum(?:\s+class)?)\s+([A-Za-z_]\w*)\b")
 IDENTIFIER_RE = re.compile(r"\b([A-Za-z_]\w*)\b")
 _PRIMITIVE_KEYWORDS = {
-    "int", "double", "float", "char", "bool", "void", "long", "short",
-    "unsigned", "signed", "const", "static", "inline", "virtual",
-    "constexpr", "auto", "return", "struct", "class", "enum", "template",
-    "typename", "namespace", "using", "friend", "explicit", "override",
-    "noexcept", "public", "private", "protected",
+    "int",
+    "double",
+    "float",
+    "char",
+    "bool",
+    "void",
+    "long",
+    "short",
+    "unsigned",
+    "signed",
+    "const",
+    "static",
+    "inline",
+    "virtual",
+    "constexpr",
+    "auto",
+    "return",
+    "struct",
+    "class",
+    "enum",
+    "template",
+    "typename",
+    "namespace",
+    "using",
+    "friend",
+    "explicit",
+    "override",
+    "noexcept",
+    "public",
+    "private",
+    "protected",
 }
 
 
@@ -37,7 +79,7 @@ def _signature_type_refs(sig_text: str, own_name: str) -> list[str]:
     and cheap, and it's what lets a referenced type's definition surface
     via graph distance for C/C++ (see references/scoring.md)."""
     before_parens = sig_text.split("(", 1)[0]
-    after_first_paren = sig_text[len(before_parens):]
+    after_first_paren = sig_text[len(before_parens) :]
     tokens = IDENTIFIER_RE.findall(before_parens) + IDENTIFIER_RE.findall(after_first_paren)
     return [t for t in tokens if t != own_name and t not in _PRIMITIVE_KEYWORDS]
 
@@ -82,11 +124,17 @@ def _extract_type_symbols(lines: list[str]) -> list[dict]:
         if end is None:
             i += 1
             continue
-        symbols.append({
-            "name": name, "qualname": name, "type": "type",
-            "start_line": start + 1, "end_line": end + 1,
-            "doc": "", "calls": [],
-        })
+        symbols.append(
+            {
+                "name": name,
+                "qualname": name,
+                "type": "type",
+                "start_line": start + 1,
+                "end_line": end + 1,
+                "doc": "",
+                "calls": [],
+            }
+        )
         i = end + 1
     return symbols
 
@@ -128,15 +176,17 @@ def parse_cpp_file(text: str) -> dict:
         sig_part, _, after_brace = first_line.partition("{")
         call_text = "\n".join([after_brace] + body_lines[1:])
         calls = sorted(set(_collect_calls(call_text)) | set(_signature_type_refs(sig_part, simple)))
-        symbols.append({
-            "name": simple,
-            "qualname": current_qualname,
-            "type": "function",
-            "start_line": body_start_line,
-            "end_line": end_line,
-            "doc": "",
-            "calls": calls,
-        })
+        symbols.append(
+            {
+                "name": simple,
+                "qualname": current_qualname,
+                "type": "function",
+                "start_line": body_start_line,
+                "end_line": end_line,
+                "doc": "",
+                "calls": calls,
+            }
+        )
         in_body = False
         current_qualname = None
         body_lines = []

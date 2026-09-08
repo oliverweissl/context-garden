@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Automated smoke test referenced by ../validate.md.
 # Exercises every command against the bundled fixtures and asserts on
 # observable behavior: clustering, profile detection, delta mode,
 # retrieval, and lossless recoverability. No network, no LLM calls.

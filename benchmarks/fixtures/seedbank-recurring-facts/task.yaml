@@ -1,0 +1,36 @@
+task_id: seedbank-recurring-facts
+component: seedbank
+level: repo
+skill_relevance: [seedbank]
+description: >
+  A "new contributor" question whose three answers are scattered across
+  docs/skill-development.md, docs/architecture.md, and
+  skills/weeder/SKILL.md. Models seedbank's amortized value across
+  sessions rather than a single-session tool invocation.
+notes: >
+  Unlike the other fixtures, "treatment" here does not install
+  skills/seedbank/ under .claude/skills/ -- it overlays a small,
+  pre-populated AGENTS.md instead, which is what a *prior* seedbank
+  session would already have committed. seedbank's payoff is the
+  artifact (a small always-loaded fact file), not a CLI invoked
+  mid-task, so this is the fixture-level knob that models it honestly:
+  treatment_mode: preseeded, not skill_available.
+base_ref: worktree
+treatment_mode: preseeded
+treatment_overlay: treatment_overlay
+prompt: |
+  A new contributor asks three questions. Answer each in one sentence,
+  citing the file it came from, and write all three answers to
+  ANSWERS.txt at the repository root:
+  1. What single command validates every Skill's structure?
+  2. What must never be true of a path that a Skill references from its
+     own tooling?
+  3. What two conditions must both hold before accepting a weeder
+     rewrite of a Skill?
+verify:
+  type: file_contains
+  path: ANSWERS.txt
+  contains:
+    - "scripts/validate-skills"
+    - "../../benchmarks"
+    - "100%"

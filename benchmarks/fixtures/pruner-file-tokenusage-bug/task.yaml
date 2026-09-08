@@ -1,0 +1,25 @@
+task_id: pruner-file-tokenusage-bug
+component: pruner
+level: file
+skill_relevance: [pruner]
+description: >
+  A single-line arithmetic bug in BenchmarkRecord.total_tokens, surfaced
+  only through one failing unit test, inside the full repository. Tests
+  whether the agent locates and reads the one relevant file instead of
+  exploring broadly for it.
+notes: >
+  This is pruner's core value proposition: given a concrete failing
+  test, return the exact file:line range instead of grep-exploring the
+  whole tree. The repository is large enough (five Skills, docs, tests,
+  this benchmark harness) that undirected exploration has a real,
+  measurable token cost -- the prompt deliberately does not name the
+  buggy file.
+base_ref: worktree
+patch: bug.patch
+prompt: |
+  `tests/benchmarks/test_types.py::test_total_tokens_sums_all_five_fields`
+  is failing on this branch. Find the bug and fix it. Do not modify the
+  test file.
+verify:
+  type: pytest
+  args: ["tests/benchmarks/test_types.py"]

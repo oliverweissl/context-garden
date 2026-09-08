@@ -9,6 +9,7 @@ walking up from the given start directory > "none". No level here ever
 triggers a network call or needs an API key -- see
 references/llm-assist.md for what actually changes at each level.
 """
+
 from __future__ import annotations
 
 import os
@@ -79,7 +80,9 @@ def resolve_assist_level(explicit: str | None = None, start_dir=None) -> str:
         level = assist.get("level") if isinstance(assist, dict) else None
         if level:
             if level not in LEVELS:
-                raise ValueError(f"invalid llm_assist.level={level!r} in {config_path}, expected one of {LEVELS}")
+                raise ValueError(
+                    f"invalid llm_assist.level={level!r} in {config_path}, expected one of {LEVELS}"
+                )
             return level
 
     return DEFAULT_LEVEL

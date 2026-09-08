@@ -4,6 +4,7 @@
 See ../SKILL.md for the agent-facing workflow and ../references/schema.md
 for the full output schema. Stdlib-only, no network access, no LLM calls.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,7 @@ WARNING_CAP = 5
 
 # ---------------------------------------------------------------- summary building
 
+
 def _derive_status(exit_code: int, error_groups: list[dict], parsed: dict) -> str:
     ns = parsed.get("numerical_summary")
     if ns and ns.get("nan_or_inf_detected"):
@@ -50,14 +52,22 @@ def _public_event(e: dict) -> dict:
     return out
 
 
-def compute_diff(prev_meta: dict, exit_code: int, numerical_summary: dict | None, curr_sig_map: dict) -> dict:
+def compute_diff(
+    prev_meta: dict, exit_code: int, numerical_summary: dict | None, curr_sig_map: dict
+) -> dict:
     prev_sigs = prev_meta.get("group_signatures", {})
     new_events, resolved_events, count_changes = [], [], []
     for sig, info in curr_sig_map.items():
         if sig not in prev_sigs:
             new_events.append(info)
         elif prev_sigs[sig]["count"] != info["count"]:
-            count_changes.append({"message": info["message"], "before": prev_sigs[sig]["count"], "after": info["count"]})
+            count_changes.append(
+                {
+                    "message": info["message"],
+                    "before": prev_sigs[sig]["count"],
+                    "after": info["count"],
+                }
+            )
     for sig, info in prev_sigs.items():
         if sig not in curr_sig_map:
             resolved_events.append(info)
@@ -75,7 +85,14 @@ def compute_diff(prev_meta: dict, exit_code: int, numerical_summary: dict | None
     return diff
 
 
-def process_and_store(store: Store, command_str: str, text: str, exit_code: int, duration: float, profile_override: str | None) -> dict:
+def process_and_store(
+    store: Store,
+    command_str: str,
+    text: str,
+    exit_code: int,
+    duration: float,
+    profile_override: str | None,
+) -> dict:
     run_id = store.next_run_id()
     store.save_raw(run_id, text)
     lines = text.splitlines()
@@ -112,14 +129,22 @@ def process_and_store(store: Store, command_str: str, text: str, exit_code: int,
 
     error_events = [e for e in events_index if e["severity"] == "error"]
     warning_events = [e for e in events_index if e["severity"] == "warning"]
-    error_groups_for_status = [g for g in groups_sorted if g["representative"]["severity"] == "error"]
+    error_groups_for_status = [
+        g for g in groups_sorted if g["representative"]["severity"] == "error"
+    ]
 
     status = _derive_status(exit_code, error_groups_for_status, parsed)
 
     prev_run_id = store.previous_run_for(command_str)
     prev_meta = store.load_meta(prev_run_id) if prev_run_id else None
-    curr_sig_map = {e["signature"]: {"message": e["message"], "count": e["count"]} for e in events_index}
-    diff_block = compute_diff(prev_meta, exit_code, parsed.get("numerical_summary"), curr_sig_map) if prev_meta else None
+    curr_sig_map = {
+        e["signature"]: {"message": e["message"], "count": e["count"]} for e in events_index
+    }
+    diff_block = (
+        compute_diff(prev_meta, exit_code, parsed.get("numerical_summary"), curr_sig_map)
+        if prev_meta
+        else None
+    )
 
     root = error_events[:ROOT_EVENT_CAP]
     repeated = error_events[ROOT_EVENT_CAP : ROOT_EVENT_CAP + REPEATED_EVENT_CAP]
@@ -147,7 +172,10 @@ def process_and_store(store: Store, command_str: str, text: str, exit_code: int,
     }
 
     meta = dict(summary)
-    meta["group_signatures"] = {e["signature"]: {"message": e["message"], "count": e["count"], "severity": e["severity"]} for e in events_index}
+    meta["group_signatures"] = {
+        e["signature"]: {"message": e["message"], "count": e["count"], "severity": e["severity"]}
+        for e in events_index
+    }
     meta["events_index"] = events_index
     meta["timestamp"] = time.time()
     store.save_meta(run_id, meta)
@@ -157,6 +185,7 @@ def process_and_store(store: Store, command_str: str, text: str, exit_code: int,
 
 # ---------------------------------------------------------------- human rendering
 
+
 def render_human(summary: dict) -> str:
     out = []
     out.append(f"$ {summary['command']}")
@@ -164,7 +193,9 @@ def render_human(summary: dict) -> str:
         f"exit={summary['exit_code']} duration={summary['duration_seconds']}s "
         f"status={summary['status'].upper()} profile={summary['profile']}"
     )
-    out.append(f"raw_output_id={summary['raw_output_id']} ({summary['raw_line_count']} lines captured, stored)")
+    out.append(
+        f"raw_output_id={summary['raw_output_id']} ({summary['raw_line_count']} lines captured, stored)"
+    )
     out.append("")
 
     diff = summary.get("changed_since_previous_run")
@@ -178,12 +209,17 @@ def render_human(summary: dict) -> str:
             out += [f"    - {e['message']} (was x{e['count']})" for e in diff["resolved_events"]]
         if diff["count_changes"]:
             out.append("  Count changed:")
-            out += [f"    ~ {e['message']}: {e['before']} -> {e['after']}" for e in diff["count_changes"]]
+            out += [
+                f"    ~ {e['message']}: {e['before']} -> {e['after']}"
+                for e in diff["count_changes"]
+            ]
         if not (diff["new_events"] or diff["resolved_events"] or diff["count_changes"]):
             out.append("  No structural changes.")
         if "numerical_summary_before" in diff:
             b, a = diff["numerical_summary_before"], diff["numerical_summary_after"]
-            out.append(f"  Residual: {b.get('final_residual')} -> {a.get('final_residual')} ({a.get('trend')})")
+            out.append(
+                f"  Residual: {b.get('final_residual')} -> {a.get('final_residual')} ({a.get('trend')})"
+            )
         out.append("")
 
     if summary["root_events"]:
@@ -226,6 +262,7 @@ def render_human(summary: dict) -> str:
 
 
 # ---------------------------------------------------------------- commands
+
 
 def cmd_run(args, store: Store) -> int:
     cmd_list = args.command
@@ -274,7 +311,10 @@ def cmd_get(args, store: Store) -> int:
     for i in range(a, b + 1):
         print(f"{i}: {lines[i - 1]}")
     if truncated:
-        print(f"... truncated to {MAX_GET_LINES} lines; request another range or --lines all for the rest", file=sys.stderr)
+        print(
+            f"... truncated to {MAX_GET_LINES} lines; request another range or --lines all for the rest",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -291,13 +331,15 @@ def cmd_event(args, store: Store) -> int:
         print(f"affected_tests ({len(entry['tests'])}): {', '.join(entry['tests'][:50])}")
     print(f"occurs at lines: {compact_ranges(entry['lines'])}")
     print("---")
-    for ln in entry["lines"][:5]:
+    shown_lines = entry["lines"][:5]
+    for idx, ln in enumerate(shown_lines):
         lo = max(1, ln - args.context)
         hi = min(len(raw_lines), ln + args.context)
         for i in range(lo, hi + 1):
             marker = ">>" if i == ln else "  "
             print(f"{marker} {i}: {raw_lines[i - 1]}")
-        print("...")
+        if idx < len(shown_lines) - 1:
+            print("...")
     return 0
 
 
@@ -314,7 +356,9 @@ def cmd_grep(args, store: Store) -> int:
                 print(f"{marker} {j}: {raw_lines[j - 1]}")
             hits += 1
             if hits >= args.max:
-                print(f"... stopped at {args.max} matches; refine pattern for more", file=sys.stderr)
+                print(
+                    f"... stopped at {args.max} matches; refine pattern for more", file=sys.stderr
+                )
                 break
     if hits == 0:
         print("no matches", file=sys.stderr)
@@ -333,7 +377,9 @@ def cmd_diff(args, store: Store) -> int:
 
 def cmd_list(args, store: Store) -> int:
     for m in store.list_runs(args.limit):
-        print(f"{m['raw_output_id']}  {m['status']:5s}  exit={m['exit_code']:<4} {m['command'][:80]}")
+        print(
+            f"{m['raw_output_id']}  {m['status']:5s}  exit={m['exit_code']:<4} {m['command'][:80]}"
+        )
     return 0
 
 
@@ -344,6 +390,7 @@ def cmd_show(args, store: Store) -> int:
 
 
 # ---------------------------------------------------------------- CLI wiring
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="compost")
@@ -358,7 +405,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest = sub.add_parser("ingest", help="summarize an already-captured log file/stdin")
     p_ingest.add_argument("--file", default=None)
     p_ingest.add_argument("--stdin", action="store_true")
-    p_ingest.add_argument("--command", default=None, help="label used for signature grouping/diffing")
+    p_ingest.add_argument(
+        "--command", default=None, help="label used for signature grouping/diffing"
+    )
     p_ingest.add_argument("--exit-code", type=int, default=0)
     p_ingest.add_argument("--profile", default=None, choices=list(PARSERS))
     p_ingest.add_argument("--json", action="store_true")
@@ -367,7 +416,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_get.add_argument("run_id")
     p_get.add_argument("--lines", required=True, help="A:B inclusive, or 'all'")
 
-    p_event = sub.add_parser("event", help="fetch full detail + raw excerpt for one clustered event")
+    p_event = sub.add_parser(
+        "event", help="fetch full detail + raw excerpt for one clustered event"
+    )
     p_event.add_argument("run_id")
     p_event.add_argument("--event", type=int, required=True)
     p_event.add_argument("--context", type=int, default=3)

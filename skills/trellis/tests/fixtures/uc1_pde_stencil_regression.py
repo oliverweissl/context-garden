@@ -6,6 +6,7 @@ this spec catches it via mesh convergence.
 BUGGED = True reproduces the regression (this fixture's default);
 BUGGED = False shows the healthy 2nd-order scheme for comparison.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -33,9 +34,12 @@ def solve(h):
 
 RESULTS = [
     S.pde.mesh_convergence(
-        solve, resolutions=[0.1, 0.05, 0.025, 0.0125, 0.00625],
+        solve,
+        resolutions=[0.1, 0.05, 0.025, 0.0125, 0.00625],
         reference=lambda h: np.array([TRUE_DERIV]),
-        expected_order=2.0, tol_order=0.3, name="stencil_convergence_order",
+        expected_order=2.0,
+        tol_order=0.3,
+        name="stencil_convergence_order",
     ),
     S.universal.nan_inf_check(solve(0.01), name="stencil_output"),
 ]

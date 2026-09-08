@@ -7,6 +7,7 @@ relevance is lexical/structural (keyword overlap + call/import graph
 distance), not semantic embedding similarity. See references/scoring.md
 for why that tradeoff was made.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -18,7 +19,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pr_common import changed_files_from_git, estimate_tokens
 from pr_index import load_or_build_index
-from pr_select import add_ad_hoc_chunk, expand_slice, load_slice, next_slice_id, save_slice, select
+from pr_select import (
+    add_ad_hoc_chunk,
+    expand_slice,
+    load_slice,
+    next_slice_id,
+    save_slice,
+    select,
+)
 
 STORE_DIRNAME = ".pruner"
 
@@ -29,6 +37,7 @@ def _store_dir(repo_root: Path, explicit: str | None) -> Path:
 
 # ---------------------------------------------------------------- rendering
 
+
 def _fmt_chunk_line(c: dict) -> str:
     loc = f"{c['file']}:{c['start_line']}-{c['end_line']}"
     score = f"{c['score']:.1f}" if c.get("score") is not None else "-"
@@ -36,7 +45,10 @@ def _fmt_chunk_line(c: dict) -> str:
 
 
 def render_human(result: dict) -> str:
-    out = [f"task: {result['task']!r}", f"budget: {result['budget']} tokens  used: {result['used_tokens']} tokens  confidence: {result['confidence']}"]
+    out = [
+        f"task: {result['task']!r}",
+        f"budget: {result['budget']} tokens  used: {result['used_tokens']} tokens  confidence: {result['confidence']}",
+    ]
     if "slice_id" in result:
         out.append(f"slice_id: {result['slice_id']}")
     for label, key in (
@@ -57,23 +69,32 @@ def render_human(result: dict) -> str:
 
     omitted = result["omitted_candidates"]
     out.append("")
-    out.append(f"Omitted candidates ({len(omitted)} shown, likely relevant but cut for budget or low score):")
+    out.append(
+        f"Omitted candidates ({len(omitted)} shown, likely relevant but cut for budget or low score):"
+    )
     for c in omitted[:10]:
         out.append(_fmt_chunk_line(c))
     if "slice_id" in result:
         out.append("")
         out.append("Expansion: if reasoning/tests fail because something's missing,")
-        out.append(f"  pruner expand {result['slice_id']} --add <file:start-end from the omitted list above>")
-        out.append(f"  pruner expand {result['slice_id']} --file <path> --lines A:B   # anything not listed at all")
+        out.append(
+            f"  pruner expand {result['slice_id']} --add <file:start-end from the omitted list above>"
+        )
+        out.append(
+            f"  pruner expand {result['slice_id']} --file <path> --lines A:B   # anything not listed at all"
+        )
     return "\n".join(out)
 
 
 # ---------------------------------------------------------------- commands
 
+
 def cmd_index(args, repo_root: Path, store_dir: Path) -> int:
     index, report = load_or_build_index(repo_root, store_dir, force=args.force)
-    print(f"indexed {report['files_indexed']} file(s): {report['files_unchanged']} unchanged (reused), "
-          f"{report['files_reparsed_or_new']} (re)parsed")
+    print(
+        f"indexed {report['files_indexed']} file(s): {report['files_unchanged']} unchanged (reused), "
+        f"{report['files_reparsed_or_new']} (re)parsed"
+    )
     print(f"symbols: {report['symbols']}  call/reference edges: {report['call_edges']}")
     return 0
 
@@ -111,12 +132,22 @@ def cmd_expand(args, repo_root: Path, store_dir: Path) -> int:
             print("error: --file requires --lines A:B", file=sys.stderr)
             return 2
         a, b = args.lines.split(":")
-        outcome = add_ad_hoc_chunk(store_dir, args.slice_id, repo_root, args.file, int(a), int(b),
-                                    args.reason or "manually added by agent", args.budget_extra)
+        outcome = add_ad_hoc_chunk(
+            store_dir,
+            args.slice_id,
+            repo_root,
+            args.file,
+            int(a),
+            int(b),
+            args.reason or "manually added by agent",
+            args.budget_extra,
+        )
         if not outcome["added"]:
             print(f"error: {outcome['error']}", file=sys.stderr)
             return 1
-        print(f"added {args.file}:{a}-{b} to {args.slice_id} (used_tokens now {outcome['record']['used_tokens']})")
+        print(
+            f"added {args.file}:{a}-{b} to {args.slice_id} (used_tokens now {outcome['record']['used_tokens']})"
+        )
         return 0
 
     if not args.add:
@@ -146,34 +177,53 @@ def cmd_list(args, repo_root: Path, store_dir: Path) -> int:
         return 0
     for p in sorted(d.glob("s*.json")):
         record = json.loads(p.read_text())
-        print(f"{record['slice_id']}  budget={record['budget']:<6} used={record['used_tokens']:<6} task={record['task']!r}")
+        print(
+            f"{record['slice_id']}  budget={record['budget']:<6} used={record['used_tokens']:<6} task={record['task']!r}"
+        )
     return 0
 
 
 # ---------------------------------------------------------------- CLI wiring
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pruner")
     p.add_argument("--repo", default=None, help="repository root (default: cwd)")
-    p.add_argument("--store", default=None, help="override store directory (default: <repo>/.pruner)")
+    p.add_argument(
+        "--store", default=None, help="override store directory (default: <repo>/.pruner)"
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     p_index = sub.add_parser("index", help="build/refresh the repository index")
-    p_index.add_argument("--force", action="store_true", help="re-parse every file, ignore cached hashes")
+    p_index.add_argument(
+        "--force", action="store_true", help="re-parse every file, ignore cached hashes"
+    )
 
     p_select = sub.add_parser("select", help="select the smallest sufficient context for a task")
     p_select.add_argument("--task", required=True)
     p_select.add_argument("--budget", type=int, default=2000)
     p_select.add_argument("--changed", nargs="*", default=None, help="explicit changed file paths")
-    p_select.add_argument("--auto-changed", action="store_true", help="use `git diff --name-only HEAD` if --changed not given")
+    p_select.add_argument(
+        "--auto-changed",
+        action="store_true",
+        help="use `git diff --name-only HEAD` if --changed not given",
+    )
     p_select.add_argument("--error", default=None, help="raw compiler error / traceback text")
-    p_select.add_argument("--error-file", default=None, help="path to a file containing the error/traceback")
-    p_select.add_argument("--graph", default=None, help="path to an external {nodes,edges} JSON graph to merge in")
+    p_select.add_argument(
+        "--error-file", default=None, help="path to a file containing the error/traceback"
+    )
+    p_select.add_argument(
+        "--graph", default=None, help="path to an external {nodes,edges} JSON graph to merge in"
+    )
     p_select.add_argument("--json", action="store_true")
 
-    p_expand = sub.add_parser("expand", help="progressively add specific chunks to an existing slice")
+    p_expand = sub.add_parser(
+        "expand", help="progressively add specific chunks to an existing slice"
+    )
     p_expand.add_argument("slice_id")
-    p_expand.add_argument("--add", nargs="*", default=None, help="chunk id(s) from that slice's omitted_candidates")
+    p_expand.add_argument(
+        "--add", nargs="*", default=None, help="chunk id(s) from that slice's omitted_candidates"
+    )
     p_expand.add_argument("--file", default=None)
     p_expand.add_argument("--lines", default=None, help="A:B, used with --file")
     p_expand.add_argument("--reason", default=None)

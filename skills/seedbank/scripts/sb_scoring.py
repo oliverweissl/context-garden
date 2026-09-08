@@ -7,6 +7,7 @@ All quantities are heuristic estimates (see references/scoring.md for the
 reasoning behind each term) -- there is no ground truth "correct" value,
 only a consistent, explainable ranking.
 """
+
 from __future__ import annotations
 
 PLACEHOLDER_REPRESENTATION_TOKENS = 20  # used only to rank un-promoted candidates

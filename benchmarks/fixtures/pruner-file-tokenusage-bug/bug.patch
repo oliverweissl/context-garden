@@ -1,0 +1,12 @@
+--- a/benchmarks/harness/types.py
++++ b/benchmarks/harness/types.py
+@@ -104,9 +104,8 @@ class BenchmarkRecord:
+         return (
+             self.input_tokens
+             + self.repository_tokens
+             + self.tool_result_tokens
+             + self.skill_tokens
+-            + self.output_tokens
+         )
+
+     def to_dict(self) -> dict[str, Any]:

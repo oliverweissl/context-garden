@@ -2,6 +2,7 @@
 Trellis replicates across many seeds and reports the confidence interval,
 which is what actually determines whether the claim is supportable.
 """
+
 import sys
 from pathlib import Path
 

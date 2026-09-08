@@ -1,0 +1,34 @@
+task_id: compost-noisy-failure-cluster
+component: compost
+level: repo
+skill_relevance: [compost]
+description: >
+  A pytest suite with two distinct bugs: one causes most of the test
+  cases to fail with the same TypeError (a large, repetitive failure
+  cluster), the other causes a couple of tests to fail with an unrelated
+  KeyError (a small secondary cluster). Tests whether the agent
+  distinguishes root cause from noise instead of wading through, or
+  repeatedly re-dumping, the full raw pytest output.
+notes: >
+  compost's value here is clustering: 17 of 21 tests fail, but they
+  reduce to exactly two distinct root causes. A baseline agent has to
+  either read a long -v traceback dump (possibly more than once, across
+  a fix-test-fix loop) or grep through it by hand; compost's `run`
+  reports clustered root cause(s) plus counts up front, and re-runs
+  report only the delta.
+base_ref: worktree
+overlay: overlay
+prompt: |
+  `pytest examples/flaky_service` is failing. Fix the underlying bug(s)
+  so the full suite passes, without weakening any assertion. Then write
+  the name of the single function most responsible for the majority of
+  the failures to examples/flaky_service/ROOT_CAUSE.txt (just the
+  function name, nothing else).
+verify:
+  type: all
+  checks:
+    - type: pytest
+      args: ["examples/flaky_service"]
+    - type: file_contains
+      path: examples/flaky_service/ROOT_CAUSE.txt
+      contains: ["get_timeout"]

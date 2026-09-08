@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Automated smoke test referenced by ../validate.md.
 # Exercises audit/optimize/test-routing/test-function/diff against
 # tests/fixtures/bloated_skill, which deliberately combines all three
 # spec use cases: an oversized skill (UC1), a rule repeated five times

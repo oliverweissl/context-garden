@@ -34,14 +34,14 @@ def test_skill_md_has_required_frontmatter(skill_md: Path):
     frontmatter = parts[1]
 
     for required_field in ("name", "description"):
-        assert f"{required_field}:" in frontmatter, (
-            f"{skill_md} frontmatter is missing required field '{required_field}'"
-        )
+        assert (
+            f"{required_field}:" in frontmatter
+        ), f"{skill_md} frontmatter is missing required field '{required_field}'"
 
 
 @pytest.mark.parametrize("skill_md", _discovered_skill_files(), ids=lambda p: p.parent.name)
 def test_skill_does_not_reference_repo_relative_paths(skill_md: Path):
     text = skill_md.read_text(encoding="utf-8")
-    assert "../../src" not in text, (
-        f"{skill_md} must not depend on repository-relative paths outside its own directory"
-    )
+    assert (
+        "../../src" not in text
+    ), f"{skill_md} must not depend on repository-relative paths outside its own directory"

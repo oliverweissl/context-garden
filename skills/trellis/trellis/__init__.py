@@ -13,6 +13,7 @@ ODEs/PDEs, Monte Carlo -- essentially always already depend on it in
 practice; re-implementing eigenvalues/condition numbers by hand would
 make the tool itself less numerically trustworthy, not more).
 """
+
 try:
     import numpy  # noqa: F401
 except ImportError as e:  # pragma: no cover
@@ -25,6 +26,15 @@ from . import linalg, ode, optimization, pde, stochastic, universal
 from .schema import CATEGORIES, CheckResult, Report, Status, build_report
 
 __all__ = [
-    "linalg", "ode", "optimization", "pde", "stochastic", "universal",
-    "CATEGORIES", "CheckResult", "Report", "Status", "build_report",
+    "linalg",
+    "ode",
+    "optimization",
+    "pde",
+    "stochastic",
+    "universal",
+    "CATEGORIES",
+    "CheckResult",
+    "Report",
+    "Status",
+    "build_report",
 ]

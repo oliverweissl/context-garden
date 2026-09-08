@@ -1,39 +1,146 @@
 #!/usr/bin/env python3
 """Entry point for Context Garden component benchmarks.
 
-Intended to discover fixtures under benchmarks/fixtures/, run each against
-a baseline agent and a baseline+component agent, and emit records matching
-the schema documented in docs/benchmarking.md.
+    scripts/benchmark list
+    scripts/benchmark run --runner claude-code [--task ID ...] [--component NAME ...]
+    scripts/benchmark analyze <results-dir>
 
-No fixtures exist yet, so this currently runs (and succeeds on) an empty
-benchmark suite.
+See benchmarks/README.md for the fixture format and what `run` actually
+does (materializes baseline/treatment working copies per task, invokes
+the `claude` CLI headlessly against each, verifies the result). `run`
+spends real API usage/cost -- there is no default runner; you must pass
+--runner claude-code deliberately. The FakeRunner used by
+tests/benchmarks/ is not reachable from this CLI, only from Python.
 """
 
 from __future__ import annotations
 
+import argparse
+import datetime as dt
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-FIXTURES_DIR = REPO_ROOT / "benchmarks" / "fixtures"
+sys.path.insert(0, str(REPO_ROOT / "benchmarks"))
+
+from harness.analyze import load_records, write_records, write_summary  # noqa: E402
+from harness.fixtures import discover_tasks  # noqa: E402
+from harness.run import run_all  # noqa: E402
+from harness.runners import ClaudeCodeRunner  # noqa: E402
+
+RESULTS_DIR = REPO_ROOT / "benchmarks" / "results"
 
 
-def discover_fixtures() -> list[Path]:
-    if not FIXTURES_DIR.is_dir():
-        return []
-    return sorted(p for p in FIXTURES_DIR.iterdir() if p.is_dir())
+def cmd_list(args: argparse.Namespace) -> int:
+    tasks = discover_tasks()
+    if not tasks:
+        print("No benchmark fixtures found under benchmarks/fixtures/.")
+        return 0
+    for task in tasks:
+        skills = ",".join(task.skill_relevance)
+        note = "" if task.run_by_default else "  (not run by default -- needs --task/--component)"
+        print(
+            f"{task.task_id:<40} component={task.component:<10} level={task.level:<4} "
+            f"skills=[{skills}]{note}"
+        )
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    tasks = discover_tasks()
+    explicit = bool(args.task or args.component)
+    if args.task:
+        tasks = [t for t in tasks if t.task_id in set(args.task)]
+    if args.component:
+        wanted = set(args.component)
+        tasks = [t for t in tasks if t.component in wanted]
+    if not explicit:
+        skipped = [t.task_id for t in tasks if not t.run_by_default]
+        tasks = [t for t in tasks if t.run_by_default]
+        if skipped:
+            print(
+                f"Skipping (not run by default, needs --task/--component): {', '.join(skipped)}"
+            )
+    if not tasks:
+        print("No matching fixtures.", file=sys.stderr)
+        return 1
+
+    if args.runner != "claude-code":
+        print(
+            f"error: unknown --runner {args.runner!r} (only 'claude-code' is CLI-runnable)",
+            file=sys.stderr,
+        )
+        return 1
+
+    runner = ClaudeCodeRunner(
+        model=args.model,
+        permission_mode=args.permission_mode,
+        max_budget_usd=args.max_budget_usd,
+    )
+
+    print(
+        f"Running {len(tasks)} task(s) x 2 conditions x {args.repeat} repeat(s) against "
+        f"{args.runner} (max ${args.max_budget_usd:.2f}/run) -- this spends real API usage."
+    )
+
+    run_dir = RESULTS_DIR / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    keep_workdirs_under = (run_dir / "workdirs") if args.keep_workdirs else None
+
+    records = run_all(tasks, runner, repeat=args.repeat, keep_workdirs_under=keep_workdirs_under)
+
+    records_path = run_dir / "records.jsonl"
+    write_records(records, records_path)
+    summary = write_summary(load_records(records_path), run_dir / "summary.md")
+
+    print(f"\nWrote {len(records)} record(s) to {records_path}")
+    print(summary)
+    return 0
+
+
+def cmd_analyze(args: argparse.Namespace) -> int:
+    records_path = Path(args.results_dir) / "records.jsonl"
+    if not records_path.exists():
+        print(f"error: no records.jsonl under {args.results_dir}", file=sys.stderr)
+        return 1
+    summary = write_summary(load_records(records_path), Path(args.results_dir) / "summary.md")
+    print(summary)
+    return 0
 
 
 def main() -> int:
-    fixtures = discover_fixtures()
-    if not fixtures:
-        print("No benchmark fixtures yet -- running empty suite. OK.")
-        return 0
+    parser = argparse.ArgumentParser(prog="scripts/benchmark")
+    sub = parser.add_subparsers(dest="cmd", required=True)
 
-    print(f"Discovered {len(fixtures)} fixture(s), but no runner is implemented yet.")
-    for fixture in fixtures:
-        print(f"  - {fixture.name}")
-    return 0
+    sub.add_parser("list", help="list discovered fixtures").set_defaults(func=cmd_list)
+
+    p_run = sub.add_parser("run", help="run baseline + treatment for one or more fixtures")
+    p_run.add_argument("--task", nargs="*", default=None, help="task_id(s) to run (default: all)")
+    p_run.add_argument("--component", nargs="*", default=None, help="restrict to component(s)")
+    p_run.add_argument("--runner", default="claude-code", choices=["claude-code"])
+    p_run.add_argument("--model", default=None)
+    p_run.add_argument("--permission-mode", default="acceptEdits")
+    p_run.add_argument("--max-budget-usd", type=float, default=1.0)
+    p_run.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="how many times to run each (task, condition) pair -- n=1 is noise, use 5+ before trusting a delta",
+    )
+    p_run.add_argument(
+        "--keep-workdirs",
+        action="store_true",
+        help="persist materialized working copies to the run's results dir",
+    )
+    p_run.set_defaults(func=cmd_run)
+
+    p_analyze = sub.add_parser(
+        "analyze", help="(re)generate summary.md for an existing results dir"
+    )
+    p_analyze.add_argument("results_dir")
+    p_analyze.set_defaults(func=cmd_analyze)
+
+    args = parser.parse_args()
+    return args.func(args)
 
 
 if __name__ == "__main__":

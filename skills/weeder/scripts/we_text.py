@@ -8,9 +8,9 @@ usage examples that each start with `python3 .../weeder.py <subcommand>`
 inside a fenced block will share that boilerplate and look like "the same
 rule repeated five times" to a naive sentence splitter, which is exactly
 the class of false positive this module exists to prevent. Caught by
-running this tool on its own SKILL.md during development -- see
-validate.md.
+running this tool on its own SKILL.md during development.
 """
+
 from __future__ import annotations
 
 import re

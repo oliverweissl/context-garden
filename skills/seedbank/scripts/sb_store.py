@@ -12,6 +12,7 @@ Layout under the store root (default ./.seedbank):
                           persistent facts (hot/warm tier)
     config.json            {hot_budget, promote_threshold} overrides
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -61,7 +62,13 @@ class Store:
             self.facts_path.write_text(json.dumps({"seq": 0, "facts": {}}, indent=2))
         if not self.config_path.exists():
             self.config_path.write_text(
-                json.dumps({"hot_budget": DEFAULT_HOT_BUDGET, "promote_threshold": DEFAULT_PROMOTE_THRESHOLD}, indent=2)
+                json.dumps(
+                    {
+                        "hot_budget": DEFAULT_HOT_BUDGET,
+                        "promote_threshold": DEFAULT_PROMOTE_THRESHOLD,
+                    },
+                    indent=2,
+                )
             )
         self.obs_path.touch(exist_ok=True)
 

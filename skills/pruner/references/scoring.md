@@ -57,8 +57,9 @@ files with no symbols):
    small positive score if nothing else touched them, so a task's
    `relevant_config` bucket isn't empty just because the task text never
    mentions the build system — these are cheap and close to universally
-   useful (see the UC1 worked example in `validate.md`, which expects a
-   plain bug fix to still surface `CMakeLists.txt`/`pyproject.toml`).
+   useful (see the UC1 worked example in `tests/smoke_test.sh`, which
+   expects a plain bug fix to still surface
+   `CMakeLists.txt`/`pyproject.toml`).
 
 Total score is the sum. There is no normalization across components by
 design — a direct error-stack hit or exact name match should dominate a

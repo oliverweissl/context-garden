@@ -10,15 +10,49 @@ shortened description clearly lose a positive-trigger keyword?) and for a
 fast first pass across many labeled examples. Confirm genuinely
 borderline/ambiguous cases with a real agent before trusting a rewrite.
 """
+
 from __future__ import annotations
 
 import re
 
 _STOPWORDS = {
-    "the", "a", "an", "in", "on", "of", "to", "for", "and", "or", "is",
-    "are", "this", "that", "with", "when", "please", "need", "want",
-    "use", "using", "help", "me", "my", "it", "be", "at", "by", "from",
-    "you", "your", "i", "can", "would", "like", "some", "any",
+    "the",
+    "a",
+    "an",
+    "in",
+    "on",
+    "of",
+    "to",
+    "for",
+    "and",
+    "or",
+    "is",
+    "are",
+    "this",
+    "that",
+    "with",
+    "when",
+    "please",
+    "need",
+    "want",
+    "use",
+    "using",
+    "help",
+    "me",
+    "my",
+    "it",
+    "be",
+    "at",
+    "by",
+    "from",
+    "you",
+    "your",
+    "i",
+    "can",
+    "would",
+    "like",
+    "some",
+    "any",
 }
 _WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _CAMEL_RE = re.compile(r"[A-Z]?[a-z0-9]+|[A-Z]+(?=[A-Z]|$)")
@@ -49,7 +83,9 @@ def relevance_score(description: str, prompt: str) -> float:
     return len(desc_kw & prompt_kw) / union if union else 0.0
 
 
-def predict_trigger(descriptions: dict[str, str], prompt: str) -> tuple[str | None, dict[str, float]]:
+def predict_trigger(
+    descriptions: dict[str, str], prompt: str
+) -> tuple[str | None, dict[str, float]]:
     """`descriptions`: {skill_name: description_text}, at minimum the
     skill under test plus any --competing descriptions supplied. Returns
     (winning_skill_name_or_None, all_scores). None if every score is 0
@@ -63,8 +99,9 @@ def predict_trigger(descriptions: dict[str, str], prompt: str) -> tuple[str | No
     return best, scores
 
 
-def evaluate_routing(skill_name: str, skill_description: str, examples: dict,
-                      competing: dict[str, str] | None = None) -> dict:
+def evaluate_routing(
+    skill_name: str, skill_description: str, examples: dict, competing: dict[str, str] | None = None
+) -> dict:
     """`examples`: {"positive": [prompt, ...], "negative": [prompt, ...],
     "ambiguous": [{"prompt":, "expected": "trigger"|"no_trigger"|"either"}]}."""
     competing = competing or {}
@@ -97,6 +134,10 @@ def evaluate_routing(skill_name: str, skill_description: str, examples: dict,
 
 def _row(prompt, kind, expected, predicted, scores, correct) -> dict:
     return {
-        "prompt": prompt, "kind": kind, "expected": expected, "predicted": predicted,
-        "correct": bool(correct), "top_scores": dict(sorted(scores.items(), key=lambda kv: -kv[1])[:3]),
+        "prompt": prompt,
+        "kind": kind,
+        "expected": expected,
+        "predicted": predicted,
+        "correct": bool(correct),
+        "top_scores": dict(sorted(scores.items(), key=lambda kv: -kv[1])[:3]),
     }

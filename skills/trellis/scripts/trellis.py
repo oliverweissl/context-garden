@@ -11,6 +11,7 @@ executes that script, aggregates RESULTS into a Report, prints it, saves
 it, and exits non-zero on FAIL -- see ../SKILL.md and
 ../tests/fixtures/*.py for worked examples.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,7 +27,9 @@ from trellis.schema import build_report  # noqa: E402
 
 
 def _load_spec_module(spec_path: Path):
-    module_spec = importlib.util.spec_from_file_location(f"trellis_spec_{spec_path.stem}", spec_path)
+    module_spec = importlib.util.spec_from_file_location(
+        f"trellis_spec_{spec_path.stem}", spec_path
+    )
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)  # executes the spec -- this is what runs the checks
     return module
@@ -48,6 +51,7 @@ def cmd_run(args) -> int:
 
     if args.json:
         import json
+
         print(json.dumps(report.to_dict(), indent=2))
     else:
         print(report.render_human())
@@ -60,6 +64,7 @@ def cmd_run(args) -> int:
 
 def cmd_list_modules(args) -> int:
     import inspect
+
     from trellis import linalg, ode, optimization, pde, stochastic, universal
 
     modules = [
@@ -83,6 +88,7 @@ def cmd_list_modules(args) -> int:
 
 def cmd_show(args) -> int:
     import json
+
     path = Path(args.report)
     data = json.loads(path.read_text())
     print(f"status: {data['status']}")
@@ -103,9 +109,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="trellis")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p_run = sub.add_parser("run", help="execute a verification spec script and report PASS/WARN/FAIL")
+    p_run = sub.add_parser(
+        "run", help="execute a verification spec script and report PASS/WARN/FAIL"
+    )
     p_run.add_argument("spec", help="path to a Python spec script defining RESULTS")
-    p_run.add_argument("--save", default=None, help="report output path (default: <spec_dir>/.trellis/<spec>_report.json)")
+    p_run.add_argument(
+        "--save",
+        default=None,
+        help="report output path (default: <spec_dir>/.trellis/<spec>_report.json)",
+    )
     p_run.add_argument("--json", action="store_true")
 
     sub.add_parser("list-modules", help="list available check functions per domain module")

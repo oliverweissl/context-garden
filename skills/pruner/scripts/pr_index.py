@@ -2,13 +2,20 @@
 builds a flat symbol table + name-resolved call graph + test-to-source
 links. Incremental: unchanged files (by content hash) are not re-parsed.
 """
+
 from __future__ import annotations
 
 import json
 import time
 from pathlib import Path
 
-from pr_common import classify_file, discover_files, estimate_tokens, read_text, sha256_text
+from pr_common import (
+    classify_file,
+    discover_files,
+    estimate_tokens,
+    read_text,
+    sha256_text,
+)
 from pr_cpp import parse_cpp_file
 from pr_python import parse_python_file
 
@@ -74,7 +81,7 @@ def _test_targets(rel_path: str, all_files) -> list[str]:
 
     guesses = set()
     if stem.startswith("test_"):
-        guesses.add(stem[len("test_"):])
+        guesses.add(stem[len("test_") :])
     if stem.endswith("_test"):
         guesses.add(stem[: -len("_test")])
 
@@ -119,7 +126,10 @@ def _parse_files(repo_root: Path, old_files: dict) -> tuple[dict, int, int]:
         if kind in ("python",) or (kind == "test" and rel.endswith(".py")):
             parsed = parse_python_file(text)
             entry["language"] = "python"
-        elif kind in ("cpp",) or (kind == "test" and Path(rel).suffix.lower() in {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh"}):
+        elif kind in ("cpp",) or (
+            kind == "test"
+            and Path(rel).suffix.lower() in {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh"}
+        ):
             parsed = parse_cpp_file(text)
             entry["language"] = "cpp"
         else:

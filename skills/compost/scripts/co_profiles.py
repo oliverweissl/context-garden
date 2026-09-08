@@ -8,6 +8,7 @@ Every parser takes (lines, exit_code) and returns:
     }
 No LLM calls anywhere in this module -- everything is regex/state-machine based.
 """
+
 from __future__ import annotations
 
 import re
@@ -51,10 +52,15 @@ def scan_explicit_markers(lines: list[str]) -> list[dict]:
 
 # ---------------------------------------------------------------- detection
 
+
 def detect_profile(command: str, text: str) -> str:
     cmd = (command or "").lower()
     lower = text.lower()
-    if "pytest" in cmd or "short test summary info" in lower or re.search(r"={3,} failures ={3,}", lower):
+    if (
+        "pytest" in cmd
+        or "short test summary info" in lower
+        or re.search(r"={3,} failures ={3,}", lower)
+    ):
         return "pytest"
     if "ctest" in cmd or "tests failed out of" in lower or "the following tests failed" in lower:
         return "ctest"
@@ -62,9 +68,10 @@ def detect_profile(command: str, text: str) -> str:
         return "cmake"
     if "srun" in cmd or "sbatch" in cmd or "slurmstepd" in lower or re.search(r"\bslurm\b", lower):
         return "slurm"
-    if any(f" {c} " in f" {cmd} " or cmd.startswith(c) for c in ("gcc", "g++", "clang", "clang++", "cc", "c++")) or re.search(
-        r"\S+:\d+:(?:\d+:)?\s*(?:error|warning):", text
-    ):
+    if any(
+        f" {c} " in f" {cmd} " or cmd.startswith(c)
+        for c in ("gcc", "g++", "clang", "clang++", "cc", "c++")
+    ) or re.search(r"\S+:\d+:(?:\d+:)?\s*(?:error|warning):", text):
         return "gcc"
     if "traceback (most recent call last):" in lower:
         return "python_traceback"
@@ -93,11 +100,38 @@ def parse_generic(lines: list[str], exit_code: int) -> dict:
 
 _PYTEST_SUMMARY_RE = re.compile(r"^(FAILED|ERROR)\s+(\S+)\s*(?:-\s*(.*))?$")
 _PYTEST_E_LINE_RE = re.compile(r"^E\s+(\w[\w.]*(?:Error|Exception|Warning))?:?\s*(.*)$")
+_PYTEST_FAILURE_HEADER_RE = re.compile(r"^_{3,}\s+(.+?)\s+_{3,}$")
+
+
+def _pytest_full_messages(lines: list[str]) -> dict[str, str]:
+    """Map test name -> its full exception message, read from the FAILURES
+    section's `E   ...` line(s) rather than the `short test summary info`
+    section -- pytest truncates that summary to terminal width (a bare
+    "T..." when not run in a real tty), so it's an unreliable message
+    source even though it's always present. The last `E` line in a
+    failure's block wins (the actual raised exception, not intermediate
+    context for a chained one)."""
+    by_test: dict[str, str] = {}
+    current: str | None = None
+    for line in lines:
+        stripped = line.strip()
+        header = _PYTEST_FAILURE_HEADER_RE.match(stripped)
+        if header:
+            current = header.group(1)
+            continue
+        if current is None:
+            continue
+        m = _PYTEST_E_LINE_RE.match(stripped)
+        if m:
+            kind, msg = m.groups()
+            by_test[current] = f"{kind}: {msg}" if kind else msg
+    return by_test
 
 
 def parse_pytest(lines: list[str], exit_code: int) -> dict:
     events = []
     tests_failed = []
+    full_messages = _pytest_full_messages(lines)
     in_summary = False
     for i, line in enumerate(lines, start=1):
         stripped = line.strip()
@@ -113,7 +147,13 @@ def parse_pytest(lines: list[str], exit_code: int) -> dict:
             if m:
                 kind, test, reason = m.groups()
                 tests_failed.append(test)
-                message = reason.strip() if reason else f"{kind} {test}"
+                # test names in the FAILURES header omit the file/module
+                # prefix that "short test summary info" includes -- match
+                # on the trailing segment (e.g. "test_x[0]" in both).
+                short_name = test.rsplit("::", 1)[-1]
+                message = full_messages.get(short_name) or (
+                    reason.strip() if reason else f"{kind} {test}"
+                )
                 events.append({"line": i, "message": message, "severity": ERROR, "test": test})
 
     if not events:
@@ -121,7 +161,9 @@ def parse_pytest(lines: list[str], exit_code: int) -> dict:
         for i, line in enumerate(lines, start=1):
             m = _PYTEST_E_LINE_RE.match(line.strip())
             if m and m.group(1):
-                events.append({"line": i, "message": f"{m.group(1)}: {m.group(2)}", "severity": ERROR})
+                events.append(
+                    {"line": i, "message": f"{m.group(1)}: {m.group(2)}", "severity": ERROR}
+                )
 
     joined = "\n".join(lines)
     passed_m = re.search(r"(\d+) passed", joined)
@@ -155,7 +197,9 @@ def parse_ctest(lines: list[str], exit_code: int) -> dict:
             m = _CTEST_FAILED_RE.match(line)
             if m:
                 name, status = m.groups()
-                events.append({"line": i, "message": f"{name} ({status})", "severity": ERROR, "test": name})
+                events.append(
+                    {"line": i, "message": f"{name} ({status})", "severity": ERROR, "test": name}
+                )
             elif line.strip() == "":
                 in_list = False
     return {"events": events, "numerical_summary": None, "artifacts": _scan_artifacts(lines)}
@@ -222,6 +266,7 @@ def parse_cmake(lines: list[str], exit_code: int) -> dict:
 
 # ---------------------------------------------------------------- python traceback
 
+
 def parse_python_traceback(lines: list[str], exit_code: int) -> dict:
     events = []
     i, n = 0, len(lines)
@@ -267,7 +312,11 @@ def parse_slurm(lines: list[str], exit_code: int) -> dict:
         "termination_reason": termination_reason or ("clean_exit" if exit_code == 0 else "unknown"),
         "peak_memory": peak_memory,
     }
-    return {"events": events, "numerical_summary": numerical_summary, "artifacts": _scan_artifacts(lines)}
+    return {
+        "events": events,
+        "numerical_summary": numerical_summary,
+        "artifacts": _scan_artifacts(lines),
+    }
 
 
 # ---------------------------------------------------------------- numerical solver
@@ -321,7 +370,11 @@ def parse_numerical_solver(lines: list[str], exit_code: int) -> dict:
         "trend": _residual_trend(valid),
         "nan_or_inf_detected": nan_detected,
     }
-    return {"events": events, "numerical_summary": numerical_summary, "artifacts": _scan_artifacts(lines)}
+    return {
+        "events": events,
+        "numerical_summary": numerical_summary,
+        "artifacts": _scan_artifacts(lines),
+    }
 
 
 PARSERS = {

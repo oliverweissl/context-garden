@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Automated smoke test referenced by ../validate.md.
 # Runs the three UC fixture spec scripts through the CLI and asserts on
 # their PASS/WARN/FAIL outcomes and evidence, plus direct library-level
 # checks against hand-computable ground truth (known finite-difference

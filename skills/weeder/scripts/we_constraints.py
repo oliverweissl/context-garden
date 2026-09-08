@@ -9,9 +9,10 @@ This is a coverage heuristic, not comprehension: it can prove a
 constraint's wording was deleted outright (the single most damaging and
 most common failure mode of manual/LLM-driven compression), but it cannot
 confirm subtler meaning was preserved. See references/routing-heuristic.md
-and validate.md for what a full functional check still requires (running
-a representative task through a real agent before/after).
+for what a full functional check still requires (running a representative
+task through a real agent before/after).
 """
+
 from __future__ import annotations
 
 import re
@@ -23,10 +24,37 @@ _CONSTRAINT_RE = re.compile(
 )
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _STOPWORDS = {
-    "the", "this", "that", "with", "when", "never", "always", "must",
-    "not", "do", "don't", "required", "critical", "critically", "cannot",
-    "shall", "prohibited", "forbidden", "and", "for", "are", "is", "was",
-    "you", "your", "it", "its", "from", "into", "than", "then",
+    "the",
+    "this",
+    "that",
+    "with",
+    "when",
+    "never",
+    "always",
+    "must",
+    "not",
+    "do",
+    "don't",
+    "required",
+    "critical",
+    "critically",
+    "cannot",
+    "shall",
+    "prohibited",
+    "forbidden",
+    "and",
+    "for",
+    "are",
+    "is",
+    "was",
+    "you",
+    "your",
+    "it",
+    "its",
+    "from",
+    "into",
+    "than",
+    "then",
 }
 
 
@@ -64,7 +92,9 @@ def full_text(parsed: dict) -> str:
     return "\n\n".join(parts)
 
 
-def check_constraints_preserved(before_parsed: dict, after_parsed: dict, threshold: float = 0.6) -> dict:
+def check_constraints_preserved(
+    before_parsed: dict, after_parsed: dict, threshold: float = 0.6
+) -> dict:
     before_text = full_text(before_parsed)
     after_text = full_text(after_parsed)
     constraints = extract_constraints(before_text)

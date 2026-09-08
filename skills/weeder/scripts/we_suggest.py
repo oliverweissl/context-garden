@@ -7,6 +7,7 @@ not their content: `none` produces zero (do step 3 freehand, as before),
 `slight` structures only the description rewrite, `lot` also structures
 duplicate-rule consolidation and obvious-content removal. See
 references/llm-assist.md for the full request/answer schema."""
+
 from __future__ import annotations
 
 from we_audit import audit_skill
@@ -19,9 +20,9 @@ def _description_shorten_request(report: dict) -> dict:
         "current_tokens": report["description_tokens"],
         "instructions": (
             "Draft 2-3 candidate shorter descriptions for this skill's frontmatter. Cut "
-            "generic phrasing (\"this skill helps you with...\", \"use this whenever you "
-            "need...\"); keep concrete trigger nouns/verbs a real prompt would contain. Pick "
-            "one and answer with {\"description_shorten\": {\"new_description\": \"...\"}}."
+            'generic phrasing ("this skill helps you with...", "use this whenever you '
+            'need..."); keep concrete trigger nouns/verbs a real prompt would contain. Pick '
+            'one and answer with {"description_shorten": {"new_description": "..."}}.'
         ),
     }
 
@@ -44,8 +45,8 @@ def _duplicate_consolidation_request(report: dict) -> dict:
             "sentences in the same section, so index rather than source identifies one) "
             "should keep it, and state it once there -- delete the rest, don't repeat it "
             "verbatim in every location (that would just turn a near-duplicate into an exact "
-            "one). Answer with {\"duplicate_consolidation\": [{\"group_index\": <int>, "
-            "\"keep_member_index\": <int>, \"canonical_text\": \"...\"}, ...]}. Omit groups "
+            'one). Answer with {"duplicate_consolidation": [{"group_index": <int>, '
+            '"keep_member_index": <int>, "canonical_text": "..."}, ...]}. Omit groups '
             "you'd rather leave as-is (e.g. legitimate parallel structure)."
         ),
     }
@@ -58,8 +59,8 @@ def _unnecessary_removal_request(report: dict) -> dict:
         "items": items,
         "instructions": (
             "Only include items that are genuinely obvious to a capable agent -- don't cut "
-            "something just because it's short. Answer with {\"unnecessary_removal\": "
-            "[{\"heading\": \"...\", \"text_to_remove\": \"...\"}, ...]} for the ones actually "
+            'something just because it\'s short. Answer with {"unnecessary_removal": '
+            '[{"heading": "...", "text_to_remove": "..."}, ...]} for the ones actually '
             "worth removing."
         ),
     }

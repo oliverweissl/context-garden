@@ -4,6 +4,7 @@ No LLM involved: repeated events are collapsed purely by regex-based
 normalization of their message text, so identical failures collapse to one
 group regardless of which line/iteration/hex-address made them unique.
 """
+
 from __future__ import annotations
 
 import re

@@ -62,28 +62,25 @@ made blind.
      short.
 
    None of this is mechanically automated — see `references/classification.md`
-   for why rewriting prose is deliberately left to judgment rather than a
-   fixed rule. How much of that judgment step the tool structures for you
-   as an explicit request/answer file, versus you just editing the copy
-   directly, is controlled by this repo's LLM-assist level (`none`
-   default, `slight`, `lot` — resolved from `--assist`,
-   `$CONTEXT_GARDEN_LLM_ASSIST`, or `.context-garden/config.yaml`'s
-   `llm_assist.level`; see `references/llm-assist.md` for exactly what
-   changes and why this never involves a second model call):
+   for why. How much of the judgment step gets structured for you as an
+   explicit request/answer file, vs. you editing the copy directly, is
+   controlled by this repo's LLM-assist level (`none` default, `slight`,
+   `lot` — resolved from `--assist`, `$CONTEXT_GARDEN_LLM_ASSIST`, or
+   `.context-garden/config.yaml`'s `llm_assist.level`; see
+   `references/llm-assist.md` for what each level structures and why
+   this never involves a second model call):
    ```
    python3 <this-skill-dir>/scripts/weeder.py suggest <skill_dir> --assist slight --json
    ```
-   At `none`, this reports zero requests — do all three bullets above
-   freehand, exactly as before this option existed. At `slight`, it
-   structures only the description rewrite; at `lot`, all three. Write
-   your answer to a JSON file (shape documented in the command's own
-   output and in `references/llm-assist.md`), then apply it mechanically:
+   At `none` this reports zero requests — do step 3 freehand. Otherwise,
+   write your answer to a JSON file (shape in the command's own output
+   and `references/llm-assist.md`) and apply it:
    ```
    python3 <this-skill-dir>/scripts/weeder.py apply-suggestion <skill_dir> --answer <answer.json> --out <skill_dir>-optimized
    ```
-   This only applies the answer; it doesn't validate it — steps 4-7 below
-   run unchanged against the result either way, so an assist-drafted
-   answer gets no free pass over a freehand edit.
+   This only applies the answer — it doesn't validate it. Steps 4-7
+   below hold an assist-drafted answer to the same bar as a freehand
+   edit; it gets no free pass.
 
 4. **Validate routing** before trusting the rewrite:
    ```
@@ -132,10 +129,4 @@ made blind.
 
 ## Modes reference
 
-`audit` (measure) · `optimize` (mechanical refactor) · `suggest` /
-`apply-suggestion` (structure and apply step 3's judgment call, gated by
-LLM-assist level) · `test-routing` · `test-function` · `diff` (combined
-before/after report). Full flag reference: `references/classification.md`
-(what audit measures and how), `references/llm-assist.md` (assist levels,
-request/answer schemas), and `references/routing-heuristic.md` (what the
-two proxy checks do and don't guarantee).
+See `references/modes.md`.

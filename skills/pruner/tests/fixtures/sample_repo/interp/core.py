@@ -1,5 +1,5 @@
-from .utils import clamp
 from .types import Range
+from .utils import clamp
 
 
 def interpolate(x, lo, hi):

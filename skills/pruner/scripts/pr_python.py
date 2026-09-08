@@ -6,6 +6,7 @@ symbols with their line ranges, first docstring line, and the names they
 call (name-based, not type-resolved -- see references/scoring.md for why
 that's an accepted approximation).
 """
+
 from __future__ import annotations
 
 import ast
@@ -37,15 +38,17 @@ def parse_python_file(text: str) -> dict:
                 doc_first_line = doc.strip().splitlines()[0] if doc.strip() else ""
                 calls = sorted(set(_collect_calls(child)) | set(_collect_annotation_names(child)))
                 end_line = getattr(child, "end_lineno", child.lineno)
-                symbols.append({
-                    "name": child.name,
-                    "qualname": qualname,
-                    "type": kind,
-                    "start_line": child.lineno,
-                    "end_line": end_line,
-                    "doc": doc_first_line,
-                    "calls": calls,
-                })
+                symbols.append(
+                    {
+                        "name": child.name,
+                        "qualname": qualname,
+                        "type": kind,
+                        "start_line": child.lineno,
+                        "end_line": end_line,
+                        "doc": doc_first_line,
+                        "calls": calls,
+                    }
+                )
                 visit(child, qualname)
             else:
                 visit(child, parent_qualname)

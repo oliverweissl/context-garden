@@ -1,5 +1,6 @@
 """Token estimation, shared with the rest of this skill suite's chars/4
 heuristic (see compost/seedbank/pruner) for consistency."""
+
 from __future__ import annotations
 
 

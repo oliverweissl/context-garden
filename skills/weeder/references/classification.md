@@ -39,7 +39,7 @@ genuinely on-demand if moved to a reference file, but haven't been yet.
 Only content that has actually been relocated to `references/*.md` counts
 as on-demand (`reference_tokens`). Conflating "classified as movable"
 with "already on-demand" was a real bug caught during this tool's own
-development (see `validate.md` §5) — `optimize`'s before/after reduction
+development — `optimize`'s before/after reduction
 number is meaningless if it's computed that way, since a skill with a
 huge unmoved Background section would report the same "always-loaded"
 figure before AND after actually moving it.
@@ -66,7 +66,7 @@ deterministic, no LLM):
 Headings are stripped before sentence-splitting (a heading has no
 terminal punctuation, so left in place it glues onto the next real
 sentence and can produce spurious matches — this was a real bug caught
-during development, see `validate.md` §5).
+during development).
 
 **Known miss case**: a near-duplicate that differs by one word in a way
 that breaks the contiguous run (e.g. "never delete a file" vs. "never

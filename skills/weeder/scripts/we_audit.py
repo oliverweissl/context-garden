@@ -2,6 +2,7 @@
 unnecessary content" flags (generic filler phrasing, background/example
 sections beyond a small cap). Combines we_parse's structural
 classification and we_dupes' duplication detection into one report."""
+
 from __future__ import annotations
 
 import re
@@ -47,14 +48,20 @@ def audit_skill(skill_dir, dup_threshold: float = 0.6) -> dict:
     description_tokens = estimate_tokens(description)
 
     section_reports = []
-    always_loaded_tokens = description_tokens  # all of SKILL.md loads in full -- see MOVABLE_CATEGORIES note
+    always_loaded_tokens = (
+        description_tokens  # all of SKILL.md loads in full -- see MOVABLE_CATEGORIES note
+    )
     movable_tokens = 0
     for s in parsed["sections"]:
         tokens = estimate_tokens(s["content"])
-        section_reports.append({
-            "heading": s["heading"], "category": s["category"], "tokens": tokens,
-            "filler_sentences": find_filler_sentences(s["content"]),
-        })
+        section_reports.append(
+            {
+                "heading": s["heading"],
+                "category": s["category"],
+                "tokens": tokens,
+                "filler_sentences": find_filler_sentences(s["content"]),
+            }
+        )
         always_loaded_tokens += tokens
         if s["category"] in MOVABLE_CATEGORIES:
             movable_tokens += tokens
@@ -69,12 +76,19 @@ def audit_skill(skill_dir, dup_threshold: float = 0.6) -> dict:
     likely_unnecessary = []
     for s in section_reports:
         if s["category"] in ("background", "examples") and s["tokens"] > 0:
-            likely_unnecessary.append({
-                "reason": f"category '{s['category']}' in SKILL.md -- candidate for moving to references/",
-                "heading": s["heading"], "tokens": s["tokens"],
-            })
+            likely_unnecessary.append(
+                {
+                    "reason": (
+                        f"category '{s['category']}' in SKILL.md -- candidate for moving to references/"
+                    ),
+                    "heading": s["heading"],
+                    "tokens": s["tokens"],
+                }
+            )
         for f in s["filler_sentences"]:
-            likely_unnecessary.append({"reason": "generic filler phrasing", "heading": s["heading"], "text": f})
+            likely_unnecessary.append(
+                {"reason": "generic filler phrasing", "heading": s["heading"], "text": f}
+            )
 
     return {
         "skill_dir": str(skill_dir),
@@ -95,9 +109,15 @@ def audit_skill(skill_dir, dup_threshold: float = 0.6) -> dict:
 def render_audit_human(report: dict) -> str:
     lines = [f"skill: {report['name']}  ({report['skill_dir']})", ""]
     lines.append(f"Description:         {report['description_tokens']:>5} tokens")
-    lines.append(f"Always-loaded total: {report['always_loaded_tokens']:>5} tokens  (all of SKILL.md -- it loads in full)")
-    lines.append(f"  of which movable:  {report['movable_tokens']:>5} tokens  (examples/background/external_reference sections -- not yet on-demand, but could be)")
-    lines.append(f"References:          {report['total_reference_tokens']:>5} tokens  across {len(report['reference_tokens'])} file(s)  (genuinely on-demand already)")
+    lines.append(
+        f"Always-loaded total: {report['always_loaded_tokens']:>5} tokens  (all of SKILL.md -- it loads in full)"
+    )
+    lines.append(
+        f"  of which movable:  {report['movable_tokens']:>5} tokens  (examples/background/external_reference sections -- not yet on-demand, but could be)"
+    )
+    lines.append(
+        f"References:          {report['total_reference_tokens']:>5} tokens  across {len(report['reference_tokens'])} file(s)  (genuinely on-demand already)"
+    )
     lines.append("")
     lines.append("Sections:")
     for s in report["sections"]:
@@ -105,11 +125,19 @@ def render_audit_human(report: dict) -> str:
         lines.append(f"  [{s['category']:<20}] {s['tokens']:>5} tok  {heading}")
     if report["duplicate_groups"]:
         lines.append("")
-        lines.append(f"Duplicate content: {len(report['duplicate_groups'])} group(s), ~{report['total_duplicate_tokens']} redundant tokens")
+        lines.append(
+            f"Duplicate content: {len(report['duplicate_groups'])} group(s), ~{report['total_duplicate_tokens']} redundant tokens"
+        )
         for g in report["duplicate_groups"]:
             sources = ", ".join(sorted({m["source"] for m in g["members"]}))
-            lines.append(f"  similarity={g['max_similarity']:.2f}  {len(g['members'])} occurrence(s) in: {sources}")
-            lines.append(f"    \"{g['members'][0]['text'][:100]}...\"" if len(g['members'][0]['text']) > 100 else f"    \"{g['members'][0]['text']}\"")
+            lines.append(
+                f"  similarity={g['max_similarity']:.2f}  {len(g['members'])} occurrence(s) in: {sources}"
+            )
+            lines.append(
+                f"    \"{g['members'][0]['text'][:100]}...\""
+                if len(g["members"][0]["text"]) > 100
+                else f"    \"{g['members'][0]['text']}\""
+            )
     if report["likely_unnecessary"]:
         lines.append("")
         lines.append(f"Likely unnecessary content: {len(report['likely_unnecessary'])} item(s)")

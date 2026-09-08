@@ -24,9 +24,9 @@ use, relative to competing descriptions that also contain domain words. A
 description that's all generic phrasing ("helps you with various tasks")
 carries almost no keyword signal and will lose to any competitor with
 real domain vocabulary — which is exactly UC3's failure mode, and exactly
-what this catches (see the worked example in `validate.md` where a vague
-description loses a real trigger prompt to a genuine competing skill, and
-a tightened one wins it).
+what this catches (see the UC3 worked example in `tests/smoke_test.sh`
+where a vague description loses a real trigger prompt to a genuine
+competing skill, and a tightened one wins it).
 
 **What this does NOT predict**: an actual model's routing decision, which
 reasons about intent, ambiguity, and multi-skill applicability in ways no
@@ -44,9 +44,8 @@ keyword-overlap heuristic captures. Two failure directions to watch for:
   If a description passes this test poorly but you're confident a real
   agent would still route correctly (or vice versa), trust the manual
   check — spot-check genuinely ambiguous/borderline prompts with a real
-  agent session before finalizing a rewrite, same as `validate.md`
-  recommends for every skill in this suite that has an approximated
-  piece.
+  agent session before finalizing a rewrite — the same manual check every
+  skill in this suite needs for its approximated pieces.
 
 **Tolerance for accepting a change**: routing accuracy after >= before
 minus a couple percentage points is noise-level for this proxy given
@@ -70,8 +69,8 @@ preserved; the check operates on everything reachable, not just
 
 **What this proves**: a constraint's wording was not deleted outright —
 the single most damaging and most common failure mode of a manual or
-LLM-driven "let me tighten this up" edit (see `validate.md`'s worked
-example, where deleting an entire `## Rules` section is caught
+LLM-driven "let me tighten this up" edit (see `tests/smoke_test.sh`'s
+worked example, where deleting an entire `## Rules` section is caught
 immediately: 7/7 -> 5/7 preserved, with the missing sentences listed
 verbatim).
 

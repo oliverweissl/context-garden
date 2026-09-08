@@ -72,7 +72,7 @@ missing) — the one non-stdlib dependency in this skill suite; see
 | Any numerical output at all | `universal.nan_inf_check` (always cheap, always worth it) |
 | A discretization scheme, stencil, timestep, or mesh resolution | `ode.timestep_convergence` / `pde.mesh_convergence` — **the single highest-value check in this library**; catches order-of-accuracy regressions no fixed-resolution test can see |
 | A linear solve, decomposition, or matrix operation | `linalg.residual_norm`, `.conditioning`, `.symmetry_check`, `.positive_definite_check` |
-| A "fix" that involved changing a tolerance | Run the *original* tolerance through `linalg.residual_norm`/equivalent yourself — don't trust the changed one (see UC2 in `validate.md`) |
+| A "fix" that involved changing a tolerance | Run the *original* tolerance through `linalg.residual_norm`/equivalent yourself — don't trust the changed one (see UC2 in `tests/smoke_test.sh`) |
 | An ODE integrator | `ode.invariant_preservation` (energy/momentum drift), `ode.reference_solution_comparison` if an analytic solution exists |
 | A PDE solver | `pde.conservation_check`, `pde.manufactured_solution_check` if you can construct one |
 | An optimizer or its gradient | `optimization.gradient_check` (catches wrong analytic gradients), `.termination_check`, `.constraint_violation_check` |
@@ -85,14 +85,7 @@ actually changed, the same way you'd pick which tests to run.
 
 ## Why numpy
 
-Linear algebra (eigenvalues, condition numbers), convergence-order
-fitting, and confidence intervals are well-trodden numerical ground.
-Reimplementing them by hand in this library would make the *verification
-tool itself* less numerically trustworthy, not more — and any repository
-doing the kind of work this skill targets already depends on numpy in
-practice. See `references/modules.md` for exactly what's implemented from
-scratch (the PASS/WARN/FAIL threshold logic, convergence-order fitting,
-CI-overlap comparison) versus what's a thin wrapper over `numpy.linalg`.
+See `references/why-numpy.md`.
 
 ## Guarantees
 

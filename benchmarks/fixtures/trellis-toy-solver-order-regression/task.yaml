@@ -1,0 +1,44 @@
+task_id: trellis-toy-solver-order-regression
+component: trellis
+level: repo
+skill_relevance: [trellis]
+# trellis trades tokens for correctness confidence -- it's expected to
+# cost MORE, not less, than baseline. See docs/benchmarking.md.
+# Not run by a plain `scripts/benchmark run` -- pass --task
+# trellis-toy-solver-order-regression or --component trellis explicitly.
+run_by_default: false
+description: >
+  A finite-difference stencil was swapped for a cheaper one-sided form
+  "for performance"; the existing single-resolution unit test still
+  passes, but the change silently drops the scheme from 2nd-order to
+  1st-order accuracy. Tests whether the agent trusts the green test
+  suite or actually checks convergence order before signing off.
+notes: >
+  This is trellis's central thesis, made concrete: passing unit tests
+  are evidence of behavior, not of numerical correctness. A baseline
+  agent has no obvious way to catch this short of independently deriving
+  a convergence-order check; trellis's SKILL.md explicitly tables "a
+  discretization scheme, stencil, timestep, or mesh resolution" ->
+  mesh_convergence as the single highest-value check for exactly this
+  situation.
+base_ref: worktree
+overlay: overlay
+prompt: |
+  examples/toy_heat_solver/solver.py's `second_derivative` function was
+  just changed (see examples/toy_heat_solver/README.md for why).
+  examples/toy_heat_solver/test_solver.py passes. Before this change is
+  merged, determine whether it preserved the function's expected
+  accuracy order, and record your verdict as a single line written to
+  examples/toy_heat_solver/VERDICT.txt: either `VERDICT: CORRECT` or
+  `VERDICT: REGRESSION`, followed by one sentence explaining why.
+verify:
+  type: file_contains
+  path: examples/toy_heat_solver/VERDICT.txt
+  contains: ["VERDICT: REGRESSION"]
+ground_truth:
+  expected_verdict: REGRESSION
+  reason: >
+    The one-sided three-point stencil (f(x0) - 2f(x0+h) + f(x0+2h)) / h^2
+    is only O(h) accurate, versus the O(h^2) centered stencil it
+    replaced. test_solver.py only checks one resolution against a loose
+    tolerance, so it cannot see the order drop.

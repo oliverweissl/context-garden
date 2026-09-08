@@ -1,0 +1,15 @@
+{
+  "name": "context-garden",
+  "owner": {
+    "name": "Oliver Weißl",
+    "url": "https://github.com/oliverweissl"
+  },
+  "description": "Context management tools for coding agents.",
+  "plugins": [
+    {
+      "name": "context-garden",
+      "source": ".",
+      "description": "Installs compost, pruner, seedbank, trellis, and weeder."
+    }
+  ]
+}

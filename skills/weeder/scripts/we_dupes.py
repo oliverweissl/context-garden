@@ -3,6 +3,7 @@ deterministic, no LLM. Same clustering spirit as compost's error
 grouping -- group things that say the same thing, regardless of exact
 wording, so a rule repeated in five places (spec's UC2) collapses to one
 finding instead of five separate paragraphs to eyeball."""
+
 from __future__ import annotations
 
 import re
@@ -57,7 +58,7 @@ def split_paragraphs(text: str, source: str) -> list[dict]:
     every subcommand's usage block starts with the same `python3 .../x.py`
     prefix) and is not the kind of duplicated *rule* this is looking for
     -- left in, it's a reliable source of false positives (caught by
-    running this tool on its own SKILL.md, see validate.md)."""
+    running this tool on its own SKILL.md)."""
     cleaned = strip_code(text)
     paras = [p.strip() for p in re.split(r"\n\s*\n", cleaned) if p.strip()]
     out = []
@@ -93,8 +94,11 @@ def jaccard(a: set, b: set) -> float:
     return len(a & b) / union if union else 0.0
 
 
-def find_duplicate_groups(paragraphs: list[dict], threshold: float = DEFAULT_THRESHOLD,
-                           phrase_min_words: int | None = None) -> list[dict]:
+def find_duplicate_groups(
+    paragraphs: list[dict],
+    threshold: float = DEFAULT_THRESHOLD,
+    phrase_min_words: int | None = None,
+) -> list[dict]:
     """`phrase_min_words`: if given, a pair is ALSO considered a duplicate
     when they share a contiguous word run of at least this length, even if
     their overall Jaccard similarity is below `threshold` (see
@@ -124,7 +128,9 @@ def find_duplicate_groups(paragraphs: list[dict], threshold: float = DEFAULT_THR
             run = longest_common_run(paragraphs[i].get("seq", []), paragraphs[j].get("seq", []))
             if run >= phrase_min_words:
                 is_dup = True
-                sim = max(sim, run / max(1, min(len(paragraphs[i]["seq"]), len(paragraphs[j]["seq"]))))
+                sim = max(
+                    sim, run / max(1, min(len(paragraphs[i]["seq"]), len(paragraphs[j]["seq"])))
+                )
         if is_dup:
             union(i, j)
             max_sim[i] = max(max_sim.get(i, 0.0), sim)
@@ -137,13 +143,13 @@ def find_duplicate_groups(paragraphs: list[dict], threshold: float = DEFAULT_THR
     return [
         {
             "members": [
-                {"text": paragraphs[i]["text"], "source": paragraphs[i]["source"]}
-                for i in idxs
+                {"text": paragraphs[i]["text"], "source": paragraphs[i]["source"]} for i in idxs
             ],
             "max_similarity": round(max(max_sim.get(i, 0.0) for i in idxs), 3),
             "duplicate_tokens_estimate": _estimate_dup_tokens(paragraphs, idxs),
         }
-        for idxs in groups.values() if len(idxs) > 1
+        for idxs in groups.values()
+        if len(idxs) > 1
     ]
 
 
@@ -153,8 +159,11 @@ def _estimate_dup_tokens(paragraphs: list[dict], idxs: list[int]) -> int:
     return sum(sizes[1:])  # keep the largest as canonical, the rest are "duplicate"
 
 
-def find_duplicates_in_skill(parsed: dict, threshold: float = DEFAULT_THRESHOLD,
-                              sentence_threshold: float = DEFAULT_SENTENCE_THRESHOLD) -> dict:
+def find_duplicates_in_skill(
+    parsed: dict,
+    threshold: float = DEFAULT_THRESHOLD,
+    sentence_threshold: float = DEFAULT_SENTENCE_THRESHOLD,
+) -> dict:
     """Pulls content from every SKILL.md section plus every reference file,
     so duplication is caught both within SKILL.md and between SKILL.md and
     references (or between two references). Returns both granularities:
@@ -170,12 +179,15 @@ def find_duplicates_in_skill(parsed: dict, threshold: float = DEFAULT_THRESHOLD,
         sentences.extend(split_sentences(text, f"references/{name}"))
 
     paragraph_groups = find_duplicate_groups(paragraphs, threshold)
-    sentence_groups = find_duplicate_groups(sentences, sentence_threshold, phrase_min_words=MIN_SHARED_PHRASE_WORDS)
+    sentence_groups = find_duplicate_groups(
+        sentences, sentence_threshold, phrase_min_words=MIN_SHARED_PHRASE_WORDS
+    )
     # a sentence group whose members are already fully covered by a
     # reported paragraph group is redundant noise -- drop it
     paragraph_texts = {m["text"] for g in paragraph_groups for m in g["members"]}
     sentence_groups = [
-        g for g in sentence_groups
+        g
+        for g in sentence_groups
         if not all(any(m["text"] in p for p in paragraph_texts) for m in g["members"])
     ]
     return {"paragraphs": paragraph_groups, "sentences": sentence_groups}

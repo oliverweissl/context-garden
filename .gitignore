@@ -37,6 +37,13 @@ htmlcov/
 .context-garden/*
 !.context-garden/config.yaml
 
+# Per-Skill local stores (generated when a Skill's CLI is run from repo
+# root, e.g. against examples/ -- see examples/README.md).
+.compost/
+.pruner/
+.seedbank/
+.trellis/
+
 # Benchmark results are generated artifacts, not source.
 benchmarks/results/*
 !benchmarks/results/.gitkeep

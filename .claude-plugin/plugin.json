@@ -1,0 +1,11 @@
+{
+  "name": "context-garden",
+  "description": "Tools for reducing redundant agent context and preserving important repository knowledge.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Oliver Weißl",
+    "url": "https://github.com/oliverweissl"
+  },
+  "repository": "https://github.com/oliverweissl/context-garden",
+  "license": "MIT"
+}

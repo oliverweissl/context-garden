@@ -9,6 +9,7 @@ precision statistics; see references/modules.md for exactly what they do
 and don't guarantee, and when to reach for scipy.stats / a proper
 bootstrap instead.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -31,7 +32,9 @@ def confidence_interval_from_samples(values, confidence: float = 0.95) -> list[f
     return [mean - z * sem, mean + z * sem]
 
 
-def seed_replication_check(fn, seeds: list, metric_fn=None, name: str = "seed_replication") -> CheckResult:
+def seed_replication_check(
+    fn, seeds: list, metric_fn=None, name: str = "seed_replication"
+) -> CheckResult:
     """Runs fn(seed) for every seed and reports mean/std/95% CI of
     metric_fn(result) across them. This is the direct answer to "the
     agent reported an improvement based on one random seed": run this
@@ -48,26 +51,35 @@ def seed_replication_check(fn, seeds: list, metric_fn=None, name: str = "seed_re
     ci = confidence_interval_from_samples(values)
 
     if n < 3:
-        status, notes = Status.WARN, "Fewer than 3 seeds -- the confidence interval below is not well-estimated."
+        status, notes = (
+            Status.WARN,
+            "Fewer than 3 seeds -- the confidence interval below is not well-estimated.",
+        )
     elif n > 1 and std == 0.0:
         status = Status.WARN
-        notes = ("All seeds produced bit-identical results -- either the computation is genuinely "
-                  "deterministic given these inputs, or the seed argument is not actually affecting "
-                  "the randomness used. Verify the seed is wired through before trusting this as 'replicated'.")
+        notes = (
+            "All seeds produced bit-identical results -- either the computation is genuinely "
+            "deterministic given these inputs, or the seed argument is not actually affecting "
+            "the randomness used. Verify the seed is wired through before trusting this as 'replicated'."
+        )
     else:
         status, notes = Status.PASS, ""
 
     return CheckResult(
-        name=f"seed_replication:{name}", status=status.value, category="empirical",
+        name=f"seed_replication:{name}",
+        status=status.value,
+        category="empirical",
         metric={"mean": mean, "std": std, "n_seeds": n, "ci_95": ci},
         expected=">= 3 seeds for a defensible estimate",
         observed={"n_seeds": n, "mean": mean, "ci_95": ci},
-        evidence={"values": values, "seeds": list(seeds)}, notes=notes,
+        evidence={"values": values, "seeds": list(seeds)},
+        notes=notes,
     )
 
 
-def confidence_interval_check(values, expected_range=None, confidence: float = 0.95,
-                               name: str = "confidence_interval") -> CheckResult:
+def confidence_interval_check(
+    values, expected_range=None, confidence: float = 0.95, name: str = "confidence_interval"
+) -> CheckResult:
     """Reports the CI; if `expected_range=(lo, hi)` is given, FAILs if the
     CI doesn't overlap it at all, WARNs if it overlaps but isn't fully
     contained, PASSes if fully contained."""
@@ -85,9 +97,13 @@ def confidence_interval_check(values, expected_range=None, confidence: float = 0
         else:
             status = Status.FAIL
     return CheckResult(
-        name=f"confidence_interval:{name}", status=status.value, category="empirical",
+        name=f"confidence_interval:{name}",
+        status=status.value,
+        category="empirical",
         metric={"ci": ci, "confidence": confidence, "n": int(values.size)},
-        expected=expected_range, observed=ci, evidence={"values": values},
+        expected=expected_range,
+        observed=ci,
+        evidence={"values": values},
     )
 
 
@@ -110,26 +126,43 @@ def compare_before_after(before, after, name: str = "before_after") -> CheckResu
 
     if overlap:
         status = Status.WARN
-        notes = ("95% CIs of before/after overlap -- the observed difference is not clearly "
-                  "distinguishable from sampling noise with this sample size. Do not claim an "
-                  "improvement from this alone; more replicates may resolve it.")
+        notes = (
+            "95% CIs of before/after overlap -- the observed difference is not clearly "
+            "distinguishable from sampling noise with this sample size. Do not claim an "
+            "improvement from this alone; more replicates may resolve it."
+        )
     else:
         status = Status.PASS
-        notes = ("95% CIs do not overlap -- the difference is unlikely to be pure sampling noise "
-                  "(CI-overlap heuristic, not a formal hypothesis test; see this function's docstring).")
+        notes = (
+            "95% CIs do not overlap -- the difference is unlikely to be pure sampling noise "
+            "(CI-overlap heuristic, not a formal hypothesis test; see this function's docstring)."
+        )
 
     return CheckResult(
-        name=f"compare_before_after:{name}", status=status.value, category="empirical",
-        metric={"mean_before": mean_before, "mean_after": mean_after,
-                "ci_before": ci_before, "ci_after": ci_after, "ci_overlap": overlap},
+        name=f"compare_before_after:{name}",
+        status=status.value,
+        category="empirical",
+        metric={
+            "mean_before": mean_before,
+            "mean_after": mean_after,
+            "ci_before": ci_before,
+            "ci_after": ci_after,
+            "ci_overlap": overlap,
+        },
         expected="non-overlapping 95% CIs to support a claimed difference",
         observed={"mean_before": mean_before, "mean_after": mean_after},
-        evidence={"before": before, "after": after}, notes=notes,
+        evidence={"before": before, "after": after},
+        notes=notes,
     )
 
 
-def distribution_sanity_check(values, expected_mean: float | None = None, expected_std: float | None = None,
-                               tol: float = 0.2, name: str = "distribution") -> CheckResult:
+def distribution_sanity_check(
+    values,
+    expected_mean: float | None = None,
+    expected_std: float | None = None,
+    tol: float = 0.2,
+    name: str = "distribution",
+) -> CheckResult:
     """Relative-tolerance check of sample mean/std against expected
     values, e.g. validating a sampler actually draws from the distribution
     it claims to."""
@@ -139,14 +172,22 @@ def distribution_sanity_check(values, expected_mean: float | None = None, expect
     problems = []
     if expected_mean is not None and mean is not None:
         if abs(mean - expected_mean) > tol * (abs(expected_mean) or 1.0):
-            problems.append(f"mean {mean:.4g} deviates from expected {expected_mean:.4g} by more than tol={tol}")
+            problems.append(
+                f"mean {mean:.4g} deviates from expected {expected_mean:.4g} by more than tol={tol}"
+            )
     if expected_std is not None:
         if abs(std - expected_std) > tol * (abs(expected_std) or 1.0):
-            problems.append(f"std {std:.4g} deviates from expected {expected_std:.4g} by more than tol={tol}")
+            problems.append(
+                f"std {std:.4g} deviates from expected {expected_std:.4g} by more than tol={tol}"
+            )
     status = Status.FAIL if problems else Status.PASS
     return CheckResult(
-        name=f"distribution_sanity:{name}", status=status.value, category="empirical",
+        name=f"distribution_sanity:{name}",
+        status=status.value,
+        category="empirical",
         metric={"mean": mean, "std": std, "n": int(values.size)},
-        expected={"mean": expected_mean, "std": expected_std}, observed={"mean": mean, "std": std},
-        evidence={}, notes="; ".join(problems),
+        expected={"mean": expected_mean, "std": expected_std},
+        observed={"mean": mean, "std": std},
+        evidence={},
+        notes="; ".join(problems),
     )
