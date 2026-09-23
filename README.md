@@ -1,4 +1,5 @@
 # 🌱 Context Garden
+*[WIP] - Still working on testing benefits and general skill engineering, happy to get feedback :)*
 
 Self-contained Agent Skills that cut an agent's context usage —
 deterministic, offline, no LLM calls inside the tooling itself. This management tool is most useful for extended coding sessions with a lot of context and bigger repositories. For small repositories or toy examples savings might not be worth the overhead.
