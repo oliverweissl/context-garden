@@ -28,13 +28,14 @@ prompt: |
   just changed (see examples/toy_heat_solver/README.md for why).
   examples/toy_heat_solver/test_solver.py passes. Before this change is
   merged, determine whether it preserved the function's expected
-  accuracy order, and record your verdict as a single line written to
-  examples/toy_heat_solver/VERDICT.txt: either `VERDICT: CORRECT` or
-  `VERDICT: REGRESSION`, followed by one sentence explaining why.
+  accuracy order, and record your verdict in
+  examples/toy_heat_solver/VERDICT.txt as exactly one line: either
+  `VERDICT: OK` or `VERDICT: REGRESSION` (nothing else in the file).
 verify:
-  type: file_contains
+  type: answer_key
   path: examples/toy_heat_solver/VERDICT.txt
-  contains: ["VERDICT: REGRESSION"]
+  key: VERDICT
+  expected: REGRESSION
 ground_truth:
   expected_verdict: REGRESSION
   reason: >

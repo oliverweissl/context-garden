@@ -15,6 +15,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VALID_LEVELS = ("file", "repo")
 VALID_TREATMENT_MODES = ("skill_available", "preseeded")
 
+# Experimental arms (see docs/benchmarking.md):
+#   baseline           no skills installed, original prompt
+#   treatment-natural  skills installed, original prompt   -> routing
+#   treatment-forced   skills installed, prompt prefixed with an explicit
+#                      instruction to use the task's skill(s) -> benefit
+# "treatment" is the legacy name for treatment-natural (older records).
+ARMS = ("baseline", "treatment-natural", "treatment-forced")
+TREATMENT_ARMS = ("treatment", "treatment-natural", "treatment-forced")
+
 
 @dataclass
 class TaskSpec:
@@ -36,6 +45,9 @@ class TaskSpec:
     ground_truth: dict[str, Any] = field(default_factory=dict)
     notes: str = ""
     run_by_default: bool = True
+    # Optional override of the treatment-forced prompt prefix (default: an
+    # instruction to use the skill(s) named in skill_relevance).
+    forced_prompt_prefix: str | None = None
 
     def __post_init__(self) -> None:
         if self.level not in VALID_LEVELS:
@@ -74,6 +86,9 @@ class AgentRunResult:
     model: str = ""
     cache_read_tokens: int = 0
     cost_usd: float = 0.0
+    # Skill names the agent actually invoked (Skill tool / SKILL.md read),
+    # when the runner can tell; empty otherwise.
+    skill_invoked: list[str] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -84,7 +99,7 @@ class BenchmarkRecord:
     task_id: str
     component: str
     level: str
-    condition: str  # "baseline" | "treatment"
+    condition: str  # one of ARMS (or legacy "treatment")
     model: str
     success: bool
     verification_success: bool
@@ -101,6 +116,12 @@ class BenchmarkRecord:
     # Diagnostic only -- see AgentRunResult.
     cache_read_tokens: int = 0
     cost_usd: float = 0.0
+    skill_invoked: list[str] = field(default_factory=list)
+    # Scheduling metadata: repetition index within (task, arm), the
+    # schedule seed, and this trial's position in the randomised order.
+    rep: int = 0
+    seed: int | None = None
+    order_index: int = -1
 
     @property
     def total_tokens(self) -> int:

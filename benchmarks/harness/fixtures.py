@@ -10,7 +10,9 @@ Materializing "baseline" vs "treatment" copies is the whole experiment:
 they differ only in whether the relevant Skill(s) are installed under
 .claude/skills/ (or, for seedbank's amortized-artifact case, whether a
 pre-populated AGENTS.md is present) -- everything else about the two
-working copies is identical.
+working copies is identical. Both treatment arms (treatment-natural,
+treatment-forced) materialize the same working copy; they differ only in
+the prompt (see run.prompt_for).
 """
 
 from __future__ import annotations
@@ -21,9 +23,37 @@ from pathlib import Path
 
 import yaml
 
-from .types import REPO_ROOT, TaskSpec
+from .types import ARMS, REPO_ROOT, TREATMENT_ARMS, TaskSpec
 
 FIXTURES_DIR = REPO_ROOT / "benchmarks" / "fixtures"
+
+# Never copied into either condition's working copy: fixture ground truth
+# (task.yaml, bug.patch, treatment overlays), prior results, the harness
+# tests (which script each task's correct answer), benchmark docs, demo
+# examples (fixtures bring their own via overlay/), any local .claude/
+# config, and the repo's own agent context files (AGENTS.md/CLAUDE.md and
+# seedbank's warm files, which would pre-seed the baseline). The skill(s)
+# under test are excluded too (see materialize) -- treatment gets them only
+# via .claude/skills/. The plugin manifest and plugin hooks (hooks/, e.g.
+# seedbank's PostToolUse hooks) are excluded as well, so no arm -- least of
+# all baseline -- can pick up a plugin hook from the working copy.
+EXCLUDED_PATHS = (
+    ".claude/",
+    ".claude-plugin/",
+    "hooks/",
+    ".seedbank/",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "benchmarks/fixtures/",
+    "benchmarks/results/",
+    "benchmarks/README.md",
+    "docs/benchmarking.md",
+    "examples/",
+    "tests/benchmarks/test_harness.py",
+    "tests/benchmarks/test_analyze.py",
+    "tests/benchmarks/test_run.py",
+    "tests/benchmarks/test_verify.py",
+)
 
 
 def discover_tasks() -> list[TaskSpec]:
@@ -42,8 +72,13 @@ def load_task(fixture_dir: Path) -> TaskSpec:
     return TaskSpec(fixture_dir=fixture_dir, **raw)
 
 
-def _copy_worktree(dest: Path) -> None:
-    """Snapshot the repository's current working tree into dest.
+def _is_excluded(rel: str, excluded: tuple[str, ...]) -> bool:
+    return any(rel == e.rstrip("/") or (e.endswith("/") and rel.startswith(e)) for e in excluded)
+
+
+def _copy_worktree(dest: Path, excluded: tuple[str, ...] = EXCLUDED_PATHS) -> None:
+    """Snapshot the repository's current working tree into dest, minus
+    `excluded` paths (a trailing "/" excludes a whole directory).
 
     Uses `git ls-files` (tracked + untracked-but-not-gitignored) rather
     than `git archive <ref>`, so fixtures materialize correctly even
@@ -65,7 +100,7 @@ def _copy_worktree(dest: Path) -> None:
         check=True,
     )
     for rel in proc.stdout.decode("utf-8").split("\0"):
-        if not rel:
+        if not rel or _is_excluded(rel, excluded):
             continue
         src = REPO_ROOT / rel
         if not src.is_file():
@@ -108,17 +143,22 @@ def materialize(task: TaskSpec, condition: str, dest: Path) -> Path:
     (see run.py, which uses a fresh temp directory per condition so
     baseline and treatment never share state).
     """
-    if condition not in ("baseline", "treatment"):
-        raise ValueError(f"condition must be 'baseline' or 'treatment', got {condition!r}")
+    if condition not in ("baseline", *TREATMENT_ARMS):
+        raise ValueError(f"condition must be one of {ARMS}, got {condition!r}")
 
-    _copy_worktree(dest)
+    # Exclude the skill(s) under test from BOTH conditions' repo snapshot,
+    # so baseline can't discover and run skills/<name>/ directly; other
+    # skills stay as ordinary repository content (e.g. seedbank's facts
+    # live in skills/weeder/SKILL.md).
+    skill_paths = tuple(f"skills/{name}/" for name in task.skill_relevance)
+    _copy_worktree(dest, EXCLUDED_PATHS + skill_paths)
 
     if task.patch:
         _apply_patch(dest, task.fixture_dir / task.patch)
     if task.overlay:
         _copy_overlay(task.fixture_dir / task.overlay, dest)
 
-    if condition == "treatment":
+    if condition in TREATMENT_ARMS:
         if task.treatment_mode == "skill_available":
             for name in task.skill_relevance:
                 _install_skill(name, dest)

@@ -8,6 +8,7 @@ to which runner produced it.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import time
 import uuid
@@ -45,10 +46,16 @@ def _local_transcript_path(workdir: Path, session_id: str) -> Path | None:
     this run, regardless of --output-format -- headless json/stream-json
     only report aggregate usage, but the local transcript still has each
     tool call, so it's the only way to see which cache-creation tokens
-    came from reading a Skill's own files vs. everything else."""
-    encoded = str(workdir.resolve()).replace("/", "-")
-    path = Path.home() / ".claude" / "projects" / encoded / f"{session_id}.jsonl"
-    return path if path.is_file() else None
+    came from reading a Skill's own files vs. everything else. Claude Code
+    names the project dir after the cwd with every non-alphanumeric
+    character replaced by "-" (not just "/": "_" and "." too)."""
+    projects = Path.home() / ".claude" / "projects"
+    for cwd in dict.fromkeys((str(workdir.resolve()), str(workdir))):
+        encoded = re.sub(r"[^A-Za-z0-9]", "-", cwd)
+        path = projects / encoded / f"{session_id}.jsonl"
+        if path.is_file():
+            return path
+    return None
 
 
 def _tool_use_path(block: dict[str, Any]) -> str | None:
@@ -69,23 +76,25 @@ def _is_under(path_str: str, root: Path) -> bool:
         return False
 
 
-def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> int:
-    """Best-effort split of cache_creation_input_tokens into Skill-file
-    reads (workdir/.claude/skills/**) vs. everything else.
+def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> tuple[int, list[str]]:
+    """Best-effort split of cache_creation_input_tokens into Skill content
+    (Skill tool invocations, and reads under workdir/.claude/skills/**)
+    vs. everything else, plus the names of the skills invoked.
 
     Heuristic, not exact accounting: a turn's content is split across
     several transcript lines that all repeat the same `usage` block, so
     each assistant `message.id` is counted once; a turn's entire
     cache-creation delta is attributed to skill_tokens if ANY tool result
-    feeding it came from under .claude/skills/ (a turn that reads one
-    Skill file and one repo file in parallel over-attributes). Good
-    enough to tell "the skill's own files cost roughly N tokens" apart
-    from "exploring the repo cost the rest" -- not precise to the token.
-    Returns 0 if the transcript is missing (older CLI, logging disabled)
-    or no Skill file was ever read.
+    feeding it came from a Skill (a turn that reads one Skill file and one
+    repo file in parallel over-attributes). Good enough to tell "the
+    skill's own files cost roughly N tokens" apart from "exploring the
+    repo cost the rest" -- not precise to the token. Returns (0, []) if
+    the transcript is missing (older CLI, logging disabled) or no Skill
+    was ever used.
     """
     skills_root = (workdir / ".claude" / "skills").resolve()
     tool_use_is_skill: dict[str, bool] = {}
+    invoked: list[str] = []
     seen_message_ids: set[str] = set()
     pending_skill_result = False
     total = 0
@@ -106,10 +115,15 @@ def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> int:
                 if entry_type == "assistant":
                     for block in content:
                         if isinstance(block, dict) and block.get("type") == "tool_use":
-                            path = _tool_use_path(block)
                             tool_id = block.get("id")
-                            if path is not None and tool_id is not None:
-                                tool_use_is_skill[tool_id] = _is_under(path, skills_root)
+                            name = _invoked_skill_name(block, skills_root)
+                            if name is not None and name not in invoked:
+                                invoked.append(name)
+                            path = _tool_use_path(block)
+                            if tool_id is not None and (name is not None or path is not None):
+                                tool_use_is_skill[tool_id] = name is not None or _is_under(
+                                    path, skills_root
+                                )
                     message_id = msg.get("id")
                     if message_id and message_id not in seen_message_ids:
                         seen_message_ids.add(message_id)
@@ -125,8 +139,23 @@ def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> int:
                             if tool_use_is_skill.get(tool_id):
                                 pending_skill_result = True
     except OSError:
-        return 0
-    return total
+        return 0, []
+    return total, invoked
+
+
+def _invoked_skill_name(block: dict[str, Any], skills_root: Path) -> str | None:
+    """The skill a tool_use invokes: a `Skill` tool call's `skill` input,
+    or a Read of .claude/skills/<name>/SKILL.md. None otherwise."""
+    inp = block.get("input")
+    if not isinstance(inp, dict):
+        return None
+    if block.get("name") == "Skill":
+        value = inp.get("skill") or inp.get("command") or inp.get("name")
+        return str(value).lstrip("/") if value else "unknown"
+    path = _tool_use_path(block)
+    if path is not None and Path(path).name == "SKILL.md" and _is_under(path, skills_root):
+        return Path(path).resolve().parent.name
+    return None
 
 
 class ClaudeCodeRunner:
@@ -146,6 +175,14 @@ class ClaudeCodeRunner:
     prior run's (or a different condition's) already-warmed cache. Turn-
     to-turn caching *within* one run's own agentic tool-call loop is
     untouched (that's real, desired reuse, not cross-run leakage).
+
+    Both conditions run with `--setting-sources project` and
+    `--strict-mcp-config`, so user-level settings (enabled plugins and
+    their skills, hooks) and user MCP servers don't leak into either run;
+    the only skills available are whatever the working copy's own
+    .claude/skills/ holds (nothing, for baseline). Skills placed directly
+    in ~/.claude/skills are not governed by these flags -- keep that
+    directory empty on a benchmark machine.
     """
 
     def __init__(
@@ -177,6 +214,9 @@ class ClaudeCodeRunner:
             str(self.max_budget_usd),
             "--append-system-prompt",
             f"benchmark run nonce: {uuid.uuid4()}",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
         ]
         if self.model:
             cmd += ["--model", self.model]
@@ -210,11 +250,12 @@ class ClaudeCodeRunner:
         # Real re-read volume is still reported, just as a diagnostic.
         repo_tokens = usage.get("cache_creation_input_tokens", 0)
         skill_tokens = 0
+        skill_invoked: list[str] = []
         session_id = payload.get("session_id")
         if session_id:
             transcript = _local_transcript_path(workdir, session_id)
             if transcript is not None:
-                skill_tokens = _skill_tokens_from_transcript(transcript, workdir)
+                skill_tokens, skill_invoked = _skill_tokens_from_transcript(transcript, workdir)
                 repo_tokens = max(0, repo_tokens - skill_tokens)
 
         return AgentRunResult(
@@ -232,5 +273,6 @@ class ClaudeCodeRunner:
             model=self.model or payload.get("model", ""),
             cache_read_tokens=usage.get("cache_read_input_tokens", 0),
             cost_usd=payload.get("total_cost_usd", 0.0),
+            skill_invoked=skill_invoked,
             raw=payload,
         )

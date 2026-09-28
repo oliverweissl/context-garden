@@ -11,11 +11,21 @@ task.yaml is one of:
   type: file_contains
     path: <path relative to the working copy>
     contains: [<substring>, ...]   # ALL must be present
+    matches: [<regex>, ...]        # optional; ALL must re.search the file
+
+  type: answer_key
+    path: <path relative to the working copy>
+    key: <KEY>                 # the file must contain exactly one `KEY: value` line
+    expected: <literal>        # value must equal this (after stripping), or
+    pattern: <regex>           # value must re.fullmatch this
+    # FAILs if the key is missing, appears more than once, or the value
+    # doesn't match -- a structured single answer, so hedging with several
+    # candidates (or burying the answer in prose) can't pass by accident.
 
   type: weeder_audit
     before: <path relative to fixture_dir>   # untouched original skill dir
     after: <path relative to the working copy>  # the agent's result
-    min_reduction_pct: <float>    # always_loaded_tokens reduction, before -> after
+    min_reduction_pct: <float>    # skill_md_tokens (description + on-trigger body) reduction
     min_preserved_ratio: <float, default 1.0>   # weeder test-function ratio
 
   type: all
@@ -26,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -65,7 +76,48 @@ def _verify_file_contains(spec: dict[str, Any], workdir: Path) -> tuple[bool, st
     missing = [needle for needle in spec.get("contains", []) if needle not in text]
     if missing:
         return False, f"missing required substring(s): {missing}"
+    # `matches`: regexes (re.search), for answers with more than one
+    # acceptable phrasing where a single literal substring is too strict.
+    unmatched = [pat for pat in spec.get("matches", []) if not re.search(pat, text)]
+    if unmatched:
+        return False, f"no match for required pattern(s): {unmatched}"
     return True, "ok"
+
+
+def parse_answer_lines(text: str, key: str) -> list[str]:
+    """Every value of a `KEY: value` line in text (key match is exact,
+    case-sensitive; surrounding whitespace and backticks are ignored)."""
+    line_re = re.compile(rf"^\s*`?{re.escape(key)}\s*:\s*(.*?)`?\s*$")
+    values = []
+    for line in text.splitlines():
+        m = line_re.match(line)
+        if m:
+            values.append(m.group(1).strip().strip("`").strip())
+    return values
+
+
+def _verify_answer_key(spec: dict[str, Any], workdir: Path) -> tuple[bool, str]:
+    key = spec["key"]
+    if ("expected" in spec) == ("pattern" in spec):
+        raise ValueError("answer_key needs exactly one of `expected` or `pattern`")
+    path = workdir / spec["path"]
+    if not path.exists():
+        return False, f"missing file: {spec['path']}"
+    values = parse_answer_lines(path.read_text(encoding="utf-8"), key)
+    if not values:
+        return False, f"missing answer line `{key}: <value>` in {spec['path']}"
+    if len(values) > 1:
+        return False, f"{len(values)} `{key}:` lines (need exactly one): {values}"
+    value = values[0]
+    if "expected" in spec:
+        ok = value == str(spec["expected"])
+        want = repr(str(spec["expected"]))
+    else:
+        ok = re.fullmatch(spec["pattern"], value) is not None
+        want = f"/{spec['pattern']}/"
+    if not ok:
+        return False, f"wrong answer: {key}: {value!r} (expected {want})"
+    return True, f"{key}: {value}"
 
 
 def _verify_weeder_audit(spec: dict[str, Any], task: TaskSpec, workdir: Path) -> tuple[bool, str]:
@@ -85,8 +137,8 @@ def _verify_weeder_audit(spec: dict[str, Any], task: TaskSpec, workdir: Path) ->
 
     before_report = audit(before_dir)
     after_report = audit(after_dir)
-    before_tokens = before_report["always_loaded_tokens"]
-    after_tokens = after_report["always_loaded_tokens"]
+    before_tokens = before_report["skill_md_tokens"]
+    after_tokens = after_report["skill_md_tokens"]
     reduction_pct = 100.0 * (1 - after_tokens / before_tokens) if before_tokens else 0.0
 
     func_proc = subprocess.run(
@@ -109,7 +161,7 @@ def _verify_weeder_audit(spec: dict[str, Any], task: TaskSpec, workdir: Path) ->
     min_preserved = spec.get("min_preserved_ratio", 1.0)
     ok = reduction_pct >= min_reduction and preserved_ratio >= min_preserved
     notes = (
-        f"always_loaded_tokens: {before_tokens} -> {after_tokens} "
+        f"skill_md_tokens: {before_tokens} -> {after_tokens} "
         f"({reduction_pct:.1f}% reduction, need >= {min_reduction}%); "
         f"constraint preserved_ratio: {preserved_ratio:.0%} (need >= {min_preserved:.0%})"
     )
@@ -128,6 +180,8 @@ def _dispatch(spec: dict[str, Any], task: TaskSpec, workdir: Path) -> tuple[bool
         return _verify_pytest(spec, workdir)
     if kind == "file_contains":
         return _verify_file_contains(spec, workdir)
+    if kind == "answer_key":
+        return _verify_answer_key(spec, workdir)
     if kind == "weeder_audit":
         return _verify_weeder_audit(spec, task, workdir)
     if kind == "all":

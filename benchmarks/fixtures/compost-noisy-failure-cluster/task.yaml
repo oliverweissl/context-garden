@@ -22,13 +22,16 @@ prompt: |
   `pytest examples/flaky_service` is failing. Fix the underlying bug(s)
   so the full suite passes, without weakening any assertion. Then write
   the name of the single function most responsible for the majority of
-  the failures to examples/flaky_service/ROOT_CAUSE.txt (just the
-  function name, nothing else).
+  the failures to examples/flaky_service/ROOT_CAUSE.txt as exactly one
+  line of the form `ROOT_CAUSE: <function_name>` (one function name,
+  nothing else in the file).
 verify:
   type: all
   checks:
     - type: pytest
       args: ["examples/flaky_service"]
-    - type: file_contains
+    - type: answer_key
       path: examples/flaky_service/ROOT_CAUSE.txt
-      contains: ["get_timeout"]
+      key: ROOT_CAUSE
+      # bare name, optionally module-qualified and/or with "()"
+      pattern: '(?:[\w.]+\.)?get_timeout(?:\(\))?'

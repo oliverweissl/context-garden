@@ -19,7 +19,7 @@ notes: >
   Verification reuses this repository's *own* weeder CLI
   (skills/weeder/scripts/weeder.py, not a copy inside the fixture) to
   score the agent's result against the same bar weeder's SKILL.md sets
-  for itself: `weeder audit`'s always_loaded_tokens reduction, and
+  for itself: `weeder audit`'s skill_md_tokens reduction, and
   `weeder test-function`'s 100% constraint-preservation ratio.
 base_ref: worktree
 overlay: overlay

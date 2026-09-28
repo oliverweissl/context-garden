@@ -18,6 +18,11 @@ notes: >
 base_ref: worktree
 treatment_mode: preseeded
 treatment_overlay: treatment_overlay
+# No skill is installed in this fixture's treatment (the artifact is the
+# pre-populated AGENTS.md), so the forced arm points at that artifact.
+forced_prompt_prefix: >-
+  Before exploring the repository, read AGENTS.md at the repository root
+  (the fact file maintained by the seedbank skill) and use it.
 prompt: |
   A new contributor asks three questions. Answer each in one sentence,
   citing the file it came from, and write all three answers to
@@ -32,5 +37,9 @@ verify:
   path: ANSWERS.txt
   contains:
     - "scripts/validate-skills"
-    - "../../benchmarks"
     - "100%"
+  matches:
+    # Q2: the path must stay inside the Skill's own directory -- accept a
+    # parent-relative example (../../benchmarks, ../benchmarks, ../../src),
+    # the repo-root form (benchmarks/...), or saying "outside ... directory".
+    - '(?is)\.\./|(?<![\w/])benchmarks/|outside\b.{0,60}\b(?:director(?:y|ies)|skill)'

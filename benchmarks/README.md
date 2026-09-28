@@ -28,11 +28,15 @@ results/      generated output (gitignored)
 ## Running
 
 ```bash
-scripts/benchmark list                                    # discovered fixtures
-scripts/benchmark run --runner claude-code --repeat 5 [--task ID ...] [--component NAME ...]
-scripts/benchmark analyze <results-dir>                    # regenerate summary.md
+scripts/benchmark list                          # discovered fixtures
+scripts/benchmark run --dry-run                 # randomised schedule + cost bound, runs nothing
+scripts/benchmark run [--task ID ...] [--component NAME ...] [--arms ...] [--runs 10] [--seed 0]
+scripts/benchmark run --resume <results-dir>    # continue an interrupted run
+scripts/benchmark analyze <results-dir>         # regenerate summary.md / summary.json
+scripts/benchmark plot <results-dir>            # benchmark.png (needs the `bench` extra)
 ```
 
-`run` spends real API usage (headless `claude -p`), capped by
-`--max-budget-usd` (default $1.00/run). Results:
-`benchmarks/results/<UTC timestamp>/{records.jsonl,summary.md}`.
+`run` spends real API usage (headless `claude -p`): sessions = tasks ×
+arms × runs, each capped by `--max-budget-usd` (default $1.00). Results:
+`benchmarks/results/<UTC timestamp>/{schedule.json,records.jsonl,summary.md,summary.json}`.
+Methodology (arms, randomisation, metrics, CIs): `docs/benchmarking.md`.
