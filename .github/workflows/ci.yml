@@ -30,3 +30,11 @@ jobs:
 
       - name: Validate skill structure
         run: python scripts/validate-skills
+
+      - name: Skill smoke tests
+        run: |
+          for t in skills/*/tests/smoke_test.sh; do
+            echo "::group::$t"
+            bash "$t"
+            echo "::endgroup::"
+          done

@@ -1,48 +1,24 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.eggs/
+AGENTS.md
+CLAUDE.md
+
+# Folders
+**/.*/
+**/__/*
+
 build/
 dist/
-*.egg
-
-# Virtual environments
-.venv/
 venv/
 env/
+htmlcov
 
-# Testing / coverage
-.pytest_cache/
+# File Types
 .coverage
 .coverage.*
-htmlcov/
-.tox/
-
-# Type checkers / linters
-.mypy_cache/
-.ruff_cache/
-
-# Packaging
 *.whl
-
-# Editors / OS
-.idea/
-.vscode/
 *.swp
+*.egg
 .DS_Store
-
-# Context Garden runtime state (project-local, generated).
-# Keep config.yaml shareable; ignore everything else under it.
-.context-garden/*
-!.context-garden/config.yaml
-
-# Per-Skill local stores (generated when a Skill's CLI is run from repo
-# root, e.g. against examples/ -- see examples/README.md).
-.compost/
-.pruner/
-.seedbank/
-.trellis/
+*.py[cod]
 
 # Benchmark results are generated artifacts, not source.
 benchmarks/results/*

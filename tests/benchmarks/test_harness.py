@@ -66,7 +66,7 @@ class TestPruner:
     def test_treatment_installs_pruner_skill_baseline_does_not(self, tmp_path):
         treat = tmp_path / "treatment"
         treat.mkdir()
-        materialize(self.task, "treatment", treat)
+        materialize(self.task, "treatment-natural", treat)
         assert (treat / ".claude" / "skills" / "pruner" / "SKILL.md").exists()
 
         base = tmp_path / "baseline"
@@ -100,19 +100,28 @@ class TestTrellis:
     def test_correct_verdict_passes(self, tmp_path):
         def verdict_regression(prompt: str, workdir: Path) -> AgentRunResult:
             path = workdir / "examples" / "toy_heat_solver" / "VERDICT.txt"
-            path.write_text("VERDICT: REGRESSION -- one-sided stencil is only O(h).\n")
+            path.write_text("VERDICT: REGRESSION\n")
             return AgentRunResult(success=True)
 
-        record = _run(self.task, "treatment", verdict_regression, tmp_path)
+        record = _run(self.task, "treatment-natural", verdict_regression, tmp_path)
         assert record.verification_success is True
 
     def test_wrong_verdict_fails(self, tmp_path):
         def verdict_correct(prompt: str, workdir: Path) -> AgentRunResult:
             path = workdir / "examples" / "toy_heat_solver" / "VERDICT.txt"
-            path.write_text("VERDICT: CORRECT -- test still passes.\n")
+            path.write_text("VERDICT: OK\n")
             return AgentRunResult(success=True)
 
-        record = _run(self.task, "treatment", verdict_correct, tmp_path)
+        record = _run(self.task, "treatment-natural", verdict_correct, tmp_path)
+        assert record.verification_success is False
+
+    def test_hedged_verdict_fails(self, tmp_path):
+        def both(prompt: str, workdir: Path) -> AgentRunResult:
+            path = workdir / "examples" / "toy_heat_solver" / "VERDICT.txt"
+            path.write_text("VERDICT: OK\nVERDICT: REGRESSION\n")
+            return AgentRunResult(success=True)
+
+        record = _run(self.task, "treatment-forced", both, tmp_path)
         assert record.verification_success is False
 
     def test_missing_verdict_file_fails(self, tmp_path):
@@ -133,10 +142,10 @@ class TestCompost:
             )
             text = text.replace('"high": 2}', '"high": 2, "urgent": 3}')
             service.write_text(text)
-            (flaky / "ROOT_CAUSE.txt").write_text("get_timeout\n")
+            (flaky / "ROOT_CAUSE.txt").write_text("ROOT_CAUSE: get_timeout\n")
             return AgentRunResult(success=True)
 
-        record = _run(self.task, "treatment", fix, tmp_path)
+        record = _run(self.task, "treatment-natural", fix, tmp_path)
         assert record.verification_success is True, record.verification_notes
 
     def test_unfixed_suite_fails(self, tmp_path):
@@ -150,7 +159,7 @@ class TestSeedbank:
     def test_treatment_preseeds_agents_md_baseline_does_not(self, tmp_path):
         treat = tmp_path / "treatment"
         treat.mkdir()
-        materialize(self.task, "treatment", treat)
+        materialize(self.task, "treatment-natural", treat)
         assert (treat / "AGENTS.md").exists()
         assert not (treat / ".claude").exists()
 
@@ -170,8 +179,34 @@ class TestSeedbank:
             )
             return AgentRunResult(success=True)
 
-        record = _run(self.task, "treatment", answer, tmp_path)
+        record = _run(self.task, "treatment-natural", answer, tmp_path)
         assert record.verification_success is True
+
+    def test_equivalent_path_phrasing_passes(self, tmp_path):
+        def answer(prompt: str, workdir: Path) -> AgentRunResult:
+            (workdir / "ANSWERS.txt").write_text(
+                "1. scripts/validate-skills (docs/skill-development.md)\n"
+                "2. It must never point outside the Skill's own directory"
+                " (docs/architecture.md)\n"
+                "3. routing accuracy after >= before and 100% constraint"
+                " preservation (skills/weeder/SKILL.md)\n"
+            )
+            return AgentRunResult(success=True)
+
+        record = _run(self.task, "treatment-natural", answer, tmp_path)
+        assert record.verification_success is True
+
+    def test_wrong_path_answer_fails(self, tmp_path):
+        def wrong(prompt: str, workdir: Path) -> AgentRunResult:
+            (workdir / "ANSWERS.txt").write_text(
+                "1. scripts/validate-skills\n"
+                "2. It must never contain spaces.\n"
+                "3. routing accuracy and 100% preservation\n"
+            )
+            return AgentRunResult(success=True)
+
+        record = _run(self.task, "treatment-natural", wrong, tmp_path)
+        assert record.verification_success is False
 
     def test_partial_answers_fail(self, tmp_path):
         def partial(prompt: str, workdir: Path) -> AgentRunResult:
@@ -213,3 +248,21 @@ class TestWeeder:
     def test_no_op_fails_reduction_bar(self, tmp_path):
         record = _run(self.task, "baseline", _do_nothing, tmp_path)
         assert record.verification_success is False
+
+
+@pytest.mark.parametrize("condition", ["baseline", "treatment-natural", "treatment-forced"])
+def test_working_copy_excludes_answers_and_skill_under_test(condition, tmp_path):
+    task = TASKS["seedbank-recurring-facts"]
+    dest = tmp_path / condition
+    dest.mkdir()
+    materialize(task, condition, dest)
+    assert not (dest / "benchmarks" / "fixtures").exists()
+    assert not (dest / "tests" / "benchmarks" / "test_harness.py").exists()
+    assert not (dest / "examples").exists()
+    assert not (dest / "skills" / "seedbank").exists()
+    # plugin manifest/hooks never reach any arm (seedbank's PostToolUse hooks)
+    assert not (dest / "hooks").exists()
+    assert not (dest / ".claude-plugin").exists()
+    # other skills stay as ordinary repo content (question 3's source)
+    assert (dest / "skills" / "weeder" / "SKILL.md").exists()
+    assert (dest / "benchmarks" / "harness" / "types.py").exists()

@@ -1,0 +1,17 @@
+{
+  "description": "seedbank: record Read/Grep/Glob tool calls as repository observations (fast, silent, never blocks)",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/seedbank/bin/seedbank\" hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

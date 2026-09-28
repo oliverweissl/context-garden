@@ -2,15 +2,17 @@
 """Entry point for Context Garden component benchmarks.
 
     scripts/benchmark list
-    scripts/benchmark run --runner claude-code [--task ID ...] [--component NAME ...]
+    scripts/benchmark run [--task ID ...] [--component NAME ...] [--arms ARM ...]
+                          [--runs N] [--seed S] [--dry-run] [--resume DIR]
     scripts/benchmark analyze <results-dir>
+    scripts/benchmark plot <results-dir>
 
-See benchmarks/README.md for the fixture format and what `run` actually
-does (materializes baseline/treatment working copies per task, invokes
-the `claude` CLI headlessly against each, verifies the result). `run`
-spends real API usage/cost -- there is no default runner; you must pass
---runner claude-code deliberately. The FakeRunner used by
-tests/benchmarks/ is not reachable from this CLI, only from Python.
+See docs/benchmarking.md for the methodology (arms, randomised interleaved
+schedule, metrics/CIs) and benchmarks/README.md for the fixture format.
+`run` spends real API usage/cost: every trial invokes the real `claude`
+CLI headlessly (sessions = tasks x arms x runs). `run --dry-run` only
+prints the randomised schedule. The FakeRunner used by tests/benchmarks/
+is not reachable from this CLI, only from Python.
 """
 
 from __future__ import annotations
@@ -23,10 +25,19 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "benchmarks"))
 
-from harness.analyze import load_records, write_records, write_summary  # noqa: E402
+from harness.analyze import load_records, write_summary  # noqa: E402
 from harness.fixtures import discover_tasks  # noqa: E402
-from harness.run import run_all  # noqa: E402
+from harness.run import (  # noqa: E402
+    RECORDS_FILE,
+    SCHEDULE_FILE,
+    completed_keys,
+    plan_schedule,
+    read_schedule,
+    run_schedule,
+    write_schedule,
+)
 from harness.runners import ClaudeCodeRunner  # noqa: E402
+from harness.types import ARMS  # noqa: E402
 
 RESULTS_DIR = REPO_ROOT / "benchmarks" / "results"
 
@@ -46,7 +57,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_run(args: argparse.Namespace) -> int:
+def _select_tasks(args: argparse.Namespace):
     tasks = discover_tasks()
     explicit = bool(args.task or args.component)
     if args.task:
@@ -58,12 +69,53 @@ def cmd_run(args: argparse.Namespace) -> int:
         skipped = [t.task_id for t in tasks if not t.run_by_default]
         tasks = [t for t in tasks if t.run_by_default]
         if skipped:
-            print(
-                f"Skipping (not run by default, needs --task/--component): {', '.join(skipped)}"
-            )
-    if not tasks:
-        print("No matching fixtures.", file=sys.stderr)
-        return 1
+            print(f"Skipping (not run by default, needs --task/--component): {', '.join(skipped)}")
+    return tasks
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    if args.resume:
+        run_dir = Path(args.resume)
+        if not (run_dir / SCHEDULE_FILE).exists():
+            print(f"error: no {SCHEDULE_FILE} under {run_dir}", file=sys.stderr)
+            return 1
+        meta, schedule = read_schedule(run_dir)
+        seed, arms, runs = meta["seed"], meta["arms"], meta["runs"]
+        by_id = {t.task_id: t for t in discover_tasks()}
+        missing = sorted({t.task_id for t in schedule} - by_id.keys())
+        if missing:
+            print(f"error: schedule names unknown task(s): {missing}", file=sys.stderr)
+            return 1
+        tasks = [by_id[i] for i in meta["tasks"]]
+        print(
+            f"Resuming {run_dir} (seed={seed}, arms={arms}, runs={runs}); "
+            "task/arm/run/seed flags are ignored."
+        )
+    else:
+        tasks = _select_tasks(args)
+        if not tasks:
+            print("No matching fixtures.", file=sys.stderr)
+            return 1
+        seed, arms, runs = args.seed, list(dict.fromkeys(args.arms)), args.runs
+        schedule = plan_schedule([t.task_id for t in tasks], arms, runs, seed)
+        run_dir = RESULTS_DIR / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    records_path = run_dir / RECORDS_FILE
+    done = completed_keys(records_path)
+    todo = [t for t in schedule if t.key not in done]
+    print(
+        f"{len(tasks)} task(s) x {len(arms)} arm(s) x {runs} run(s) = {len(schedule)} "
+        f"session(s); {len(done & {t.key for t in schedule})} already done, {len(todo)} to run "
+        f"(seed={seed}, max ${args.max_budget_usd:.2f}/session, "
+        f"worst case ${len(todo) * args.max_budget_usd:.2f})."
+    )
+
+    if args.dry_run:
+        for i, trial in enumerate(schedule):
+            mark = "done" if trial.key in done else "    "
+            print(f"{i:>4} {mark} {trial.task_id:<40} {trial.arm:<18} rep={trial.rep}")
+        print("Dry run: nothing executed.")
+        return 0
 
     if args.runner != "claude-code":
         print(
@@ -72,27 +124,39 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
+    if not args.resume:
+        write_schedule(run_dir, schedule, seed=seed, arms=arms, runs=runs)
     runner = ClaudeCodeRunner(
         model=args.model,
         permission_mode=args.permission_mode,
         max_budget_usd=args.max_budget_usd,
     )
-
-    print(
-        f"Running {len(tasks)} task(s) x 2 conditions x {args.repeat} repeat(s) against "
-        f"{args.runner} (max ${args.max_budget_usd:.2f}/run) -- this spends real API usage."
-    )
-
-    run_dir = RESULTS_DIR / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    print(f"Running against {args.runner} -- this spends real API usage. Results: {run_dir}")
     keep_workdirs_under = (run_dir / "workdirs") if args.keep_workdirs else None
 
-    records = run_all(tasks, runner, repeat=args.repeat, keep_workdirs_under=keep_workdirs_under)
+    def progress(index, total, record):
+        status = "PASS" if record.verification_success else "FAIL"
+        print(
+            f"[{index + 1}/{total}] {record.task_id} {record.condition} rep={record.rep}: "
+            f"{status}, {record.total_tokens} tokens"
+        )
 
-    records_path = run_dir / "records.jsonl"
-    write_records(records, records_path)
+    try:
+        run_schedule(
+            tasks,
+            runner,
+            schedule,
+            records_path,
+            seed=seed,
+            keep_workdirs_under=keep_workdirs_under,
+            on_record=progress,
+        )
+    except KeyboardInterrupt:
+        print(f"\nInterrupted. Resume with: scripts/benchmark run --resume {run_dir}")
+        return 130
+
     summary = write_summary(load_records(records_path), run_dir / "summary.md")
-
-    print(f"\nWrote {len(records)} record(s) to {records_path}")
+    print(f"\nRecords: {records_path}")
     print(summary)
     return 0
 
@@ -107,25 +171,60 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_plot(args: argparse.Namespace) -> int:
+    from harness.plot import MatplotlibMissing, plot_results_dir
+
+    results_dir = Path(args.results_dir)
+    records_path = results_dir / RECORDS_FILE
+    if records_path.exists():
+        write_summary(load_records(records_path), results_dir / "summary.md")
+    elif not (results_dir / "summary.json").exists():
+        print(f"error: no {RECORDS_FILE} or summary.json under {results_dir}", file=sys.stderr)
+        return 1
+    try:
+        out = plot_results_dir(results_dir)
+    except MatplotlibMissing as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote {out}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="scripts/benchmark")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("list", help="list discovered fixtures").set_defaults(func=cmd_list)
 
-    p_run = sub.add_parser("run", help="run baseline + treatment for one or more fixtures")
+    p_run = sub.add_parser("run", help="run a randomised tasks x arms x runs schedule")
     p_run.add_argument("--task", nargs="*", default=None, help="task_id(s) to run (default: all)")
     p_run.add_argument("--component", nargs="*", default=None, help="restrict to component(s)")
+    p_run.add_argument(
+        "--arms",
+        nargs="+",
+        default=list(ARMS),
+        choices=list(ARMS),
+        help="arms to run (default: all three)",
+    )
+    p_run.add_argument(
+        "--runs", type=int, default=10, help="repetitions per (task, arm) (default: 10)"
+    )
+    p_run.add_argument(
+        "--seed", type=int, default=0, help="seed for the randomised interleaved order"
+    )
+    p_run.add_argument(
+        "--dry-run", action="store_true", help="print the schedule and cost bound; run nothing"
+    )
+    p_run.add_argument(
+        "--resume",
+        metavar="RESULTS_DIR",
+        default=None,
+        help="continue an interrupted run (skips completed (task, arm, rep) records)",
+    )
     p_run.add_argument("--runner", default="claude-code", choices=["claude-code"])
     p_run.add_argument("--model", default=None)
     p_run.add_argument("--permission-mode", default="acceptEdits")
     p_run.add_argument("--max-budget-usd", type=float, default=1.0)
-    p_run.add_argument(
-        "--repeat",
-        type=int,
-        default=1,
-        help="how many times to run each (task, condition) pair -- n=1 is noise, use 5+ before trusting a delta",
-    )
     p_run.add_argument(
         "--keep-workdirs",
         action="store_true",
@@ -134,10 +233,16 @@ def main() -> int:
     p_run.set_defaults(func=cmd_run)
 
     p_analyze = sub.add_parser(
-        "analyze", help="(re)generate summary.md for an existing results dir"
+        "analyze", help="(re)generate summary.md + summary.json for an existing results dir"
     )
     p_analyze.add_argument("results_dir")
     p_analyze.set_defaults(func=cmd_analyze)
+
+    p_plot = sub.add_parser(
+        "plot", help="render benchmark.png (pass rate + token delta, 95%% CIs) into a results dir"
+    )
+    p_plot.add_argument("results_dir")
+    p_plot.set_defaults(func=cmd_plot)
 
     args = parser.parse_args()
     return args.func(args)

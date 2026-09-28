@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+"""Check weeder's lexical routing proxy against real Claude Code routing.
+
+    scripts/validate-routing [--skill DIR] [--examples FILE] [--competing DIR ...]
+                             [--model M] [--limit N] [--json-out PATH] [--dry-run]
+
+MANUAL ONLY -- never run from CI. For every prompt in a weeder routing
+examples file ({"positive": [...], "negative": [...], "ambiguous":
+[{"prompt":, "expected":}]}) it creates a temp project with the skill
+under test plus any --competing skills installed under .claude/skills/,
+runs `claude -p --output-format stream-json --verbose` with the prompt,
+and records which Skill tool invocation (if any) the model makes. The
+session is stopped as soon as a Skill call appears (or the model answers
+without one), so each prompt costs roughly one short turn of the caller's
+own Claude Code usage. No API key is read or needed by this script.
+
+Reports real-routing accuracy, weeder's proxy accuracy on the same
+prompts, and a real-vs-proxy confusion table. Defaults to weeder's own
+fixture pair (tests/fixtures/bloated_skill vs competing_skill). See
+docs/weeder-calibration.md.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import uuid
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+WEEDER = REPO_ROOT / "skills" / "weeder"
+FIX = WEEDER / "tests" / "fixtures"
+sys.path.insert(0, str(WEEDER / "scripts"))
+
+from we_parse import parse_skill  # noqa: E402
+from we_routing import predict_trigger  # noqa: E402
+
+NONE = "(none)"
+
+# Included only if `claude --help` lists them. --bare is deliberately not
+# used (it forces ANTHROPIC_API_KEY auth).
+OPTIONAL_FLAGS = [
+    ("--setting-sources", ["project"]),  # only the temp project's .claude/skills
+    ("--strict-mcp-config", []),
+    ("--no-session-persistence", []),
+    ("--permission-prompts", ["none"]),  # the Skill call is recorded before it's denied
+    ("--max-turns", ["2"]),
+]
+
+
+def supported(help_text: str, flag: str) -> bool:
+    return bool(re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", help_text))
+
+
+def base_command(args) -> list[str]:
+    try:
+        help_text = subprocess.run(
+            [args.claude_bin, "--help"], capture_output=True, text=True, timeout=60
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        help_text = ""
+    cmd = [args.claude_bin, "-p", "--output-format", "stream-json", "--verbose"]
+    for flag, values in OPTIONAL_FLAGS:
+        if supported(help_text, flag):
+            cmd += [flag, *values]
+    if args.max_budget_usd and supported(help_text, "--max-budget-usd"):
+        cmd += ["--max-budget-usd", str(args.max_budget_usd)]
+    if args.tools is not None and supported(help_text, "--tools"):
+        cmd += ["--tools", args.tools]
+    if args.model:
+        cmd += ["--model", args.model]
+    cmd += ["--append-system-prompt", "routing validation nonce: {nonce}"]
+    return cmd
+
+
+def normalise(skill: str | None) -> str:
+    if not skill:
+        return NONE
+    return str(skill).lstrip("/").split(":")[-1]
+
+
+def skill_call(event: dict) -> str | None:
+    """The skill named by a Skill tool_use in a stream-json assistant event."""
+    if event.get("type") != "assistant":
+        return None
+    content = (event.get("message") or {}).get("content") or []
+    for block in content if isinstance(content, list) else []:
+        if (
+            isinstance(block, dict)
+            and block.get("type") == "tool_use"
+            and block.get("name") == "Skill"
+        ):
+            inp = block.get("input") or {}
+            return str(inp.get("skill") or inp.get("command") or inp.get("name") or "unknown")
+    return None
+
+
+def run_prompt(cmd: list[str], prompt: str, skills: dict[str, Path], timeout: float) -> dict:
+    with tempfile.TemporaryDirectory(prefix="validate-routing-") as tmp:
+        for name, src in skills.items():
+            shutil.copytree(src, Path(tmp) / ".claude" / "skills" / name)
+        nonce = uuid.uuid4().hex
+        full = [c.replace("{nonce}", nonce) for c in cmd]
+        # prompt on stdin: --tools is variadic and would swallow a positional
+        proc = subprocess.Popen(
+            full,
+            cwd=tmp,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass
+        invoked, finished, error = None, False, None
+        try:
+            for line in proc.stdout:
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                invoked = skill_call(event)
+                if invoked:
+                    break  # routing decided; stop spending usage
+                if event.get("type") == "result":
+                    finished = True
+                    if event.get("is_error") and event.get("subtype") != "error_max_turns":
+                        error = str(event.get("result") or event.get("subtype"))[:200]
+                    break
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        if not invoked and not finished and error is None:
+            stderr = proc.stderr.read() if proc.stderr else ""
+            error = f"no result event (exit {proc.returncode}): {stderr.strip()[:200]}"
+        return {"real": normalise(invoked), "error": error}
+
+
+def correct(kind: str, expected: str, predicted: str, skill: str) -> bool:
+    if expected == "either":
+        return True
+    if expected == "trigger":
+        return predicted == skill
+    return predicted != skill
+
+
+def load_cases(examples: dict) -> list[dict]:
+    cases = [
+        {"prompt": p, "kind": "positive", "expected": "trigger"}
+        for p in examples.get("positive", [])
+    ]
+    cases += [
+        {"prompt": p, "kind": "negative", "expected": "no_trigger"}
+        for p in examples.get("negative", [])
+    ]
+    cases += [
+        {"prompt": a["prompt"], "kind": "ambiguous", "expected": a.get("expected", "either")}
+        for a in examples.get("ambiguous", [])
+    ]
+    return cases
+
+
+def pct(x: float | None) -> str:
+    return "n/a" if x is None else f"{x:.0%}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    ap.add_argument(
+        "--skill", default=None, help="skill under test (default: weeder's bloated_skill fixture)"
+    )
+    ap.add_argument("--examples", default=str(FIX / "routing_examples.json"))
+    ap.add_argument(
+        "--competing",
+        nargs="*",
+        default=None,
+        help="competitor skill dirs (default with the fixture skill: competing_skill)",
+    )
+    ap.add_argument("--claude-bin", default="claude")
+    ap.add_argument("--model", default=None)
+    ap.add_argument(
+        "--tools",
+        default="Skill",
+        help='value for --tools (default "Skill": the model can only route, not act)',
+    )
+    ap.add_argument("--max-budget-usd", type=float, default=0.25, help="per prompt, if supported")
+    ap.add_argument("--timeout", type=float, default=180.0)
+    ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--json-out", default=None)
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="show cases, proxy predictions and the command; no calls",
+    )
+    args = ap.parse_args(argv)
+
+    skill_dir = Path(args.skill or FIX / "bloated_skill")
+    competing = args.competing
+    if competing is None:
+        competing = [str(FIX / "competing_skill")] if args.skill is None else []
+
+    parsed = parse_skill(skill_dir)
+    skill = parsed["name"]
+    skills = {skill: skill_dir}
+    descriptions = {skill: parsed["frontmatter"].get("description", "")}
+    for d in competing:
+        cp = parse_skill(d)
+        skills[cp["name"]] = Path(d)
+        descriptions[cp["name"]] = cp["frontmatter"].get("description", "")
+
+    cases = load_cases(json.loads(Path(args.examples).read_text()))[: args.limit]
+    cmd = base_command(args)
+    print(f"skill under test: {skill}; installed: {', '.join(skills)}")
+    print(f"{len(cases)} prompt(s) -> up to {len(cases)} short headless claude sessions")
+    print("command: " + shlex.join(cmd) + " < prompt-on-stdin")
+
+    rows = []
+    for i, c in enumerate(cases, 1):
+        proxy, _ = predict_trigger(descriptions, c["prompt"])
+        row = {**c, "proxy": normalise(proxy)}
+        if args.dry_run:
+            row.update(real=None, error=None)
+        else:
+            try:
+                row.update(run_prompt(cmd, c["prompt"], skills, args.timeout))
+            except OSError as e:
+                print(f"error: cannot run {args.claude_bin}: {e}", file=sys.stderr)
+                return 1
+            print(
+                f"  {i}/{len(cases)} real={row['real']:<16} proxy={row['proxy']:<16} "
+                f"{c['prompt'][:60]!r}"
+                + (f"  ERROR {row['error']}" if row["error"] else "")
+            )
+        rows.append(row)
+
+    if args.dry_run:
+        for r in rows:
+            print(
+                f"  [{r['kind']:<9}] expected={r['expected']:<10} proxy={r['proxy']:<16} "
+                f"{r['prompt'][:60]!r}"
+            )
+        return 0
+
+    ok = [r for r in rows if not r["error"]]
+    for r in ok:
+        r["real_correct"] = correct(r["kind"], r["expected"], r["real"], skill)
+        r["proxy_correct"] = correct(r["kind"], r["expected"], r["proxy"], skill)
+    n = len(ok)
+    summary = {
+        "skill": skill,
+        "installed": list(skills),
+        "n": n,
+        "errors": len(rows) - n,
+        "real_accuracy": sum(r["real_correct"] for r in ok) / n if n else None,
+        "proxy_accuracy": sum(r["proxy_correct"] for r in ok) / n if n else None,
+        "agreement": sum(r["real"] == r["proxy"] for r in ok) / n if n else None,
+    }
+    labels = sorted({*skills, NONE} | {r["real"] for r in ok} | {r["proxy"] for r in ok})
+    confusion = {real: {pr: 0 for pr in labels} for real in labels}
+    for r in ok:
+        confusion[r["real"]][r["proxy"]] += 1
+    summary["confusion_real_by_proxy"] = confusion
+
+    print()
+    print(
+        f"real routing accuracy : {pct(summary['real_accuracy'])}  "
+        f"({n} prompt(s), {summary['errors']} error(s))"
+    )
+    print(f"proxy accuracy        : {pct(summary['proxy_accuracy'])}")
+    print(f"real/proxy agreement  : {pct(summary['agreement'])}")
+    print("\nconfusion (rows = real Skill call, columns = proxy prediction):")
+    w = max(len(x) for x in labels) + 2
+    print(" " * w + "".join(f"{x:>{w}}" for x in labels))
+    for real in labels:
+        print(f"{real:<{w}}" + "".join(f"{confusion[real][pr]:>{w}}" for pr in labels))
+    disagreements = [r for r in ok if r["real"] != r["proxy"]]
+    if disagreements:
+        print("\ndisagreements:")
+        for r in disagreements:
+            print(f"  [{r['kind']}] real={r['real']} proxy={r['proxy']}  {r['prompt'][:70]!r}")
+
+    if args.json_out:
+        Path(args.json_out).write_text(
+            json.dumps({"summary": summary, "rows": rows}, indent=2) + "\n"
+        )
+        print(f"\nwrote {args.json_out}")
+    return 1 if summary["errors"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

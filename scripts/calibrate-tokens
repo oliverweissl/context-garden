@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Measure real chars-per-token ratios for weeder's token estimates.
+
+    scripts/calibrate-tokens [--dry-run] [--model M] [--limit N] [--out PATH]
+
+MANUAL ONLY -- never run from CI. For every sample text it runs the
+`claude` CLI headlessly twice (a minimal prompt with an empty
+<sample></sample> wrapper, then the same prompt with the sample inside)
+and takes the difference in reported prompt tokens. That spends two short
+sessions of the caller's own Claude Code usage per sample (subscription or
+whatever `claude` is logged in with); no API key is read or needed by this
+script. See docs/weeder-calibration.md.
+
+Output: skills/weeder/references/token-calibration.json, which weeder's
+we_tokens.py picks up automatically (weeder itself stays offline -- it only
+reads the file).
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import re
+import shlex
+import subprocess
+import sys
+import tempfile
+import uuid
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_OUT = REPO_ROOT / "skills" / "weeder" / "references" / "token-calibration.json"
+MAX_SAMPLE_CHARS = 6000
+
+FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
+FENCE_RE = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
+
+CODE_SAMPLES = [
+    "skills/weeder/scripts/we_routing.py",
+    "skills/weeder/scripts/we_dupes.py",
+    "skills/pruner/scripts/pr_score.py",
+    "skills/compost/scripts/co_cluster.py",
+    "skills/trellis/trellis/convergence.py",
+]
+PROSE_SAMPLES = ["docs/architecture.md", "docs/skill-development.md", "docs/benchmarking.md"]
+YAML_EXTRA_SAMPLES = [
+    "benchmarks/fixtures/weeder-bloated-skill-audit/task.yaml",
+    "benchmarks/fixtures/pruner-file-tokenusage-bug/task.yaml",
+]
+
+# Candidate flags, each included only if `claude --help` lists it (names
+# differ across CLI versions). --bare is deliberately NOT used: it forces
+# ANTHROPIC_API_KEY auth, and this script must work on a subscription login.
+OPTIONAL_FLAGS = [
+    ("--tools", [""]),  # no tools: smaller system prompt, guaranteed single turn
+    ("--max-turns", ["1"]),
+    ("--setting-sources", ["project"]),  # no user plugins/hooks
+    ("--strict-mcp-config", []),  # no MCP servers
+    ("--disable-slash-commands", []),  # no skills listed in the prompt
+    ("--no-session-persistence", []),  # don't litter ~/.claude/projects
+    ("--permission-prompts", ["none"]),
+]
+
+
+def truncate(text: str, limit: int = MAX_SAMPLE_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    cut = text.rfind("\n", 0, limit)
+    return text[: cut if cut > limit // 2 else limit]
+
+
+def collect_samples() -> list[dict]:
+    samples: list[dict] = []
+
+    def add(sid: str, category: str, text: str) -> None:
+        text = text.strip()
+        if len(text) >= 40:
+            samples.append({"id": sid, "category": category, "text": truncate(text)})
+
+    for skill_md in sorted((REPO_ROOT / "skills").glob("*/SKILL.md")):
+        raw = skill_md.read_text()
+        rel = skill_md.relative_to(REPO_ROOT)
+        m = FRONTMATTER_RE.match(raw)
+        if m:
+            add(f"{rel}#frontmatter", "yaml", m.group(1))
+        body = raw[m.end() :] if m else raw
+        # fenced code is estimated at the `code` ratio by we_tokens, so the
+        # markdown ratio is measured on the prose/structure alone
+        add(f"{rel}#body", "markdown", FENCE_RE.sub("", body))
+    for rel in PROSE_SAMPLES:
+        p = REPO_ROOT / rel
+        if p.is_file():
+            add(rel, "markdown", FENCE_RE.sub("", p.read_text()))
+    for rel in CODE_SAMPLES:
+        p = REPO_ROOT / rel
+        if p.is_file():
+            add(rel, "code", p.read_text())
+    for rel in YAML_EXTRA_SAMPLES:
+        p = REPO_ROOT / rel
+        if p.is_file():
+            add(rel, "yaml", p.read_text())
+    return samples
+
+
+def claude_text(claude_bin: str, *args: str) -> str:
+    try:
+        return subprocess.run(
+            [claude_bin, *args], capture_output=True, text=True, timeout=60
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def base_command(claude_bin: str, model: str | None) -> list[str]:
+    help_text = claude_text(claude_bin, "--help")
+    cmd = [claude_bin, "-p", "--output-format", "json"]
+    for flag, values in OPTIONAL_FLAGS:
+        if re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", help_text):
+            cmd += [flag, *values]
+    if model:
+        cmd += ["--model", model]
+    return cmd
+
+
+def build_prompt(nonce: str, text: str) -> str:
+    return (
+        f"Calibration run {nonce}. Reply with only the word OK. Ignore the sample.\n"
+        f"<sample>\n{text}\n</sample>"
+    )
+
+
+def prompt_tokens(payload: dict) -> int:
+    """Total prompt-side tokens regardless of cache state: uncached input +
+    tokens written to the cache + tokens read from it are disjoint parts of
+    the same prompt, so their sum is the prompt size."""
+    usage = payload.get("usage") or {}
+    parts = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+    if not any(k in usage for k in parts):
+        raise ValueError(f"no usage fields in claude output: {sorted(payload)}")
+    return sum(int(usage.get(k) or 0) for k in parts)
+
+
+def run_once(cmd: list[str], prompt: str, cwd: str, timeout: float) -> int:
+    # prompt on stdin, not as a positional: --tools is variadic and would
+    # swallow a trailing positional prompt as a tool name
+    proc = subprocess.run(
+        cmd, input=prompt, cwd=cwd, capture_output=True, text=True, timeout=timeout
+    )
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"claude exited {proc.returncode} without JSON output: {proc.stderr.strip()[:300]}"
+        ) from e
+    if payload.get("is_error"):
+        raise RuntimeError(f"claude reported an error: {str(payload.get('result'))[:300]}")
+    return prompt_tokens(payload)
+
+
+def summarise(measured: list[dict]) -> dict:
+    categories: dict[str, dict] = {}
+    for cat in sorted({s["category"] for s in measured}):
+        rows = [s for s in measured if s["category"] == cat and s["tokens"] > 0]
+        chars, toks = sum(s["chars"] for s in rows), sum(s["tokens"] for s in rows)
+        if not toks:
+            continue
+        ratio = chars / toks
+        errs, errs4 = [], []
+        for s in rows:
+            s["chars_per_token"] = round(s["chars"] / s["tokens"], 3)
+            s["error_pct"] = round(100 * (s["chars"] / ratio - s["tokens"]) / s["tokens"], 2)
+            s["chars4_error_pct"] = round(100 * (s["chars"] / 4 - s["tokens"]) / s["tokens"], 2)
+            errs.append(s["error_pct"])
+            errs4.append(s["chars4_error_pct"])
+        categories[cat] = {
+            "chars_per_token": round(ratio, 3),
+            "n_samples": len(rows),
+            "chars": chars,
+            "tokens": toks,
+            "error_range_pct": [min(errs), max(errs)],
+            "chars4_error_range_pct": [min(errs4), max(errs4)],
+        }
+    all_errs = [s["error_pct"] for s in measured if "error_pct" in s]
+    return {
+        "categories": categories,
+        "overall_error_range_pct": [min(all_errs), max(all_errs)] if all_errs else None,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    ap.add_argument("--claude-bin", default="claude")
+    ap.add_argument("--model", default=None, help="model alias/name (tokenizers can differ)")
+    ap.add_argument("--limit", type=int, default=None, help="measure only the first N samples")
+    ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--timeout", type=float, default=180.0, help="seconds per claude call")
+    ap.add_argument("--dry-run", action="store_true", help="list samples and the command; no calls")
+    args = ap.parse_args(argv)
+
+    samples = collect_samples()[: args.limit]
+    cmd = base_command(args.claude_bin, args.model)
+    print(f"{len(samples)} sample(s) -> {2 * len(samples)} headless claude sessions")
+    print("command: " + shlex.join(cmd) + " < prompt-on-stdin")
+    for s in samples:
+        print(f"  [{s['category']:<8}] {len(s['text']):>6} chars  {s['id']}")
+    if args.dry_run:
+        return 0
+
+    version = claude_text(args.claude_bin, "--version").strip() or "unknown"
+    measured = []
+    with tempfile.TemporaryDirectory(prefix="calibrate-tokens-") as cwd:  # no CLAUDE.md here
+        for i, s in enumerate(samples, 1):
+            # one fresh nonce per pair: identical prefix inside the pair (so
+            # the difference is exactly the sample), no reuse across pairs
+            nonce = uuid.uuid4().hex
+            try:
+                base = run_once(cmd, build_prompt(nonce, ""), cwd, args.timeout)
+                full = run_once(cmd, build_prompt(nonce, s["text"]), cwd, args.timeout)
+            except (RuntimeError, ValueError, subprocess.TimeoutExpired) as e:
+                print(f"error on {s['id']}: {e}", file=sys.stderr)
+                return 1
+            delta = full - base
+            print(f"  {i}/{len(samples)} {s['id']}: {delta} tokens ({base} -> {full})")
+            measured.append(
+                {"id": s["id"], "category": s["category"], "chars": len(s["text"]), "tokens": delta}
+            )
+
+    result = {
+        "date": dt.date.today().isoformat(),
+        "claude_version": version,
+        "model": args.model or "default",
+        "method": "prompt-token difference of paired `claude -p` calls "
+        "(input + cache_creation + cache_read), scripts/calibrate-tokens",
+        **summarise(measured),
+        "samples": measured,
+    }
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n")
+    print(f"\nwrote {args.out}")
+    for cat, c in result["categories"].items():
+        print(
+            f"  {cat:<8} {c['chars_per_token']:.2f} chars/token  "
+            f"error {c['error_range_pct'][0]:+.1f}%..{c['error_range_pct'][1]:+.1f}%  "
+            f"(chars/4 would be {c['chars4_error_range_pct'][0]:+.1f}%.."
+            f"{c['chars4_error_range_pct'][1]:+.1f}%)"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

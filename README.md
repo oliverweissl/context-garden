@@ -12,9 +12,7 @@ deterministic, offline, no LLM calls inside the tooling itself. This management 
 | 🌿 [`trellis`](skills/trellis) | Correctness gate for numerical code (convergence order, residuals, conditioning). |
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
-Here you can see some benchmarking results for the rather small benchmarks included in this repo, evaluated on claude-code.
-
-![Benchmark Results on Small Examples with Claude Code](benchmarks/results/Bar.png)
+See [`docs/benchmarking.md`](docs/benchmarking.md) for how to run the benchmarks and plot their results.
 
 ## How to use
 Replace `{skill}` with the skills name to install the skill for your agent.
