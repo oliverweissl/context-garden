@@ -41,6 +41,49 @@ from harness.types import ARMS  # noqa: E402
 
 RESULTS_DIR = REPO_ROOT / "benchmarks" / "results"
 
+# Runner flags persisted in schedule.json so --resume continues with the same
+# runner configuration. argparse defaults are None so explicitly given flags
+# can be told apart from omitted ones; omitted flags fall back to these.
+RUNNER_DEFAULTS = {
+    "runner": "claude-code",
+    "model": None,
+    "permission_mode": "acceptEdits",
+    "max_budget_usd": 1.0,
+}
+
+
+def positive_int(value: str) -> int:
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be >= 1, got {n}")
+    return n
+
+
+def _flag(key: str) -> str:
+    return "--" + key.replace("_", "-")
+
+
+def _resolve_runner_config(args: argparse.Namespace, stored: dict | None) -> dict:
+    """Runner config for this invocation. Fresh run: flags over defaults.
+    Resume: the config stored in schedule.json, with explicitly given flags
+    allowed only if they match it (ValueError otherwise). Schedules written
+    before the config was stored fall back to flags/defaults."""
+    given = {k: getattr(args, k) for k in RUNNER_DEFAULTS if getattr(args, k) is not None}
+    if stored is None:
+        return {**RUNNER_DEFAULTS, **given}
+    conflicts = [
+        f"{_flag(k)}={v!r} (stored: {stored[k]!r})"
+        for k, v in given.items()
+        if k in stored and stored[k] != v
+    ]
+    if conflicts:
+        raise ValueError(
+            "runner flag(s) differ from the resumed run's schedule.json: "
+            + ", ".join(conflicts)
+            + "; omit them to reuse the stored values"
+        )
+    return {**RUNNER_DEFAULTS, **given, **stored}
+
 
 def cmd_list(args: argparse.Namespace) -> int:
     tasks = discover_tasks()
@@ -82,14 +125,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         meta, schedule = read_schedule(run_dir)
         seed, arms, runs = meta["seed"], meta["arms"], meta["runs"]
         by_id = {t.task_id: t for t in discover_tasks()}
-        missing = sorted({t.task_id for t in schedule} - by_id.keys())
-        if missing:
-            print(f"error: schedule names unknown task(s): {missing}", file=sys.stderr)
+        tasks = [by_id[i] for i in meta["tasks"] if i in by_id]
+        stored = meta.get("runner_config")
+        try:
+            config = _resolve_runner_config(args, stored)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
             return 1
-        tasks = [by_id[i] for i in meta["tasks"]]
         print(
             f"Resuming {run_dir} (seed={seed}, arms={arms}, runs={runs}); "
-            "task/arm/run/seed flags are ignored."
+            "task/arm/run/seed flags are ignored"
+            + ("; runner config restored from schedule.json." if stored else ".")
         )
     else:
         tasks = _select_tasks(args)
@@ -99,6 +145,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         seed, arms, runs = args.seed, list(dict.fromkeys(args.arms)), args.runs
         schedule = plan_schedule([t.task_id for t in tasks], arms, runs, seed)
         run_dir = RESULTS_DIR / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        config = _resolve_runner_config(args, None)
 
     records_path = run_dir / RECORDS_FILE
     done = completed_keys(records_path)
@@ -106,8 +153,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(
         f"{len(tasks)} task(s) x {len(arms)} arm(s) x {runs} run(s) = {len(schedule)} "
         f"session(s); {len(done & {t.key for t in schedule})} already done, {len(todo)} to run "
-        f"(seed={seed}, max ${args.max_budget_usd:.2f}/session, "
-        f"worst case ${len(todo) * args.max_budget_usd:.2f})."
+        f"(seed={seed}, max ${config['max_budget_usd']:.2f}/session, "
+        f"worst case ${len(todo) * config['max_budget_usd']:.2f})."
     )
 
     if args.dry_run:
@@ -117,21 +164,21 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("Dry run: nothing executed.")
         return 0
 
-    if args.runner != "claude-code":
+    if config["runner"] != "claude-code":
         print(
-            f"error: unknown --runner {args.runner!r} (only 'claude-code' is CLI-runnable)",
+            f"error: unknown --runner {config['runner']!r} (only 'claude-code' is CLI-runnable)",
             file=sys.stderr,
         )
         return 1
 
     if not args.resume:
-        write_schedule(run_dir, schedule, seed=seed, arms=arms, runs=runs)
+        write_schedule(run_dir, schedule, seed=seed, arms=arms, runs=runs, runner_config=config)
     runner = ClaudeCodeRunner(
-        model=args.model,
-        permission_mode=args.permission_mode,
-        max_budget_usd=args.max_budget_usd,
+        model=config["model"],
+        permission_mode=config["permission_mode"],
+        max_budget_usd=config["max_budget_usd"],
     )
-    print(f"Running against {args.runner} -- this spends real API usage. Results: {run_dir}")
+    print(f"Running against {config['runner']} -- this spends real API usage. Results: {run_dir}")
     keep_workdirs_under = (run_dir / "workdirs") if args.keep_workdirs else None
 
     def progress(index, total, record):
@@ -151,6 +198,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             keep_workdirs_under=keep_workdirs_under,
             on_record=progress,
         )
+    except ValueError as exc:  # e.g. schedule names a task no longer in fixtures/
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     except KeyboardInterrupt:
         print(f"\nInterrupted. Resume with: scripts/benchmark run --resume {run_dir}")
         return 130
@@ -190,7 +240,7 @@ def cmd_plot(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts/benchmark")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -207,7 +257,7 @@ def main() -> int:
         help="arms to run (default: all three)",
     )
     p_run.add_argument(
-        "--runs", type=int, default=10, help="repetitions per (task, arm) (default: 10)"
+        "--runs", type=positive_int, default=10, help="repetitions per (task, arm) (default: 10)"
     )
     p_run.add_argument(
         "--seed", type=int, default=0, help="seed for the randomised interleaved order"
@@ -221,10 +271,12 @@ def main() -> int:
         default=None,
         help="continue an interrupted run (skips completed (task, arm, rep) records)",
     )
-    p_run.add_argument("--runner", default="claude-code", choices=["claude-code"])
+    p_run.add_argument(
+        "--runner", default=None, choices=["claude-code"], help="(default: claude-code)"
+    )
     p_run.add_argument("--model", default=None)
-    p_run.add_argument("--permission-mode", default="acceptEdits")
-    p_run.add_argument("--max-budget-usd", type=float, default=1.0)
+    p_run.add_argument("--permission-mode", default=None, help="(default: acceptEdits)")
+    p_run.add_argument("--max-budget-usd", type=float, default=None, help="(default: 1.0)")
     p_run.add_argument(
         "--keep-workdirs",
         action="store_true",
@@ -244,7 +296,7 @@ def main() -> int:
     p_plot.add_argument("results_dir")
     p_plot.set_defaults(func=cmd_plot)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args.func(args)
 
 

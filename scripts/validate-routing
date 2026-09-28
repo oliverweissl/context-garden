@@ -24,12 +24,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import re
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -101,8 +104,22 @@ def skill_call(event: dict) -> str | None:
     return None
 
 
+def _pump(stream, q: queue.Queue) -> None:
+    """Reader thread: forward stdout lines to q; None marks EOF."""
+    try:
+        for line in stream:
+            q.put(line)
+    finally:
+        q.put(None)
+
+
 def run_prompt(cmd: list[str], prompt: str, skills: dict[str, Path], timeout: float) -> dict:
-    with tempfile.TemporaryDirectory(prefix="validate-routing-") as tmp:
+    """Run one prompt; `timeout` is a wall-clock deadline for the whole
+    session (the process is killed and a timeout error recorded on expiry)."""
+    with (
+        tempfile.TemporaryDirectory(prefix="validate-routing-") as tmp,
+        tempfile.TemporaryFile("w+") as errf,
+    ):
         for name, src in skills.items():
             shutil.copytree(src, Path(tmp) / ".claude" / "skills" / name)
         nonce = uuid.uuid4().hex
@@ -113,9 +130,12 @@ def run_prompt(cmd: list[str], prompt: str, skills: dict[str, Path], timeout: fl
             cwd=tmp,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=errf,  # a file, not a pipe: can't fill up and stall the child
             text=True,
         )
+        deadline = time.monotonic() + timeout
+        lines: queue.Queue = queue.Queue()
+        threading.Thread(target=_pump, args=(proc.stdout, lines), daemon=True).start()
         try:
             proc.stdin.write(prompt)
             proc.stdin.close()
@@ -123,7 +143,14 @@ def run_prompt(cmd: list[str], prompt: str, skills: dict[str, Path], timeout: fl
             pass
         invoked, finished, error = None, False, None
         try:
-            for line in proc.stdout:
+            while True:
+                try:
+                    line = lines.get(timeout=max(0.0, deadline - time.monotonic()))
+                except queue.Empty:
+                    error = f"timeout after {timeout:g}s"
+                    break
+                if line is None:
+                    break  # EOF
                 try:
                     event = json.loads(line)
                 except json.JSONDecodeError:
@@ -138,13 +165,18 @@ def run_prompt(cmd: list[str], prompt: str, skills: dict[str, Path], timeout: fl
                     break
         finally:
             if proc.poll() is None:
-                proc.terminate()
+                if error:
+                    proc.kill()
+                else:
+                    proc.terminate()
             try:
-                proc.wait(timeout=timeout)
+                proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait()
         if not invoked and not finished and error is None:
-            stderr = proc.stderr.read() if proc.stderr else ""
+            errf.seek(0)
+            stderr = errf.read()
             error = f"no result event (exit {proc.returncode}): {stderr.strip()[:200]}"
         return {"real": normalise(invoked), "error": error}
 

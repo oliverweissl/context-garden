@@ -392,6 +392,21 @@ hook "{\"session_id\":\"x\",\"cwd\":\"$SCRATCH/nogit\",\"tool_name\":\"Glob\",\"
 if [ ! -e "$SCRATCH/nogit/.seedbank" ]; then echo "PASS: hook: outside a git repo -> no store created"; else echo "FAIL: hook created a store outside a git repo"; fail=1; fi
 cd "$REPO"
 
+# --- store .gitignore: profiler state ignored, warm/*.md committable --------
+assert_contains "store .gitignore: written when the CLI created the store" "$(cat .seedbank/.gitignore)" "keystats.json"
+mkdir -p .seedbank/warm && touch .seedbank/warm/build.md
+ignored=$(git check-ignore .seedbank/keystats.json .seedbank/observations.jsonl .seedbank/.lock .seedbank/hook.log .seedbank/warm/build.md .seedbank/.gitignore)
+assert_contains "store .gitignore: profiler state ignored" "$ignored" ".seedbank/observations.jsonl"
+assert_not_contains "store .gitignore: warm/*.md not ignored" "$ignored" "warm/build.md"
+assert_not_contains "store .gitignore: the .gitignore itself not ignored" "$ignored" ".seedbank/.gitignore"
+mkdir -p "$SCRATCH/fresh" && git -C "$SCRATCH/fresh" init -q && echo hi > "$SCRATCH/fresh/a.txt"
+hook "{\"session_id\":\"f1\",\"cwd\":\"$SCRATCH/fresh\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"a.txt\"}}"
+assert_contains "hook: records into a store it creates" "$(cat "$SCRATCH/fresh/.seedbank/keystats.json" 2>/dev/null)" '"read:a.txt"'
+assert_contains "hook: new store gets a .gitignore" "$(cat "$SCRATCH/fresh/.seedbank/.gitignore" 2>/dev/null)" "observations.jsonl"
+mkdir -p "$SCRATCH/own/.seedbank" && git -C "$SCRATCH/own" init -q && echo "# mine" > "$SCRATCH/own/.seedbank/.gitignore"
+(cd "$SCRATCH/own" && CC observe search "x" >/dev/null)
+assert_eq "store .gitignore: an existing one is never overwritten" "$(cat "$SCRATCH/own/.seedbank/.gitignore")" "# mine"
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "ALL CHECKS PASSED"

@@ -7,7 +7,8 @@ tool_response, ...}) and records
     Grep  -> observe search "<pattern>[ path=<dir>][ glob=<glob>]"
     Glob  -> observe search "<pattern>[ path=<dir>]"
 
-Contract: never fails or slows the tool call -- always exits 0, prints
+Contract: never fails or slows the tool call (registered as an async hook
+in hooks/hooks.json, so it runs in the background) -- always exits 0, prints
 nothing on stdout, swallows every error (logged to .seedbank/hook.log when
 the store exists). Only acts inside a git work tree; the store is created
 lazily on the first recorded observation. Paths outside the repo, and

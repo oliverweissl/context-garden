@@ -15,6 +15,8 @@ Layout under the store root (default ./.seedbank):
                           back to the defaults below)
     hook.log               errors swallowed by the Claude Code hook
     .lock                  flock target serializing concurrent commands
+    .gitignore             written once when the store dir is created: ignores
+                          the local profiler state above, not warm/*.md
 """
 
 from __future__ import annotations
@@ -37,6 +39,19 @@ except ImportError:  # Windows: no flock; locking degrades to a no-op
     fcntl = None
 
 DEFAULT_STORE_DIRNAME = ".seedbank"
+# Written into a freshly created store: the profiler state is local, while
+# warm/*.md (and AGENTS.md outside the store) are meant to be committed.
+STORE_GITIGNORE = """\
+# seedbank local profiler state (warm/*.md is meant to be committed)
+observations.jsonl
+keystats.json
+facts.json
+config.json
+.lock
+hook.log
+hook.log.1
+*.tmp
+"""
 DEFAULT_HOT_BUDGET = 500
 DEFAULT_PROMOTE_THRESHOLD = 1.0
 
@@ -155,7 +170,14 @@ class Store:
         self.root = Path(root)
         self.repo_root = Path(repo_root) if repo_root else self.root.resolve().parent
         self.session: str | None = None  # set by the CLI / hook (resolve_session)
+        created = not self.root.exists()
         self.root.mkdir(parents=True, exist_ok=True)
+        if created:
+            try:  # "x": never overwrite a .gitignore someone else put there
+                with (self.root / ".gitignore").open("x") as f:
+                    f.write(STORE_GITIGNORE)
+            except FileExistsError:
+                pass
         self.lock_path = self.root / ".lock"
         self.obs_path = self.root / "observations.jsonl"
         self.keystats_path = self.root / "keystats.json"

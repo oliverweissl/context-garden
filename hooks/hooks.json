@@ -1,5 +1,5 @@
 {
-  "description": "seedbank: record Read/Grep/Glob tool calls as repository observations (fast, silent, never blocks)",
+  "description": "seedbank: record Read/Grep/Glob tool calls as repository observations (async: runs in the background, never blocks the tool call)",
   "hooks": {
     "PostToolUse": [
       {
@@ -8,7 +8,8 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/seedbank/bin/seedbank\" hook",
-            "timeout": 10
+            "async": true,
+            "timeout": 5
           }
         ]
       }

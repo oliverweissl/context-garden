@@ -93,12 +93,13 @@ invalidation, `AGENTS.md` generation).
 ## Automatic observation (Claude Code hook)
 
 The context-garden plugin ships `hooks/hooks.json`, which runs
-`bin/seedbank hook` after every `Read`, `Grep` and `Glob` (silent, always
-exits 0, only inside a git repo). If you copied just this skill, add to
+`bin/seedbank hook` asynchronously after every `Read`, `Grep` and `Glob`
+(background, silent, always exits 0, only inside a git repo). If you copied just this skill, add to
 `.claude/settings.json` (or `~/.claude/settings.json`):
 ```json
 {"hooks": {"PostToolUse": [{"matcher": "Read|Grep|Glob",
-  "hooks": [{"type": "command", "command": "<this-skill-dir>/bin/seedbank hook"}]}]}}
+  "hooks": [{"type": "command", "command": "<this-skill-dir>/bin/seedbank hook",
+  "async": true, "timeout": 5}]}]}}
 ```
 
 ## Tiers
@@ -114,10 +115,12 @@ exits 0, only inside a git repo). If you copied just this skill, add to
 ## In the target repository
 
 Commit `AGENTS.md` (and any `.seedbank/warm/*.md`) — that's the whole
-point, it replaces a hand-maintained context file. Gitignore
-`.seedbank/{observations.jsonl,keystats.json,facts.json,config.json,.lock}`
-(the local profiler state) unless the team has decided to share observation
-history across contributors.
+point, it replaces a hand-maintained context file. A new store is created
+with `.seedbank/.gitignore` ignoring the local profiler state
+(`observations.jsonl`, `keystats.json`, `facts.json`, `config.json`,
+`.lock`, `hook.log`, `*.tmp`) but not `warm/`; commit that `.gitignore`
+too, and edit it only if the team decides to share observation history.
+An existing `.seedbank/.gitignore` is never overwritten.
 
 **If Claude Code is one of the agents working in this repository**, also
 commit a one-line `CLAUDE.md`:

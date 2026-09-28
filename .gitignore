@@ -1,24 +1,51 @@
-AGENTS.md
-CLAUDE.md
+# Repo-root agent context files (kept local, not committed).
+# Anchored so benchmark fixture overlays can still ship their own AGENTS.md.
+/AGENTS.md
+/CLAUDE.md
 
-# Folders
-**/.*/
-**/__/*
-
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+*.whl
 build/
 dist/
+
+# Virtual environments
+.venv/
 venv/
 env/
-htmlcov
 
-# File Types
+# Testing / coverage / tooling caches
+.pytest_cache/
 .coverage
 .coverage.*
-*.whl
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
+.idea/
+.vscode/
 *.swp
-*.egg
 .DS_Store
-*.py[cod]
+
+# Context Garden runtime state (project-local, generated).
+# Keep config.yaml shareable; ignore everything else under it.
+.context-garden/*
+!.context-garden/config.yaml
+
+# Per-Skill local stores (generated when a Skill's CLI is run from repo root).
+.compost/
+.pruner/
+.seedbank/
+.trellis/
+
+# Local Claude Code settings.
+.claude/settings.local.json
 
 # Benchmark results are generated artifacts, not source.
 benchmarks/results/*

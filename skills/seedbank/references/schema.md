@@ -101,7 +101,9 @@ stdin and records `Read` as `observe read <repo-relative path>`, `Grep` as
 Relative paths resolve against the hook's `cwd`; files outside the git
 repo and anything under `.git/` or `.seedbank/` are skipped. Acts only
 inside a git work tree, creates the store lazily, prints nothing, always
-exits 0 (errors go to `.seedbank/hook.log`), ~50 ms per call.
+exits 0 (errors go to `.seedbank/hook.log`), ~50 ms per call. Registered
+with `"async": true`, so it runs in the background and never delays the
+tool call.
 
 ## `seedbank demote <fact_id> --tier warm|cold`
 

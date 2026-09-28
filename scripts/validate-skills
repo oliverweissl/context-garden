@@ -8,6 +8,8 @@ Checks (once Skills exist):
   - referenced files within a Skill actually exist (markdown relative
     links, and `references/...`, `scripts/...`, `bin/...` paths)
   - no Skill references paths outside its own directory (e.g. ../../src)
+    in prose or markdown links (fenced code blocks and inline code spans
+    are exempt: example commands may legitimately use `../`)
 
 With no SKILL.md files present yet, this succeeds trivially -- there is
 nothing to validate until the first Skill is added.
@@ -27,20 +29,43 @@ try:
 except ImportError:  # PyYAML is a dev extra; degrade to a substring check
     yaml = None
 
+# Frontmatter: a `---` line at the very start, closed by the next `---` line.
+FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n(.*?)\n---\s*(\n|\Z)", re.DOTALL)
 # `../` anywhere in a path-like token: from SKILL.md at the skill root, any
-# parent-relative reference escapes the skill directory.
+# parent-relative reference escapes the skill directory. Only checked in
+# prose (see _prose): code fences / inline code are skipped.
 FORBIDDEN_PATH_PATTERN = re.compile(r"(?<![\w.])\.\./\S*")
 # Markdown relative links: [text](target) -- URLs and in-page anchors skipped below.
 LINK_PATTERN = re.compile(r"\]\(([^)\s]+)\)")
 # Bare skill-relative paths, e.g. references/schema.md, bin/compost.
 SKILL_PATH_PATTERN = re.compile(r"(?<![\w./-])(?:references|scripts|bin)/[\w./-]*[\w-]")
+FENCE_PATTERN = re.compile(r"^\s*(`{3,}|~{3,})")
+INLINE_CODE_PATTERN = re.compile(r"(`+).+?\1")
+
+
+def _prose(lines: list[str]) -> list[str]:
+    """Lines with fenced code blocks blanked and inline code spans removed."""
+    out: list[str] = []
+    fence: str | None = None
+    for line in lines:
+        m = FENCE_PATTERN.match(line)
+        if fence is None and m:
+            fence = m.group(1)
+            out.append("")
+        elif fence is not None:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence = None
+            out.append("")
+        else:
+            out.append(INLINE_CODE_PATTERN.sub("", line))
+    return out
 
 
 def _check_frontmatter(skill_md: Path, text: str) -> list[str]:
-    parts = text.split("---", 2)
-    if not text.startswith("---") or len(parts) < 3:
+    match = FRONTMATTER_PATTERN.match(text)
+    if not match:
         return [f"{skill_md}: missing YAML frontmatter"]
-    frontmatter = parts[1]
+    frontmatter = match.group(1)
     if yaml is None:
         return [
             f"{skill_md}: frontmatter missing '{field}'"
@@ -72,8 +97,9 @@ def validate_skill(skill_dir: Path) -> list[str]:
 
     errors.extend(_check_frontmatter(skill_md, text))
 
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        for match in FORBIDDEN_PATH_PATTERN.finditer(line):
+    lines = text.splitlines()
+    for lineno, (line, prose) in enumerate(zip(lines, _prose(lines)), start=1):
+        for match in FORBIDDEN_PATH_PATTERN.finditer(prose):
             errors.append(
                 f"{skill_md}:{lineno}: references a path outside the skill directory:"
                 f" {match.group(0)}"
