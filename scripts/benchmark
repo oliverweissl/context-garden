@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
+import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -116,6 +119,53 @@ def _select_tasks(args: argparse.Namespace):
     return tasks
 
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PUBLISHED_DIR = REPO_ROOT / "docs" / "benchmarks"
+README = REPO_ROOT / "README.md"
+FIGURE_BEGIN = "<!-- benchmark-figure:begin -->"
+FIGURE_END = "<!-- benchmark-figure:end -->"
+
+
+def _plugin_version() -> str:
+    """The context-garden version under test, from .claude-plugin/plugin.json."""
+    manifest = REPO_ROOT / ".claude-plugin" / "plugin.json"
+    return json.loads(manifest.read_text(encoding="utf-8"))["version"]
+
+
+def _run_version(results_dir: Path) -> str | None:
+    """Version recorded in a results dir's schedule.json (None for pre-0.2 runs)."""
+    path = results_dir / SCHEDULE_FILE
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8")).get("version")
+
+
+def _publish(results_dir: Path, version: str) -> Path:
+    """Copy figure + summary to docs/benchmarks/v<version>/ and point the README at it."""
+    dest = PUBLISHED_DIR / f"v{version}"
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in ("benchmark.png", "summary.md"):
+        if (results_dir / name).exists():
+            shutil.copy2(results_dir / name, dest / name)
+    rel = dest.relative_to(REPO_ROOT).as_posix()
+    block = (
+        f"{FIGURE_BEGIN}\n"
+        f"Benchmark results for **v{version}** on the small fixtures in this repo, run with Claude "
+        f"Code ([summary]({rel}/summary.md); older versions in "
+        f"[`docs/benchmarks/`](docs/benchmarks)):\n\n"
+        f"![Benchmark results for context-garden v{version}]({rel}/benchmark.png)\n"
+        f"{FIGURE_END}"
+    )
+    text = README.read_text(encoding="utf-8")
+    pattern = re.compile(re.escape(FIGURE_BEGIN) + r".*?" + re.escape(FIGURE_END), re.DOTALL)
+    if pattern.search(text):
+        text = pattern.sub(lambda _: block, text)
+    else:
+        print(f"warning: no {FIGURE_BEGIN} marker in README.md; figure not linked", file=sys.stderr)
+    README.write_text(text, encoding="utf-8")
+    return dest
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     if args.resume:
         run_dir = Path(args.resume)
@@ -172,7 +222,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     if not args.resume:
-        write_schedule(run_dir, schedule, seed=seed, arms=arms, runs=runs, runner_config=config)
+        write_schedule(
+            run_dir, schedule, seed=seed, arms=arms, runs=runs, runner_config=config,
+            version=_plugin_version(),
+        )  # fmt: skip
     runner = ClaudeCodeRunner(
         model=config["model"],
         permission_mode=config["permission_mode"],
@@ -226,17 +279,25 @@ def cmd_plot(args: argparse.Namespace) -> int:
 
     results_dir = Path(args.results_dir)
     records_path = results_dir / RECORDS_FILE
-    if records_path.exists():
-        write_summary(load_records(records_path), results_dir / "summary.md")
-    elif not (results_dir / "summary.json").exists():
-        print(f"error: no {RECORDS_FILE} or summary.json under {results_dir}", file=sys.stderr)
+    if not records_path.exists():
+        print(f"error: no {RECORDS_FILE} under {results_dir}", file=sys.stderr)
         return 1
+    version = args.version or _run_version(results_dir)
+    if args.publish and not version:
+        print(
+            "error: results dir has no recorded version (pre-0.2 run); pass --version",
+            file=sys.stderr,
+        )
+        return 1
+    write_summary(load_records(records_path), results_dir / "summary.md")
     try:
-        out = plot_results_dir(results_dir)
-    except MatplotlibMissing as exc:
+        out = plot_results_dir(results_dir, version=version)
+    except (MatplotlibMissing, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"Wrote {out}")
+    if args.publish:
+        print(f"Published to {_publish(results_dir, version)} and updated README.md")
     return 0
 
 
@@ -291,9 +352,18 @@ def main(argv: list[str] | None = None) -> int:
     p_analyze.set_defaults(func=cmd_analyze)
 
     p_plot = sub.add_parser(
-        "plot", help="render benchmark.png (pass rate + token delta, 95%% CIs) into a results dir"
+        "plot",
+        help="render benchmark.png (per-metric treatment vs baseline delta, 95%% bootstrap CI)",
     )
     p_plot.add_argument("results_dir")
+    p_plot.add_argument(
+        "--version", default=None, help="version label (default: from the run's schedule.json)"
+    )
+    p_plot.add_argument(
+        "--publish",
+        action="store_true",
+        help="copy figure + summary to docs/benchmarks/v<version>/ and link it from README.md",
+    )
     p_plot.set_defaults(func=cmd_plot)
 
     args = parser.parse_args(argv)

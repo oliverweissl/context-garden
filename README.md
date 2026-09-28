@@ -12,6 +12,12 @@ deterministic, offline, no LLM calls inside the tooling itself. This management 
 | 🌿 [`trellis`](skills/trellis) | Correctness gate for numerical code (convergence order, residuals, conditioning). |
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
+<!-- benchmark-figure:begin -->
+Benchmark results for **v0.2.0** on the small fixtures in this repo, run with Claude Code ([summary](docs/benchmarks/v0.2.0/summary.md); older versions in [`docs/benchmarks/`](docs/benchmarks)):
+
+![Benchmark results for context-garden v0.2.0](docs/benchmarks/v0.2.0/benchmark.png)
+<!-- benchmark-figure:end -->
+
 See [`docs/benchmarking.md`](docs/benchmarking.md) for how to run the benchmarks and plot their results.
 
 ## How to use

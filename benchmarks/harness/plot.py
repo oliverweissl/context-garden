@@ -1,8 +1,10 @@
-"""Render the benchmark figure from summary.json (see analyze.py).
+"""Render the benchmark figure from a results dir's records.jsonl.
 
-Two panels, tasks on the y axis, one dot + 95% CI whisker per arm:
-  left   verified pass rate (Wilson CI)
-  right  total-token delta vs baseline, % of baseline mean (Welch CI)
+Grouped bar chart (the design from the original analysis notebook): one bar
+group per metric, one bar per component, height = treatment vs baseline
+delta in % of the baseline mean, whiskers = 95% bootstrap CI of that delta
+(10k resamples, fixed seed). With several treatment arms (treatment-natural,
+treatment-forced) there is one panel per arm, stacked.
 
 matplotlib is an optional dependency (`pip install -e '.[bench]'`).
 """
@@ -15,15 +17,18 @@ from typing import Any
 
 from .types import ARMS
 
-# Fixed categorical order (arm -> colour never changes between figures).
-ARM_COLORS = {
-    "baseline": "#2a78d6",
-    "treatment-natural": "#eb6834",
-    "treatment-forced": "#1baf7a",
-    "treatment": "#eda100",  # legacy records
+METRICS = {
+    "input_tokens": "Input tokens",
+    "output_tokens": "Output tokens",
+    "cache_read_tokens": "Cache read tokens",
+    "total_tokens": "Total tokens",
+    "tool_calls": "Tool calls",
+    "runtime": "Runtime",
+    "cost_usd": "Cost $",
 }
+BOOTSTRAP_SAMPLES = 10_000
+BOOTSTRAP_SEED = 42
 MUTED = "#6b6a63"
-GRID = "#e4e3dc"
 
 
 class MatplotlibMissing(RuntimeError):
@@ -44,94 +49,91 @@ def _import_pyplot():
     return plt
 
 
-def _err(t: dict[str, Any] | None, scale: float = 1.0) -> tuple[float, float, float] | None:
-    if not t or t.get("value") is None:
-        return None
-    v = t["value"] * scale
-    if t.get("lo") is None:
-        return v, 0.0, 0.0
-    # clamp: floating-point noise can put a bound a hair past the point estimate
-    return v, max(0.0, v - t["lo"] * scale), max(0.0, t["hi"] * scale - v)
+def bootstrap_deltas(
+    records: list[dict[str, Any]], arm: str, components: list[str]
+) -> dict[str, dict[str, tuple[float, float, float] | None]]:
+    """{component: {metric: (delta %, err_low, err_high)}} for `arm` vs baseline.
 
+    delta = 100 * (mean(treatment) / mean(baseline) - 1); the CI resamples both
+    arms independently. None when either arm has no records or baseline mean is 0.
+    """
+    import numpy as np
 
-def plot_summary(analysis: dict[str, Any], out_path: Path) -> Path:
-    plt = _import_pyplot()
-    tasks = analysis["tasks"]
-    if not tasks:
-        raise ValueError("summary has no tasks to plot")
-    present = {a for t in tasks for a in t["arms"]}
-    arms = [a for a in ARMS if a in present] + sorted(present - set(ARMS))
-    task_ids = [t["task_id"] for t in tasks]
-
-    height = max(2.6, 0.75 * len(tasks) * max(1, len(arms)) / 2 + 1.4)
-    fig, (ax_pass, ax_tok) = plt.subplots(1, 2, figsize=(11, height), sharey=True)
-    step = 0.8 / max(1, len(arms))
-    offsets = {a: (i - (len(arms) - 1) / 2) * step for i, a in enumerate(arms)}
-
-    for yi, task in enumerate(tasks):
-        for arm in arms:
-            s = task["arms"].get(arm)
-            if s is None:
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    out: dict[str, dict[str, tuple[float, float, float] | None]] = {}
+    for component in components:
+        rows = [r for r in records if r.get("component") == component]
+        out[component] = {}
+        for metric in METRICS:
+            b = np.array([r.get(metric) or 0 for r in rows if r["condition"] == "baseline"])
+            t = np.array([r.get(metric) or 0 for r in rows if r["condition"] == arm])
+            if not len(b) or not len(t) or b.mean() == 0:
+                out[component][metric] = None
                 continue
-            y = yi + offsets[arm]
-            color = ARM_COLORS.get(arm, MUTED)
-            p = _err(s["pass_rate"], 100)
-            if p:
-                ax_pass.errorbar(
-                    p[0], y, xerr=[[p[1]], [p[2]]], fmt="o", ms=6, color=color,
-                    ecolor=color, elinewidth=2, capsize=0,
-                    label=None if arm in _labels(ax_pass) else arm,
-                )  # fmt: skip
-            d = s.get("delta_vs_baseline")
-            t = _err(d and d["tokens_pct"])
-            if t:
-                ax_tok.errorbar(
-                    t[0], y, xerr=[[t[1]], [t[2]]], fmt="o", ms=6, color=color,
-                    ecolor=color, elinewidth=2, capsize=0,
-                )  # fmt: skip
+            bs = rng.choice(b, (BOOTSTRAP_SAMPLES, len(b))).mean(1)
+            ts = rng.choice(t, (BOOTSTRAP_SAMPLES, len(t))).mean(1)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                boot = 100 * (ts / bs - 1)
+            boot = boot[np.isfinite(boot)]
+            delta = float(100 * (t.mean() / b.mean() - 1))
+            lo, hi = np.percentile(boot, [2.5, 97.5]) if len(boot) else (delta, delta)
+            out[component][metric] = (delta, max(0.0, delta - lo), max(0.0, hi - delta))
+    return out
 
-    ax_pass.set_xlim(-2, 102)
-    ax_pass.set_xlabel("verified pass rate, % (95% Wilson CI)")
-    ax_pass.set_title("Pass rate", loc="left", fontsize=11)
-    ax_tok.axvline(0, color=MUTED, lw=1)
-    ax_tok.set_xlabel("total tokens vs baseline, % (95% Welch CI; <0 = fewer)")
-    ax_tok.set_title("Token delta vs baseline", loc="left", fontsize=11)
-    ax_pass.set_yticks(range(len(task_ids)), task_ids)
-    ax_pass.invert_yaxis()
-    for ax in (ax_pass, ax_tok):
-        ax.grid(axis="x", color=GRID, lw=0.8)
-        ax.set_axisbelow(True)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.spines["left"].set_color(GRID)
-        ax.spines["bottom"].set_color(GRID)
-        ax.tick_params(colors=MUTED)
 
-    handles, labels = ax_pass.get_legend_handles_labels()
-    order = sorted(range(len(labels)), key=lambda i: arms.index(labels[i]))
-    fig.legend(
-        [handles[i] for i in order], [labels[i] for i in order],
-        loc="upper center", ncol=len(arms), frameon=False, bbox_to_anchor=(0.5, 1.0),
+def plot_records(
+    records: list[dict[str, Any]], out_path: Path, version: str | None = None
+) -> Path:
+    import numpy as np
+
+    plt = _import_pyplot()
+    present = {r["condition"] for r in records}
+    arms = [a for a in ARMS if a in present and a != "baseline"]
+    arms += sorted(present - set(ARMS) - {"baseline"})  # legacy "treatment"
+    if "baseline" not in present or not arms:
+        raise ValueError("need baseline records and at least one treatment arm to plot")
+    components = sorted({r["component"] for r in records})
+
+    x, w = np.arange(len(METRICS)), 0.75 / len(components)
+    fig, axes = plt.subplots(len(arms), 1, figsize=(12, 6 * len(arms)), squeeze=False)
+    for ax, arm in zip(axes[:, 0], arms):
+        deltas = bootstrap_deltas(records, arm, components)
+        for i, component in enumerate(components):
+            vals = [deltas[component][m] for m in METRICS]
+            heights = [v[0] if v else 0.0 for v in vals]
+            err = [[v[1] if v else 0.0 for v in vals], [v[2] if v else 0.0 for v in vals]]
+            ax.bar(
+                x + (i - (len(components) - 1) / 2) * w, heights, w, yerr=err,
+                capsize=4, label=component,
+            )  # fmt: skip
+        ax.axhline(0, color="black", lw=1)
+        ax.set(
+            xticks=x, xticklabels=list(METRICS.values()),
+            ylabel="Treatment vs baseline delta (%)",
+        )  # fmt: skip
+        if len(arms) > 1:
+            ax.set_title(f"{arm} vs baseline", loc="left", fontsize=11)
+        ax.legend(frameon=False)
+        ax.grid(axis="y", alpha=0.2)
+
+    n = sorted(
+        {sum(1 for r in records if r["component"] == c and r["condition"] == a)
+         for c in components for a in ["baseline", *arms]} - {0}
     )  # fmt: skip
-    n_by_arm = sorted({s["n"] for t in tasks for s in t["arms"].values()})
-    fig.text(
-        0.99, 0.005, f"n per task x arm: {', '.join(map(str, n_by_arm))}",
-        ha="right", va="bottom", fontsize=8, color=MUTED,
-    )  # fmt: skip
-    fig.tight_layout(rect=(0, 0.02, 1, 0.93))
+    footer = f"n per component x arm: {', '.join(map(str, n))}; 95% bootstrap CI"
+    if version:
+        footer = f"context-garden v{version} · {footer}"
+    fig.text(0.99, 0.0, footer, ha="right", va="top", fontsize=8, color=MUTED)
     out_path = Path(out_path)
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, bbox_inches="tight", dpi=100)
     plt.close(fig)
     return out_path
 
 
-def _labels(ax) -> set[str]:
-    return set(ax.get_legend_handles_labels()[1])
-
-
-def plot_results_dir(results_dir: Path, out_name: str = "benchmark.png") -> Path:
+def plot_results_dir(
+    results_dir: Path, out_name: str = "benchmark.png", version: str | None = None
+) -> Path:
     results_dir = Path(results_dir)
-    summary_json = results_dir / "summary.json"
-    return plot_summary(
-        json.loads(summary_json.read_text(encoding="utf-8")), results_dir / out_name
-    )
+    lines = (results_dir / "records.jsonl").read_text(encoding="utf-8").splitlines()
+    records = [json.loads(line) for line in lines if line.strip()]
+    return plot_records(records, results_dir / out_name, version)

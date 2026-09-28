@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "benchmarks"))
 
 from harness import run as run_mod  # noqa: E402
-from harness.analyze import load_records, write_summary  # noqa: E402
+from harness.analyze import load_records  # noqa: E402
 from harness.fixtures import EXCLUDED_PATHS, _is_excluded, discover_tasks  # noqa: E402
 from harness.run import (  # noqa: E402
     Trial,
@@ -146,6 +146,6 @@ def test_plot_writes_png(tmp_path):
                     skill_invoked=["pruner"] if arm != "baseline" and i % 2 else [],
                 ).to_dict()
             )  # fmt: skip
-    write_summary(rows, tmp_path / "summary.md")
-    out = plot_results_dir(tmp_path)
+    (tmp_path / "records.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    out = plot_results_dir(tmp_path, version="0.2.0")
     assert out.exists() and out.stat().st_size > 0

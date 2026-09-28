@@ -1,62 +1,39 @@
 # Architecture
 
-## Layout
+## Repository layout
 
-```text
-skills/      distributable Agent Skills, one self-contained dir each
-tests/       repo-level tests (Skill structure/self-containment checks)
-benchmarks/  evaluation harness + fixtures that measure each Skill's win
-docs/        this file, skill-development.md, benchmarking.md
-scripts/     repo tooling: validate-skills, build-skills, benchmark
-```
+| Directory | Purpose |
+| --- | --- |
+| `skills/` | Distributable Agent Skills; each Skill lives in its own self-contained folder. |
+| `tests/` | Repository tests, including checks for Skill structure and self-containment. |
+| `benchmarks/` | Evaluation harness and fixtures that measure whether a Skill helps. |
+| `docs/` | Documentation, including this file, `skill-development.md`, and `benchmarking.md`. |
+| `scripts/` | Repository tools: `validate-skills`, `build-skills`, and `benchmark`. |
 
-## Skill self-containment (critical rule)
+## The key packaging rule
 
-A Skill must never require a path outside its own directory (e.g.
-`../../benchmarks/...`) — installers may copy only `skills/<name>/`, so
-anything it depends on has to travel inside that one folder. Shared code
-a Skill needs must be bundled at build time (`scripts/build-skills`) or
-vendored into the Skill's own `scripts/`. Checked by
-`scripts/validate-skills` — run it after touching any `skills/<name>/`.
+**A Skill must work using only files inside its own directory.** An installer may copy just `skills/<name>/`, so a reference such as `../../benchmarks/...` can break after installation.
 
-## Principles
+If a Skill needs shared code, bundle it during the build with `scripts/build-skills` or include it in the Skill's own `scripts/` directory. Run `scripts/validate-skills` after changing any `skills/<name>/`; it checks this rule.
 
-Everything in `skills/` exists in service of these; when a design choice
-in a Skill looks unusual, it's almost always tracing back to one of them.
+## Design principles
 
-- **Context is scarce.** Every persistent instruction and every tool
-  result an agent reads competes for the same limited attention — a
-  Skill's job is to make an agent read less, not just do more.
-- **Compress, never destroy evidence.** A summary (a compost cluster, a
-  pruner slice) must keep the original source retrievable — an agent
-  should be able to go from "here's the gist" to "here's the exact line"
-  without redoing the work that produced the gist.
-- **Progressive disclosure.** Keep `SKILL.md` small — it's paid for on
-  every use. Deterministic logic lives in `scripts/`; depth an agent only
-  sometimes needs lives in `references/`, loaded on demand.
-- **Deterministic tooling over prompt instructions.** Anything with one
-  correct answer (parsing, scoring, budget enforcement) should be code,
-  not an instruction hoping the agent gets it right each time.
-- **Optimize `verified successful results / total tokens consumed`**, not
-  raw token count — a Skill that saves tokens by giving worse answers is
-  not a win. See `docs/benchmarking.md` for how `verified` is checked
-  independently of the agent's own claim.
-- **Measure, don't assert the win.** A Skill earns its place in this repo
-  by beating a baseline agent on a real benchmark task, not by reading
-  well in a spec. See `docs/benchmarking.md`.
+These principles guide the Skills in `skills/`:
 
-## `.context-garden/` runtime directory
+1. **Treat context as scarce.** Instructions and tool results compete for the agent's attention. A Skill should help the agent read less while still doing the job well.
+2. **Summarize without losing evidence.** A compost cluster or pruner slice should preserve a route back to the exact source line. The agent should not have to repeat the work that produced the summary.
+3. **Load detail only when needed.** Keep `SKILL.md` short because it is read on every use. Put predictable logic in `scripts/` and occasional detail in `references/`.
+4. **Use code for deterministic tasks.** Parsing, scoring, and budget enforcement belong in tools when there is one correct answer. Do not rely on prompt instructions to reproduce that answer every time.
+5. **Optimize for verified results per token.** Saving tokens is not an improvement if answers get worse. `docs/benchmarking.md` explains how results are checked independently of the agent's claims.
+6. **Prove the benefit with benchmarks.** A Skill earns its place by outperforming a baseline agent on a real task, not by sounding convincing in its specification. See `docs/benchmarking.md`.
 
-Project-local state for Skills that use it. Only `config.yaml` is
-committed; everything else is generated/gitignored.
+## The `.context-garden/` runtime directory
+
+Skills can use `.context-garden/` for project-local state. Only `config.yaml` is committed; generated files are gitignored.
 
 ```yaml
 llm_assist:
-  level: none   # none | slight | lot
+  level: none  # none | slight | lot
 ```
 
-`llm_assist` structures a workflow step that already needs an agent's
-judgment (e.g. weeder's description rewrite) as a request/answer file
-instead of freehand editing — it never means the tooling calls an LLM
-itself. See `skills/weeder/references/llm-assist.md` for the reference
-implementation.
+`llm_assist` changes how a step that already requires the agent's judgment is organized. For example, weeder can exchange request and answer files for a description rewrite instead of editing freehand. It **does not** cause the tooling to call an LLM. See `skills/weeder/references/llm-assist.md` for an example.

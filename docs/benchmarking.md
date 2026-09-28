@@ -1,220 +1,133 @@
 # Benchmarking
 
-Compares a baseline agent vs. the same agent with a Skill available (and explicitly told to use it), on tasks built from this
-repository (a real bug injected into a real file, a real Skill made
-oversized, a niche correctness scenario) — see `benchmarks/README.md` for
-the fixture format, index, and run commands.
+The benchmark compares an agent working without a Skill with the same agent when that Skill is available. Each task comes from this repository: for example, a real bug inserted into a file, an oversized Skill, or a niche correctness check. See `benchmarks/README.md` for the fixture format, task index, and commands.
 
-## Methodology
-
-### Arms
-
-Every task runs under up to three arms (`--arms`, default all three):
-
-| arm | working copy | prompt |
-|---|---|---|
-| `baseline` | no skills installed | original |
-| `treatment-natural` | task's skill(s) installed under `.claude/skills/` | original |
-| `treatment-forced` | same as `treatment-natural` | original, prefixed with an explicit instruction to use the task's skill(s) (`skill_relevance` in `task.yaml`) |
-
-The two treatment arms answer different questions and are reported
-separately:
-
-- **Routing** — does the agent pick the skill up unprompted? The
-  natural invocation rate of `treatment-natural` (from the recorded
-  `skill_invoked`).
-- **Benefit** — when the skill *is* used, does it help? `treatment-forced`
-  vs `baseline`. The forced arm's own invocation rate is shown as a
-  compliance check.
-
-For `seedbank-recurring-facts` (`treatment_mode: preseeded`) the treatment
-arms get a pre-populated `AGENTS.md` instead of an installed skill, and
-the forced prefix (`forced_prompt_prefix` in its `task.yaml`) tells the
-agent to read it. No Skill is invoked there, so its invocation rate is
-always 0 and not meaningful — read its pass-rate/token deltas only.
-
-Older records with `condition: treatment` are treated as
-`treatment-natural`-equivalent (shown under their own name).
-
-### Repetitions and order
-
-- `--runs N` repetitions per (task, arm); **default 10**. Below ~10 the
-  CIs are too wide to distinguish most effects.
-- Execution order is **randomised and interleaved** with a fixed
-  `--seed` (default 0): repetition-major blocks, each containing every
-  (task, arm) pair once in shuffled order. Arms alternate throughout the
-  run, so drift over time (latency, rate limits, model-side changes)
-  hits every arm about equally.
-- The seed, arms, runs, tasks and the full order are written to
-  `schedule.json`; each record also carries `rep`, `seed` and
-  `order_index`.
-- **Resumable.** Each record is appended to `records.jsonl` as soon as
-  its trial finishes. `scripts/benchmark run --resume <results-dir>`
-  re-reads `schedule.json` and skips every (task, arm, rep) already
-  recorded (a torn last line from a killed process is ignored and the
-  trial re-run).
-
-### Metrics
-
-`scripts/benchmark analyze` writes `summary.md` (readable) and
-`summary.json` (what `plot` reads). All intervals are 95% CIs.
-
-- **Primary: verified pass rate** per task × arm — `verification_success`
-  from `harness/verify.py`, computed from the working copy, never the
-  agent's own claim. Wilson score CI; delta vs baseline with a Newcombe
-  hybrid-score CI.
-- **Secondary: tokens and cost** — mean `total_tokens` and `cost_usd`
-  with t-based CIs; delta vs baseline (absolute and % of the baseline
-  mean) with a Welch t CI. Tokens are also split by whether the task's
-  skill was actually invoked in that run, so a cheap/expensive
-  minority of invoked runs isn't averaged away.
-- **Routing** and **Benefit** tables as described above.
-
-Don't read a token saving as a win unless the pass rate held: the
-primary table comes first for that reason.
-
-### Verification: structured single answers
-
-Tasks whose answer is a single fact ask for exactly one `KEY: value`
-line — `ROOT_CAUSE: <function_name>` (compost), `VERDICT: OK` /
-`VERDICT: REGRESSION` (trellis). The `answer_key` verify type fails if
-the key is missing, appears more than once (hedging with several
-candidates), or the value doesn't equal `expected` / fully match
-`pattern`. See `harness/verify.py` for all verify types.
-
-### Isolation
-
-Identical working copies except for the treatment payload: `treatment`
-arms have the relevant `skills/<name>/` installed under
-`.claude/skills/` (`treatment_mode: skill_available`, default), or a
-pre-populated `AGENTS.md` overlay (`treatment_mode: preseeded`). The
-working copy never contains the skill under test's `skills/<name>/`,
-fixture answers (`benchmarks/fixtures/`, the harness tests), prior
-results, `AGENTS.md`/`CLAUDE.md`, `.claude/`, or the plugin manifest
-and hooks (`.claude-plugin/`, `hooks/` — e.g. seedbank's PostToolUse
-hooks), so no arm, least of all `baseline`, can trigger a plugin hook
-from the repository (`EXCLUDED_PATHS` in `harness/fixtures.py`).
-
-Every arm runs with `--setting-sources project` and
-`--strict-mcp-config` and without `--plugin-dir`, so user-level
-settings, enabled plugins (their skills and hooks) and user MCP servers
-don't load. That does not stop Claude Code from loading Skills in the
-user-level `~/.claude/skills/` directory — a Skill installed there leaks
-into `baseline`. Keep `~/.claude/skills/` empty on the benchmark
-machine, or run with a clean `HOME` (a throwaway directory holding only
-the `claude` login credentials).
-
-`ClaudeCodeRunner` appends a unique nonce to the system prompt on every
-call, so no run gets a cheaper ride off another run's warmed prompt
-cache. Within-run caching across one run's own tool-call turns is
-untouched.
-
-## Running
+## Quick start
 
 ```bash
 scripts/benchmark list
-scripts/benchmark run --dry-run                      # print schedule + cost bound, run nothing
-scripts/benchmark run [--task ID ...] [--component NAME ...] \
-    [--arms baseline treatment-natural treatment-forced] [--runs 10] [--seed 0] \
-    [--model M] [--max-budget-usd 1.0]
-scripts/benchmark run --resume benchmarks/results/<UTC timestamp>   # after an interruption
+scripts/benchmark run --dry-run
+scripts/benchmark run
 scripts/benchmark analyze benchmarks/results/<UTC timestamp>
 ```
 
-Results land in `benchmarks/results/<UTC timestamp>/`
-(`schedule.json`, `records.jsonl`, `summary.md`, `summary.json`).
+The dry run shows the trial schedule and estimated cost without starting any sessions. A normal run uses three default tasks, three arms, and ten repetitions: **90 sessions**. Past runs cost about **$10–15** in total, though the ceiling is 90 × `--max-budget-usd` (default $1 per session).
 
-### Cost
+Results appear in `benchmarks/results/<UTC timestamp>/`: `schedule.json`, `records.jsonl`, `summary.md`, and `summary.json`.
 
-**Sessions = tasks × arms × runs**, each a real headless `claude -p`
-session capped by `--max-budget-usd` (default $1.00). A default run
-(3 default tasks × 3 arms × 10 runs) is 90 sessions; past runs cost
-roughly $0.10–0.15 per session, so expect ~$10–15, with a hard ceiling
-of 90 × `--max-budget-usd`. `--dry-run` prints both numbers before you
-spend anything. Adding trellis and weeder makes it 150 sessions.
+## What is compared?
 
-## Plotting
+Each task can run in three **arms**. `--arms` selects arms; the default is all three.
+
+| Arm | What the agent receives | Prompt |
+| --- | --- | --- |
+| `baseline` | No installed Skills | Original task |
+| `treatment-natural` | The task's Skill(s), installed in `.claude/skills/` | Original task |
+| `treatment-forced` | The same Skill(s) | Original task plus an explicit instruction to use the Skill(s), from `skill_relevance` in `task.yaml` |
+
+The arms answer two separate questions:
+
+- **Routing:** Does the agent choose the Skill on its own? Look at `skill_invoked` for `treatment-natural`.
+- **Benefit:** Does the Skill help when the agent is told to use it? Compare `treatment-forced` with `baseline`. The forced arm's invocation rate also checks whether the agent followed the instruction.
+
+One exception is `seedbank-recurring-facts` (`treatment_mode: preseeded`). Its treatment arms receive a prepared `AGENTS.md` instead of a Skill. The forced prompt tells the agent to read that file (`forced_prompt_prefix` in `task.yaml`). No Skill is invoked, so an invocation rate of 0 is expected. Compare its pass rates and tokens instead.
+
+Older records may say `condition: treatment`. The analysis keeps that name but treats it like `treatment-natural`.
+
+## How trials run
+
+The default is **10 repetitions per task and arm** (`--runs 10`). With substantially fewer than ten, confidence intervals are usually too wide to distinguish effects.
+
+The runner shuffles and interleaves trials using a fixed seed (`--seed 0` by default). Each repetition contains one trial for every selected task and arm. This spreads changes in latency, rate limits, or model behavior across arms. `schedule.json` stores the seed, selected tasks and arms, repetition count, and full order. Each record also stores `rep`, `seed`, and `order_index`.
+
+Completed trials are appended to `records.jsonl`. If a run stops, resume it with:
 
 ```bash
-pip install -e '.[bench]'        # matplotlib (optional dependency)
+scripts/benchmark run --resume benchmarks/results/<UTC timestamp>
+```
+
+The runner skips recorded task/arm/repetition combinations. If the last line was cut off when the process stopped, it ignores that line and reruns the trial.
+
+### Isolation between arms
+
+Working copies are identical except for the treatment payload. A treatment arm gets either its Skill in `.claude/skills/` (the default `skill_available` mode) or a prepared `AGENTS.md` overlay (`preseeded` mode).
+
+The working copy excludes the Skill's repository copy, fixture answers and harness tests, previous results, `AGENTS.md`, `CLAUDE.md`, `.claude/`, the plugin manifest, and hooks. The exclusions are defined in `EXCLUDED_PATHS` in `harness/fixtures.py`. This prevents repository plugin hooks from running in any arm, including `baseline`.
+
+Every arm uses `--setting-sources project` and `--strict-mcp-config`, without `--plugin-dir`. User settings, enabled plugins and their hooks, and user MCP servers therefore do not load. **One remaining leak is `~/.claude/skills/`: Claude Code can still load Skills from there.** Keep it empty on the benchmark machine, or use a clean `HOME` with only the `claude` login credentials.
+
+`ClaudeCodeRunner` adds a unique nonce to each call's system prompt. This prevents one run from benefiting from another run's warm prompt cache; caching within a run still works.
+
+## Reading the results
+
+Run `scripts/benchmark analyze <results-dir>` to create a readable `summary.md` and machine-readable `summary.json`. All reported confidence intervals are **95%**.
+
+1. **Start with verified pass rate.** `verification_success` comes from `harness/verify.py` inspecting the working copy, not from the agent's claim. The report gives pass rates by task and arm, Wilson score intervals, and changes from baseline with Newcombe hybrid-score intervals.
+2. **Then look at tokens and cost.** The report gives mean `total_tokens` and `cost_usd`, t-based intervals, and absolute and percentage changes from baseline with Welch t intervals. It also separates token use by whether the agent actually invoked the task's Skill, so a small group of unusually cheap or expensive invoked runs does not disappear into the average.
+3. **Use the routing and benefit tables** to distinguish Skill discovery from the effect of using it.
+
+A token saving is useful only if the pass rate holds up. That is why pass rate appears first.
+
+### Tasks with a single correct answer
+
+Some tasks require exactly one `KEY: value` line: `ROOT_CAUSE: <function_name>` for compost, or `VERDICT: OK` / `VERDICT: REGRESSION` for trellis. The `answer_key` verifier fails if the key is missing, repeated, or paired with a value that does not equal `expected` or fully match `pattern`. See `harness/verify.py` for the other verification types.
+
+## Commands and cost
+
+```bash
+scripts/benchmark list
+scripts/benchmark run --dry-run
+scripts/benchmark run [--task ID ...] [--component NAME ...] \
+    [--arms baseline treatment-natural treatment-forced] [--runs 10] [--seed 0] \
+    [--model M] [--max-budget-usd 1.0]
+scripts/benchmark run --resume benchmarks/results/<UTC timestamp>
+scripts/benchmark analyze benchmarks/results/<UTC timestamp>
+```
+
+**Sessions = tasks × arms × runs.** Each session is a headless `claude -p` run capped by `--max-budget-usd` (default $1). The default 3 × 3 × 10 run has 90 sessions; past sessions cost roughly $0.10–0.15 each. Adding trellis and weeder makes 150 sessions. Check `--dry-run` for the estimate and maximum before running.
+
+## Plotting results
+
+```bash
+pip install -e '.[bench]'  # optional matplotlib dependency
 scripts/benchmark plot benchmarks/results/<UTC timestamp>
 ```
 
-Regenerates `summary.json` from `records.jsonl` and writes
-`benchmark.png` into the results directory: verified pass rate per task
-× arm with Wilson CIs (left) and the total-token delta vs baseline, % of
-baseline mean, with Welch CIs (right). Without matplotlib the command
-exits with an error naming the extra to install.
+The plot command regenerates the summary from `records.jsonl` and writes `benchmark.png`. It shows treatment-versus-baseline percentage changes for input, output, and cache-read tokens; total tokens; tool calls; runtime; and cost. Bars are grouped by metric, with one bar per component. Error bars are 95% bootstrap intervals (10,000 resamples, seed 42). Multiple treatment arms get separate panels. If matplotlib is missing, the command reports which extra to install.
 
-## trellis and weeder: not part of a plain run
+## Why trellis and weeder are opt-in
 
-Not every Skill here is trying to reduce tokens for the task it runs in
-— trellis and weeder aren't, see below. `summary.md` doesn't
-special-case anything: if you run one, it gets the same rows as
-everything else, and its token delta will legitimately be positive
-(more tokens). Instead
-they set `run_by_default: false` in their fixture's `task.yaml`, so a
-plain `scripts/benchmark run` (no `--task`/`--component`) skips them
-entirely and spends no API budget on either. Run one deliberately with
-`scripts/benchmark run --component trellis` (or `--task <id>`) — and
-read the token increase as expected, not as a bug.
+`trellis` and `weeder` set `run_by_default: false` in their `task.yaml` fixtures. A plain `scripts/benchmark run` skips both. Select one with `--component trellis`, `--component weeder`, or `--task <id>`.
 
-- **trellis** is a correctness gate, not a compression tool. It spends
-  extra tokens (write a spec script, run checks, produce a report) to
-  buy numerical/scientific confidence a passing test suite can't provide
-  — see `skills/trellis/SKILL.md`'s central thesis. Costing more tokens
-  than baseline is the expected outcome, every time; the thing worth
-  measuring is whether it catches a real regression (verified rate),
-  not whether it's cheaper. Use it after any change to numerical code
-  (solvers, discretization schemes, optimizers, Monte Carlo methods) —
-  skip it for anything that isn't.
-- **weeder** shrinks *other* Skills' always-loaded token cost. Its
-  payoff lands in every future invocation of the Skill it just
-  optimized, not in the task where it's invoked — running it costs
-  tokens now for a saving that shows up elsewhere later, structurally
-  invisible to a single-task before/after comparison. Use it when
-  authoring or reviewing a Skill (a `SKILL.md` feels oversized, has a
-  rule stated twice, or a routing description too generic to trigger
-  reliably) — not as part of a normal task.
+| Component | Why it can use more tokens now | What to measure / when to use it |
+| --- | --- | --- |
+| **trellis** | It writes a spec script, checks numerical behavior, and reports findings. | Whether it catches real regressions. Use after changes to numerical code such as solvers, discretization, optimizers, or Monte Carlo methods. See `skills/trellis/SKILL.md`. |
+| **weeder** | Optimizing a Skill costs tokens in the current task. Savings happen in future uses of that Skill, outside this single-task comparison. | Use while authoring or reviewing a Skill whose `SKILL.md` is oversized, repeats rules, or has a routing description too generic to trigger reliably. |
 
-## Record schema
+`summary.md` reports both like any other component. A positive token delta for these tasks is expected; interpret it in light of their purpose.
 
-```yaml
-task_id:
-component:
-level:            # file | repo
-condition:        # baseline | treatment-natural | treatment-forced (legacy: treatment)
-model:
-rep:              # repetition index within (task, arm)
-seed:             # schedule seed
-order_index:      # position in the randomised schedule
+## Record fields
 
-success:
-verification_success:
+Each line in `records.jsonl` contains:
 
-input_tokens:
-repository_tokens:
-tool_result_tokens:
-skill_tokens:
-output_tokens:
-total_tokens:
+| Group | Fields |
+| --- | --- |
+| Identity and schedule | `task_id`, `component`, `level` (`file` or `repo`), `condition`, `model`, `rep`, `seed`, `order_index` |
+| Outcome | `success`, `verification_success` |
+| Tokens | `input_tokens`, `repository_tokens`, `tool_result_tokens`, `skill_tokens`, `output_tokens`, `total_tokens` |
+| Activity | `tool_calls`, `repository_reads`, `retries`, `runtime` |
+| Diagnostics | `cache_read_tokens`, `cost_usd`, `skill_invoked` |
 
-tool_calls:
-repository_reads:
-retries:
-runtime:
+`condition` is `baseline`, `treatment-natural`, or `treatment-forced` (older records may use `treatment`). `skill_invoked` records Skills the agent used through the Skill tool or by reading `SKILL.md`.
 
-cache_read_tokens:   # diagnostic only, not in total_tokens
-cost_usd:            # diagnostic only, not in total_tokens
-skill_invoked:       # skills the agent invoked (Skill tool / SKILL.md read)
+`total_tokens` is the sum of the five token fields before it; see `harness/types.py::BenchmarkRecord`. `repository_tokens` uses `cache_creation_input_tokens`: new content counted once. It does **not** use `cache_read_input_tokens`, which can count the same content again on each tool turn. `cache_read_tokens` and `cost_usd` help check the metric against actual rereads and dollars; neither is added to `total_tokens`.
+
+## Publishing results for a version
+
+Each run stores the context-garden version from `.claude-plugin/plugin.json` in `schedule.json`. After a full run for a release:
+
+```bash
+scripts/benchmark plot benchmarks/results/<run-dir> --publish
 ```
 
-`total_tokens` is the sum of the five token fields above it
-(`harness/types.py::BenchmarkRecord`). `repository_tokens` comes from
-`cache_creation_input_tokens` (content newly read into context, counted
-once) — not `cache_read_input_tokens`, which is repeated re-reads of
-already-counted content across a run's own tool-call turns and would
-double/triple/N-count the same material as a function of turn count
-alone. `cache_read_tokens`/`cost_usd` are reported for sanity-checking
-the token metric against real re-read volume and $ cost, never summed
-into `total_tokens`.
+This writes `benchmark.png`, copies it and `summary.md` to `docs/benchmarks/v<version>/`, and updates the figure between the `benchmark-figure` markers in `README.md`. Older versions remain in `docs/benchmarks/`. Add a row for the release to `docs/benchmarks/README.md`. For runs from before version 0.2, supply `--version` because their schedules do not record it.
