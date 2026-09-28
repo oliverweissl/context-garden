@@ -6,57 +6,59 @@ knapsack solve -- the spec asks to "solve approximately", and a plain
 score-ordered greedy is far easier to explain ("this was included because
 it scored higher than the budget cutoff") than a density-optimized packing
 would be, which matters since every chunk's inclusion has to be justified
-in `reasons`. See references/scoring.md for the tradeoff.
+in `reasons`. Tokens are accounted without overlap: a chunk nested in (or
+overlapping) already-selected lines only costs its new lines, and one
+fully covered already is not selected twice. See references/scoring.md.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-from pr_common import estimate_tokens, read_text
-from pr_graph import (
-    all_distances,
-    bfs_distances,
-    build_adjacency,
-    file_of,
-    merge_external_graph,
-)
+from pr_common import estimate_tokens, is_fixture_path, read_text, sha256_text
+from pr_graph import bfs_distances, file_of, merge_external_graph
+from pr_index import python_source_roots
 from pr_score import (
-    extract_keywords,
+    Idf,
+    TaskText,
+    chunk_idf_docs,
+    error_identifiers,
+    failing_test_names,
     graph_score,
     lexical_match,
     resolve_error_locations,
 )
 
 REQUIRED_THRESHOLD = 8.0
-EXACT_SEED_THRESHOLD = 9.0
-CONFIG_PRIORITY_NAMES = {"cmakelists.txt", "pyproject.toml", "setup.py", "makefile", "package.json"}
+SEED_THRESHOLD = 9.0
+FALLBACK_SEED_MIN = 4.0  # no strong seed: top lexical chunks >= this seed instead
+FALLBACK_SEEDS = 3
+MIN_RELATIVE_SCORE = 0.15  # chunks below this fraction of the top score are omitted
+TEST_BUDGET_FRACTION = 0.2  # cap for test chunks the task/error doesn't name
+TEST_BUDGET_FRACTION_NAMED = 0.1  # ...when it does name specific failing tests
+LARGE_CLASS_LINES = 30  # larger classes are represented by a header chunk
+HEADER_MAX_LINES = 20
+CONFIG_PRIORITY_NAMES = {"cmakelists.txt", "pyproject.toml", "setup.py", "setup.cfg", "makefile", "package.json"}
 OMITTED_CAP = 30
 SLICES_DIRNAME = "slices"
 
 
-def _all_chunks(index: dict) -> list[dict]:
+def _all_chunks(index) -> list[dict]:
     """One chunk per symbol, plus one whole-file chunk for files with no
-    symbols at all (config/doc/unparsed files, or empty source files)."""
+    symbols at all (config/doc/unparsed files, or empty source files).
+    A class/struct that contains methods and is longer than
+    LARGE_CLASS_LINES becomes a `class_header` chunk -- class line,
+    docstring/fields, up to and including the first method's signature
+    line (the `__init__` signature in the common case), at most
+    HEADER_MAX_LINES. Its methods are separate chunks, so selecting the
+    whole class would double-count them."""
     chunks = []
-    for rel, entry in index["files"].items():
-        if entry["symbols"]:
-            for sym in entry["symbols"]:
-                chunks.append(
-                    {
-                        "id": sym["id"],
-                        "file": rel,
-                        "start_line": sym["start_line"],
-                        "end_line": sym["end_line"],
-                        "name": sym["name"],
-                        "doc": sym.get("doc", ""),
-                        "chunk_kind": sym["type"],
-                        "file_kind": entry["kind"],
-                    }
-                )
-        else:
+    for rel, entry in index.files.items():
+        syms = entry["symbols"]
+        if not syms:
             chunks.append(
                 {
                     "id": f"{rel}:__file__",
@@ -64,58 +66,177 @@ def _all_chunks(index: dict) -> list[dict]:
                     "start_line": 1,
                     "end_line": max(1, entry["line_count"]),
                     "name": Path(rel).name,
+                    "qualname": Path(rel).name,
                     "doc": "",
                     "chunk_kind": "file",
                     "file_kind": entry["kind"],
+                    "tokens": entry["size_tokens"],
                 }
             )
+            continue
+        for sym in syms:
+            c = {
+                "id": sym["id"],
+                "file": rel,
+                "start_line": sym["start_line"],
+                "end_line": sym["end_line"],
+                "name": sym["name"],
+                "qualname": sym["qualname"],
+                "doc": sym.get("doc", ""),
+                "chunk_kind": sym["type"],
+                "file_kind": entry["kind"],
+                "tokens": sym.get("tokens"),
+            }
+            kids = [index.by_id[k] for k in index.children.get(sym["id"], ()) if k in index.by_id]
+            n_lines = sym["end_line"] - sym["start_line"] + 1
+            if kids and sym["type"] in ("class", "type") and n_lines > LARGE_CLASS_LINES:
+                first = min(kids, key=lambda k: k["start_line"])
+                end = max(sym["start_line"], first["start_line"])
+                if first["name"] not in ("__init__", sym["name"]):
+                    end = max(sym["start_line"], first["start_line"] - 1)
+                end = min(end, sym["start_line"] + HEADER_MAX_LINES - 1)  # long docstrings
+                c.update(end_line=end, chunk_kind="class_header", tokens=None)
+            chunks.append(c)
     return chunks
 
 
-def _chunk_tokens(repo_root: Path, chunk: dict) -> int:
-    text = read_text(repo_root / chunk["file"])
-    if text is None:
-        return 1
-    lines = text.splitlines()
-    snippet = "\n".join(lines[chunk["start_line"] - 1 : chunk["end_line"]])
-    return estimate_tokens(snippet)
+class _Lines:
+    """Per-file line cache + token estimates, read lazily."""
+
+    def __init__(self, repo_root: Path):
+        self.repo_root = repo_root
+        self.cache: dict[str, list[str] | None] = {}
+
+    def lines(self, rel: str) -> list[str] | None:
+        if rel not in self.cache:
+            text = read_text(self.repo_root / rel)
+            self.cache[rel] = None if text is None else text.splitlines()
+        return self.cache[rel]
+
+    def tokens(self, rel: str, line_numbers) -> int:
+        lines = self.lines(rel)
+        if lines is None:
+            return 1
+        return estimate_tokens("\n".join(lines[n - 1] for n in sorted(line_numbers) if 0 < n <= len(lines)))
+
+
+def _chunk_tokens(repo_root: Path, chunk: dict, cache: dict | None = None) -> int:
+    lines = _Lines(repo_root)
+    if cache is not None:
+        lines.cache = cache
+    return lines.tokens(chunk["file"], range(chunk["start_line"], chunk["end_line"] + 1))
+
+
+def _nearest_configs(index, anchors: set[str]) -> dict[str, str]:
+    """config file -> the anchor source file it is nearest to: walk up from
+    each anchor to the first directory holding a primary project config
+    (CMakeLists.txt, pyproject.toml, ...). Test-fixture configs never count."""
+    by_dir: dict[str, list[str]] = {}
+    for rel, entry in index.files.items():
+        p = PurePosixPath(rel)
+        if entry["kind"] == "config" and p.name.lower() in CONFIG_PRIORITY_NAMES and not is_fixture_path(rel):
+            by_dir.setdefault("" if str(p.parent) == "." else str(p.parent), []).append(rel)
+    out: dict[str, str] = {}
+    for a in sorted(anchors):
+        d = PurePosixPath(a).parent
+        while True:
+            key = "" if str(d) == "." else str(d)
+            if key in by_dir:
+                for cfg in by_dir[key]:
+                    out.setdefault(cfg, a)
+                break
+            if key == "":
+                break
+            d = d.parent
+    return out
+
+
+def _linked_whole_files(index, repo_root: Path, seeds: set[str], by_id: dict) -> dict:
+    """Symbol-less source files (declaration-only headers, re-export
+    modules) that a seed's file includes or is included by. Scored by
+    whether they actually mention a seed's name -- e.g. the header that
+    declares the function an 'undeclared identifier' error is about."""
+    seed_syms = [index.by_id[s] for s in seeds if s in index.by_id]
+    names = {s["name"] for s in seed_syms}
+    lines = _Lines(repo_root)
+    out = {}
+    for sf in {s["file"] for s in seed_syms}:
+        for rel in index.imports(sf) | index.importers(sf):
+            entry = index.files.get(rel)
+            cid = f"{rel}:__file__"
+            if not entry or entry["symbols"] or entry["language"] is None or cid not in by_id:
+                continue
+            text = "\n".join(lines.lines(rel) or [])
+            hits = sorted(n for n in names if re.search(rf"\b{re.escape(n)}\b", text))
+            if hits:
+                out[cid] = (5.0, f"linked to a seed's file and mentions {hits}")
+            else:
+                out.setdefault(cid, (1.0, "included by / includes a seed's file"))
+    return out
 
 
 def score_all(
-    index: dict,
+    index,
     repo_root: Path,
     task: str,
     changed_files: list[str] | None,
     error_text: str | None,
     external_graph: dict | None,
-) -> list[dict]:
-    task_lower = (task or "").lower()
-    task_keywords = extract_keywords(task or "")
+    budget: int | None = None,
+) -> tuple[list[dict], list[str]]:
+    """Returns (chunks sorted by score desc, notes)."""
+    # identifiers named by the error text (exception type, failing test,
+    # quoted names, echoed code) count as task text for lexical scoring
+    err_idents = " ".join(error_identifiers(error_text)) if error_text else ""
+    tt = TaskText(f"{task or ''} {err_idents}".strip())
+    named_tests = {n.lower() for n in failing_test_names(error_text)} | {
+        w for w in TaskText(task or "").words if w.startswith("test")
+    }
     chunks = _all_chunks(index)
     changed_set = set(changed_files or [])
-    error_seed_ids = set(resolve_error_locations(error_text, index)) if error_text else set()
+    source_roots = set(python_source_roots(index.files))
+    error_seed_ids: set[str] = set()
+    notes: list[str] = []
+    if error_text:
+        hit_ids, synthetic, notes = resolve_error_locations(error_text, index, source_roots)
+        error_seed_ids = set(hit_ids)
+        chunks.extend(synthetic)
 
-    lexical = {}
-    for c in chunks:
-        s, reasons = lexical_match(c["name"], c["doc"], c["file"], task_lower, task_keywords)
-        lexical[c["id"]] = (s, reasons)
+    idf = Idf(chunk_idf_docs(chunks))
+    lexical = {c["id"]: lexical_match(c, tt, idf) for c in chunks}
+    by_id = {c["id"]: c for c in chunks}
 
-    seeds = {cid for cid, (s, _) in lexical.items() if s >= EXACT_SEED_THRESHOLD}
+    # graph seeds: strong lexical matches (a rare exact name, a qualified
+    # name) and error-stack hits -- not every single-word overlap
+    seeds = {cid for cid, (s, _) in lexical.items() if s >= SEED_THRESHOLD}
     seeds |= error_seed_ids
+    if not seeds:
+        ranked = sorted(
+            (
+                (s, cid)
+                for cid, (s, _) in lexical.items()
+                if s >= FALLBACK_SEED_MIN and by_id[cid]["file_kind"] not in ("test", "config", "doc")
+            ),
+            reverse=True,
+        )
+        if ranked:
+            floor = 0.6 * ranked[0][0]
+            seeds = {cid for s, cid in ranked[:FALLBACK_SEEDS] if s >= floor}
     if not seeds:
         seeds = {c["id"] for c in chunks if c["file"] in changed_set}
 
+    dist: dict[str, int] = {}
     if seeds:
-        if external_graph:
-            adj = build_adjacency(index["call_edges"])
-            merge_external_graph(adj, external_graph)
-            dist = bfs_distances(adj, seeds)
-        else:
-            dist = all_distances(index, seeds)
+        extra = merge_external_graph(external_graph) if external_graph else None
+        dist = bfs_distances(index, seeds, extra)
+        # what a seed calls/uses is slightly more useful than who calls it
+        seed_callees = set().union(*(index.callees(sd) for sd in seeds if sd in index.by_id))
     else:
-        dist = {}
+        seed_callees = set()
 
     seed_files = {file_of(s) for s in seeds}
+    fallback = _linked_whole_files(index, repo_root, seeds, by_id)
+    test_target_cache: dict[str, set[str]] = {}
     scored = []
     for c in chunks:
         lex_score, lex_reasons = lexical[c["id"]]
@@ -123,13 +244,22 @@ def score_all(
         g_score, g_reason = graph_score(dist.get(c["id"]))
         if g_reason:
             reasons.append(g_reason)
+            if c["id"] in seed_callees and dist.get(c["id"]) == 1:
+                g_score += 0.5
+                reasons.append("called/used by a seed")
+        elif c["id"] in fallback:
+            g_score, g_reason = fallback[c["id"]]
+            reasons.append(g_reason)
 
         test_boost = 0.0
+        named_test = False
         if c["file_kind"] == "test":
-            tested = {f for f, tests in index["test_links"].items() if c["file"] in tests}
-            if tested & seed_files:
+            if c["file"] not in test_target_cache:
+                test_target_cache[c["file"]] = index.test_targets(c["file"])
+            if test_target_cache[c["file"]] & seed_files:
                 test_boost = 8.0
                 reasons.append("tests a file the task/error/diff implicates")
+            named_test = c["name"].lower() in named_tests or c["id"] in error_seed_ids
 
         recency_boost = 0.0
         if c["file"] in changed_set:
@@ -142,23 +272,43 @@ def score_all(
             reasons.append("encloses a location named in the provided error/traceback")
 
         total = lex_score + g_score + test_boost + recency_boost + error_boost
-        scored.append({**c, "score": total, "reasons": reasons, "is_seed": c["id"] in seeds})
+        if c["file_kind"] == "config" and is_fixture_path(c["file"]) and not error_boost:
+            total = 0.0  # a test fixture's pyproject/CMakeLists is never the project's config
+        scored.append(
+            {
+                **c,
+                "score": round(total, 2),
+                "reasons": reasons,
+                "is_seed": c["id"] in seeds,
+                "named_test": named_test,
+            }
+        )
 
+    # primary config: the nearest one(s) above the selected source files
+    anchors = {
+        c["file"]
+        for c in scored
+        if c["file_kind"] not in ("test", "config", "doc")
+        and (c["is_seed"] or c["score"] >= REQUIRED_THRESHOLD)
+    }
+    if not anchors:
+        top = sorted(
+            (c for c in scored if c["score"] > 0 and c["file_kind"] not in ("test", "config", "doc")),
+            key=lambda c: -c["score"],
+        )[:3]
+        anchors = {c["file"] for c in top}
+    nearest = _nearest_configs(index, anchors)
     for c in scored:
-        if (
-            c["file_kind"] == "config"
-            and c["score"] <= 0
-            and Path(c["file"]).name.lower() in CONFIG_PRIORITY_NAMES
-        ):
-            c["score"] = 0.5
-            c["reasons"].append("primary project configuration file (always considered)")
+        if c["file_kind"] == "config" and c["file"] in nearest:
+            c["score"] = round(max(c["score"], 0.0) + 0.5, 2)
+            c["reasons"].append(f"nearest project configuration to {nearest[c['file']]}")
 
     scored.sort(key=lambda c: -c["score"])
-    return scored
+    return scored, notes
 
 
 def select(
-    index: dict,
+    index,
     repo_root: Path,
     task: str,
     budget: int,
@@ -166,20 +316,41 @@ def select(
     error_text: str | None = None,
     external_graph: dict | None = None,
 ) -> dict:
-    scored = score_all(index, repo_root, task, changed_files, error_text, external_graph)
-    for c in scored:
-        c["tokens"] = _chunk_tokens(repo_root, c)
+    scored, notes = score_all(
+        index, repo_root, task, changed_files, error_text, external_graph, budget
+    )
+    lines = _Lines(repo_root)
+    any_named = any(c["named_test"] for c in scored)
+    test_cap = int(budget * (TEST_BUDGET_FRACTION_NAMED if any_named else TEST_BUDGET_FRACTION))
 
-    used = 0
+    top = max((c["score"] for c in scored if c["file_kind"] != "config"), default=0.0)
+    floor = MIN_RELATIVE_SCORE * top
+    used = test_used = 0
+    covered: dict[str, set[int]] = {}
     required, supporting, tests, config, omitted = [], [], [], [], []
     for c in scored:
-        if c["score"] <= 0:
+        if c["score"] <= 0 or (c["score"] < floor and c["file_kind"] != "config"):
             omitted.append(c)
             continue
-        if used + c["tokens"] > budget:
+        span = set(range(c["start_line"], c["end_line"] + 1))
+        already = covered.get(c["file"], set())
+        new = span - already
+        if not new:
+            continue  # nested in something already selected
+        if c.get("tokens") is None:
+            c["tokens"] = lines.tokens(c["file"], span)
+        cost = c["tokens"] if new == span else lines.tokens(c["file"], new)
+        capped_test = c["file_kind"] == "test" and not c["named_test"]
+        if used + cost > budget or (capped_test and test_used + cost > test_cap):
             omitted.append(c)
             continue
-        used += c["tokens"]
+        if new != span:
+            c["reasons"].append(f"overlaps already-selected lines; counted {cost} new tokens")
+        c["tokens"] = cost
+        used += cost
+        if capped_test:
+            test_used += cost
+        covered.setdefault(c["file"], set()).update(span)
         if c["file_kind"] == "test":
             tests.append(c)
         elif c["file_kind"] == "config":
@@ -190,9 +361,17 @@ def select(
             supporting.append(c)
 
     omitted.sort(key=lambda c: -c["score"])
-    confidence = "high" if (required or tests) else ("medium" if supporting else "low")
+    omitted = omitted[:OMITTED_CAP]
+    for c in omitted:
+        if c.get("tokens") is None:
+            c["tokens"] = lines.tokens(c["file"], range(c["start_line"], c["end_line"] + 1))
+    for c in required + supporting + tests + config + omitted:
+        c.pop("named_test", None)
+    # "high" needs a non-test source chunk in required_context; a slice
+    # that is only tests/weak matches is at best "medium"
+    confidence = "high" if required else ("medium" if (supporting or tests) else "low")
 
-    return {
+    result = {
         "task": task,
         "budget": budget,
         "used_tokens": used,
@@ -200,9 +379,17 @@ def select(
         "supporting_context": supporting,
         "relevant_tests": tests,
         "relevant_config": config,
-        "omitted_candidates": omitted[:OMITTED_CAP],
+        "omitted_candidates": omitted,
         "confidence": confidence,
     }
+    if notes:
+        result["notes"] = notes
+    if confidence != "high":
+        result["hint"] = (
+            "no source chunk scored as required -- this slice may not explain the task; "
+            "verify with grep/targeted reads before relying on it"
+        )
+    return result
 
 
 # ---------------------------------------------------------------- slice persistence
@@ -226,6 +413,35 @@ def next_slice_id(store_dir: Path) -> str:
     return f"s{n + 1:04d}"
 
 
+_INCLUDED_KEYS = ("required_context", "supporting_context", "relevant_tests", "relevant_config")
+
+
+def _file_hash(repo_root: Path, rel: str) -> str | None:
+    text = read_text(repo_root / rel)
+    return None if text is None else sha256_text(text)
+
+
+def _record_file_hashes(record: dict) -> None:
+    """Remember the content hash of every file in the slice (first time it
+    is seen), so `show` can warn when line ranges may have gone stale."""
+    repo_root = Path(record["repo_root"])
+    hashes = record.setdefault("file_hashes", {})
+    for key in _INCLUDED_KEYS:
+        for c in record.get(key, []):
+            if c["file"] not in hashes:
+                hashes[c["file"]] = _file_hash(repo_root, c["file"])
+
+
+def changed_since_slice(record: dict) -> list[str]:
+    """Files in the slice whose content changed since their hash was stored."""
+    repo_root = Path(record["repo_root"])
+    return sorted(
+        f
+        for f, h in record.get("file_hashes", {}).items()
+        if _file_hash(repo_root, f) != h
+    )
+
+
 def save_slice(store_dir: Path, slice_id: str, repo_root: Path, result: dict) -> Path:
     record = {
         "slice_id": slice_id,
@@ -233,6 +449,7 @@ def save_slice(store_dir: Path, slice_id: str, repo_root: Path, result: dict) ->
         "created_at": time.time(),
         **result,
     }
+    _record_file_hashes(record)
     path = _slice_dir(store_dir) / f"{slice_id}.json"
     path.write_text(json.dumps(record, indent=2))
     return path
@@ -255,10 +472,14 @@ def expand_slice(
     record = load_slice(store_dir, slice_id)
     budget = record["budget"] + (extra_budget or 0)
     omitted_by_id = {c["id"]: c for c in record["omitted_candidates"]}
+    for c in record["omitted_candidates"]:
+        omitted_by_id.setdefault(f"{c['file']}:{c['start_line']}-{c['end_line']}", c)
     promoted, still_missing, over_budget = [], [], []
 
     for cid in add_chunk_ids:
         chunk = omitted_by_id.get(cid)
+        if chunk is not None and chunk["id"] in promoted:
+            continue
         if chunk is None:
             still_missing.append(cid)
             continue
@@ -268,10 +489,13 @@ def expand_slice(
         chunk["reasons"].append("manually expanded: agent identified this as a missing dependency")
         record["supporting_context"].append(chunk)
         record["used_tokens"] += chunk["tokens"]
-        record["omitted_candidates"] = [c for c in record["omitted_candidates"] if c["id"] != cid]
-        promoted.append(cid)
+        record["omitted_candidates"] = [
+            c for c in record["omitted_candidates"] if c["id"] != chunk["id"]
+        ]
+        promoted.append(chunk["id"])
 
     record["budget"] = budget
+    _record_file_hashes(record)
     path = _slice_dir(store_dir) / f"{slice_id}.json"
     path.write_text(json.dumps(record, indent=2))
     return {
@@ -323,6 +547,7 @@ def add_ad_hoc_chunk(
     record["budget"] = budget
     record["supporting_context"].append(chunk)
     record["used_tokens"] += chunk["tokens"]
+    _record_file_hashes(record)
     path = _slice_dir(store_dir) / f"{slice_id}.json"
     path.write_text(json.dumps(record, indent=2))
     return {"record": record, "added": True, "error": None}

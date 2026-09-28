@@ -1,62 +1,368 @@
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 1, 1>&, Matrix<double, 1, 1>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 2, 2>&, Matrix<double, 2, 2>&)'
-src/linalg.hpp:200:12: error: no matching function for call to 'multiply(Matrix<double, 3, 3>&, Matrix<double, 3, 3>&)'
-src/linalg.hpp:201:12: error: no matching function for call to 'multiply(Matrix<double, 4, 4>&, Matrix<double, 4, 4>&)'
-src/linalg.hpp:202:12: error: no matching function for call to 'multiply(Matrix<double, 5, 5>&, Matrix<double, 5, 5>&)'
+g++ -std=c++17 -Isrc -c src/main.cpp -o main.o
+In file included from /usr/include/c++/11/algorithm:62,
+                 from src/main.cpp:3:
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1950:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1950 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1954:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1954 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+/usr/include/c++/11/bits/stl_algo.h: In instantiation of 'void std::__insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare) [with _RandomAccessIterator = Point*; _Compare = __gnu_cxx::__ops::_Iter_less_iter]':
+/usr/include/c++/11/bits/stl_algo.h:1866:25:   required from 'void std::__final_insertion_sort(_RandomAccessIterator, _RandomAccessIterator, _Compare)'
+src/main.cpp:14:14:   required from here
+/usr/include/c++/11/bits/predefined_ops.h:1961:23: error: no match for 'operator<' (operand types are 'Point' and 'Point')
+   1961 |       { return *__it1 < *__it2; }
+      |                ~~~~~~~^~~~~~~~
+src/solver.cpp:42:5: error: 'tol' was not declared in this scope
+   42 |     tol *= 0.5;
+      |     ^~~
 src/linalg.hpp:210:1: warning: unused parameter 'tol' [-Wunused-parameter]
-make: *** [linalg.o] Error 1
+make: *** [main.o] Error 1

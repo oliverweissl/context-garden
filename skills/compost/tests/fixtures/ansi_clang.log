@@ -1,0 +1,9 @@
+[1m/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/__algorithm/sort.h:265:18: [0m[0;1;31merror: [0m[1minvalid operands to binary expression ('Point' and 'Point')[0m
+    if (__comp(*__i, *__j)) {
+[1msrc/app/main.cpp:9:8: [0m[0;1;30mnote: [0min instantiation of function template specialization 'std::sort<Point *>' requested here[0m
+[1msrc/app/main.cpp:12:5: [0m[0;1;31merror: [0m[1muse of undeclared identifier 'foo'[0m
+    foo();
+[0;1;32m    ^[0m
+[1msrc/app/util.cpp:3:10: [0m[0;1;35mwarning: [0m[1munused variable 'x' [-Wunused-variable][0m
+]8;;file:///src/app/main.cpp\main.cpp]8;;\
+1 warning and 2 errors generated.

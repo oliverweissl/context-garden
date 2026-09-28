@@ -44,6 +44,19 @@ def render_section(s: dict) -> str:
     return f"{hashes} {s['heading']}\n\n{body}" if body else f"{hashes} {s['heading']}"
 
 
+def check_out_dir(skill_dir: Path, out_dir: Path) -> None:
+    """Refuse an --out that is, contains, or lives inside the source skill
+    dir: the output is written by deleting out_dir and re-copying
+    skill_dir into it, which would otherwise destroy the source."""
+    src = Path(skill_dir).resolve()
+    dst = Path(out_dir).resolve()
+    if dst == src or dst.is_relative_to(src) or src.is_relative_to(dst):
+        raise ValueError(
+            f"--out {out_dir} overlaps the source skill dir {skill_dir}; "
+            "pick an output dir outside it (and not containing it)"
+        )
+
+
 def rebuild_skill_md(frontmatter_block: str, sections: list[dict]) -> str:
     parts = [frontmatter_block.rstrip("\n")]
     for s in sections:
@@ -61,6 +74,7 @@ def optimize_skill(
 ) -> dict:
     skill_dir = Path(skill_dir)
     out_dir = Path(out_dir)
+    check_out_dir(skill_dir, out_dir)
     parsed = parse_skill(skill_dir)
 
     fm_match = FRONTMATTER_RE.match(parsed["raw_skill_md"])
@@ -101,23 +115,23 @@ def optimize_skill(
     for filename, content in new_reference_files.items():
         (out_dir / "references" / filename).write_text(content)
 
-    # single source of truth for "always loaded" (see we_audit.MOVABLE_CATEGORIES):
-    # re-audit both the original dir and the freshly written output dir,
-    # rather than re-deriving the same figure here with separate logic.
+    # single source of truth for SKILL.md's per-trigger cost (see
+    # we_audit.MOVABLE_CATEGORIES): re-audit both the original dir and the
+    # freshly written output dir, rather than re-deriving the same figure
+    # here with separate logic. Moving body sections never changes the
+    # always-loaded description, only what loads on trigger.
     from we_audit import audit_skill
 
-    before_always_loaded = audit_skill(skill_dir)["always_loaded_tokens"]
-    after_always_loaded = audit_skill(out_dir)["always_loaded_tokens"]
+    before_skill_md = audit_skill(skill_dir)["skill_md_tokens"]
+    after_skill_md = audit_skill(out_dir)["skill_md_tokens"]
 
     return {
         "skill_dir": str(skill_dir),
         "out_dir": str(out_dir),
         "moves": moves,
-        "before_always_loaded_tokens": before_always_loaded,
-        "after_always_loaded_tokens": after_always_loaded,
+        "before_skill_md_tokens": before_skill_md,
+        "after_skill_md_tokens": after_skill_md,
         "reduction_pct": (
-            round(100 * (1 - after_always_loaded / before_always_loaded), 1)
-            if before_always_loaded
-            else 0.0
+            round(100 * (1 - after_skill_md / before_skill_md), 1) if before_skill_md else 0.0
         ),
     }

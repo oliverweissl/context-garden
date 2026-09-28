@@ -1,0 +1,16 @@
+[1/4] Building CXX object CMakeFiles/app.dir/src/io.cpp.o
+[2/4] Building CXX object CMakeFiles/app.dir/src/main.cpp.o
+FAILED: CMakeFiles/app.dir/src/main.cpp.o
+/usr/bin/clang++ -I/src/include -O2 -c /src/main.cpp -o CMakeFiles/app.dir/src/main.cpp.o
+/src/main.cpp:42:17: error: no member named 'solve' in 'Grid'
+    auto r = g.solve(tol);
+             ~ ^
+1 error generated.
+[3/4] Linking CXX executable bench
+FAILED: bench
+Undefined symbols for architecture arm64:
+  "_kernel_init", referenced from:
+      _main in bench.cpp.o
+ld: symbol(s) not found for architecture arm64
+clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+ninja: build stopped: subcommand failed.

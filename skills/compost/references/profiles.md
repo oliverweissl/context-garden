@@ -34,13 +34,15 @@ order (first match wins) unless `--profile` is passed explicitly:
 
 5. **gcc** — command contains `gcc`/`g++`/`clang`/`clang++`/`cc`/`c++`, or
    any line matches the diagnostic shape `path:line:col: error|warning: msg`.
-   `note:` lines are dropped (they're context for a preceding
-   error/warning, not independent events).
+   `note:` lines are not events, but user-code locations from instantiation
+   backtraces (gcc `path:L:C:   required from here` before the error, clang
+   `note: ... requested here` after it) and include chains are attached to
+   the error as context and surface as `user_location`.
 
 6. **python_traceback** — output contains a bare
    `Traceback (most recent call last):` line. Each traceback's final
    (exception) line becomes one event; intermediate frames are not
-   individually extracted (use `compost event <id> --event N` to see the
+   individually extracted (use `bin/compost event <id> --event N` to see the
    full raw traceback around that line).
 
 7. **numerical_solver** — output has a line matching
@@ -72,7 +74,8 @@ duplicated.
 
 ## Adding a profile
 
-Add a `parse_<name>(lines, exit_code) -> {events, numerical_summary,
-artifacts}` function and a detection branch in `co_profiles.py`, then
-register it in the `PARSERS` dict. Keep it regex/state-machine based —
+Add a streaming parser class in `co_profiles.py` (`feed(lineno, line)` per
+line, `finish() -> {events, numerical_summary}`; keep state proportional to
+events, not lines), a flag in `ProfileDetector`, and register it in
+`PARSERS`. Keep it regex/state-machine based —
 compost's core guarantee is that compaction never requires a model call.

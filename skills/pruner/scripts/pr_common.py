@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+import sys
 from pathlib import Path
 
 IGNORE_DIRS = {
@@ -98,6 +99,14 @@ def discover_files(repo_root: Path) -> list[str]:
     ls-files` (respects .gitignore for free); falls back to a walk with a
     hardcoded ignore list when not in a git repo."""
     tracked = _git_tracked_files(repo_root)
+    if tracked == []:
+        # e.g. --repo points at a gitignored/vendored dir inside a git repo
+        print(
+            f"warning: git ls-files found no files under {repo_root} (gitignored or "
+            "vendored?); falling back to a filesystem walk",
+            file=sys.stderr,
+        )
+        tracked = None
     if tracked is not None:
         candidates = tracked
     else:
@@ -126,16 +135,26 @@ def discover_files(repo_root: Path) -> list[str]:
 
 
 def read_text(path: Path) -> str | None:
+    """UTF-8 text, with undecodable bytes replaced rather than dropping the
+    file (latin-1 sources etc.). Returns None for unreadable/binary files."""
     try:
-        return path.read_text(encoding="utf-8", errors="strict")
-    except (UnicodeDecodeError, OSError):
+        data = path.read_bytes()
+    except OSError:
         return None
+    if b"\x00" in data[:8192]:
+        return None
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("utf-8", errors="replace")
 
 
 def changed_files_from_git(repo_root: Path) -> list[str]:
     try:
         out = subprocess.run(
-            ["git", "diff", "--name-only", "HEAD"],
+            # --relative: paths relative to repo_root (== the index root),
+            # not the git toplevel, so this works from a subdirectory too
+            ["git", "diff", "--name-only", "--relative", "HEAD"],
             cwd=repo_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -148,3 +167,21 @@ def changed_files_from_git(repo_root: Path) -> list[str]:
     return [
         line.strip() for line in out.stdout.decode(errors="replace").splitlines() if line.strip()
     ]
+
+
+def test_stem_guesses(rel_path: str) -> set[str]:
+    """Source-file stems a test file's name points at: test_foo.py / foo_test.cpp -> {"foo"}."""
+    stem = Path(rel_path).stem
+    guesses = set()
+    if stem.startswith("test_"):
+        guesses.add(stem[len("test_") :])
+    if stem.endswith("_test"):
+        guesses.add(stem[: -len("_test")])
+    return guesses
+
+
+def is_fixture_path(rel_path: str) -> bool:
+    """Files under test-fixture/test-data directories (sample projects,
+    golden files) -- never the project's own config."""
+    parts = {seg.lower() for seg in Path(rel_path).parts[:-1]}
+    return bool(parts & {"fixtures", "fixture", "testdata", "test_data"})

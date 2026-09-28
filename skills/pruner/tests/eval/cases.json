@@ -1,0 +1,239 @@
+{
+  "cases": [
+    {
+      "id": "s1-bugfix-named",
+      "repo": "sample_repo",
+      "task": "Fix incorrect boundary behavior in interpolate().",
+      "budget": 250,
+      "expect": [
+        "interp/core.py:5-11",
+        "interp/utils.py:1-7"
+      ],
+      "note": "named function + its clamp helper"
+    },
+    {
+      "id": "s2-gcc-undeclared",
+      "repo": "sample_repo",
+      "task": "Fix the build error in the solver",
+      "budget": 150,
+      "expect": [
+        "csrc/solver.cpp:12-14",
+        "csrc/linalg.hpp:3-7"
+      ],
+      "error": "csrc/solver.cpp:14:5: error: use of undeclared identifier 'residual'"
+    },
+    {
+      "id": "s3-converge-change",
+      "repo": "sample_repo",
+      "task": "Change the convergence tolerance criterion in converge()",
+      "budget": 150,
+      "expect": [
+        "csrc/solver.cpp:16-22",
+        "csrc/solver.cpp:12-14"
+      ]
+    },
+    {
+      "id": "s4-pytest-zerodiv",
+      "repo": "sample_repo",
+      "task": "tests are failing",
+      "budget": 200,
+      "expect": [
+        "interp/core.py:5-11",
+        "tests/test_interp.py:4-5"
+      ],
+      "error": "=================================== FAILURES ===================================\n__________________________ test_boundary_clamped_low ___________________________\n\n    def test_boundary_clamped_low():\n>       assert interpolate(-5, 0.0, 10.0) == 0.0\n\ntests/test_interp.py:5:\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _\n>       return (x - lo) / span\nE       ZeroDivisionError: division by zero\n\ninterp/core.py:11: ZeroDivisionError\n=========================== short test summary info ============================\nFAILED tests/test_interp.py::test_boundary_clamped_low - ZeroDivisionError"
+    },
+    {
+      "id": "s5-vague-clamp",
+      "repo": "sample_repo",
+      "task": "values above the upper bound are not clamped correctly",
+      "budget": 150,
+      "expect": [
+        "interp/utils.py:1-7"
+      ]
+    },
+    {
+      "id": "m1-idf-choice",
+      "repo": "mono_repo",
+      "task": "Choice.convert should accept values case-insensitively when case_sensitive=False",
+      "budget": 300,
+      "expect": [
+        "clicky/src/clicky/types.py:77-78",
+        "clicky/src/clicky/types.py:80-86"
+      ],
+      "note": "convert is defined on 6 classes; only Choice's matters (IDF)"
+    },
+    {
+      "id": "m2-idf-intrange-clamp",
+      "repo": "mono_repo",
+      "task": "IntRange with clamp=True returns the maximum for values below the minimum",
+      "budget": 450,
+      "expect": [
+        "clicky/src/clicky/types.py:50-58",
+        "clicky/src/clicky/types.py:60-65"
+      ]
+    },
+    {
+      "id": "m3-pytest-assert-src-layout",
+      "repo": "mono_repo",
+      "task": "fix the failing test",
+      "budget": 500,
+      "expect": [
+        "clicky/tests/test_types.py:16-17",
+        "clicky/src/clicky/types.py:50-58",
+        "clicky/src/clicky/types.py:60-65"
+      ],
+      "error": "=================================== FAILURES ===================================\n_________________________ test_intrange_clamps_to_min __________________________\n\n    def test_intrange_clamps_to_min():\n>       assert IntRange(0, 5, clamp=True).convert(\"-3\", None, None) == 0\nE       assert 5 == 0\nE        +  where 5 = convert('-3', None, None)\n\nclicky/tests/test_types.py:17: AssertionError\n=========================== short test summary info ============================\nFAILED clicky/tests/test_types.py::test_intrange_clamps_to_min - assert 5 == 0",
+      "note": "assertion-only failure: source reached via src-layout import of clicky.types"
+    },
+    {
+      "id": "m4-vague-group-dispatch",
+      "repo": "mono_repo",
+      "task": "running a registered subcommand through a group fails with 'No such command'",
+      "budget": 300,
+      "expect": [
+        "clicky/src/clicky/core.py:116-117",
+        "clicky/src/clicky/core.py:119-127"
+      ],
+      "note": "tests must not crowd out source"
+    },
+    {
+      "id": "m5-class-vs-method",
+      "repo": "mono_repo",
+      "task": "Command.parse_args mishandles the --opt=value syntax",
+      "budget": 400,
+      "expect": [
+        "clicky/src/clicky/core.py:59-76"
+      ],
+      "note": "whole Command class is ~60 lines; the method is what matters"
+    },
+    {
+      "id": "m6-method-main",
+      "repo": "mono_repo",
+      "task": "Command.main should print the error to stderr and exit with the exception's exit code",
+      "budget": 400,
+      "expect": [
+        "clicky/src/clicky/core.py:96-103",
+        "clicky/src/clicky/exceptions.py:1-11"
+      ]
+    },
+    {
+      "id": "m7-gcc-dup-basename-dirhint",
+      "repo": "mono_repo",
+      "task": "fix the compile error",
+      "budget": 400,
+      "expect": [
+        "engine/b/solver.cpp:22-28",
+        "engine/b/solver.cpp:9-20"
+      ],
+      "error": "make[2]: Entering directory '/home/dev/mono_repo/engine/b'\nsolver.cpp:25:31: error: 'step_size' was not declared in this scope\n   25 |         seidel_sweep(m, b, x, step_size);\n      |                               ^~~~~~~~~\nmake[2]: *** [CMakeFiles/solver_b.dir/build.make:76: solver.cpp.o] Error 1\nmake[2]: Leaving directory '/home/dev/mono_repo/engine/b'",
+      "note": "a/solver.cpp:25 also exists; the make dir hint disambiguates"
+    },
+    {
+      "id": "m8-gcc-dup-basename-symbols",
+      "repo": "mono_repo",
+      "task": "fix the compile error",
+      "budget": 300,
+      "expect": [
+        "engine/b/solver.cpp:9-20",
+        "engine/b/solver.cpp:5-7"
+      ],
+      "error": "solver.cpp:10:20: error: 'relaxation_factor' was not declared in this scope",
+      "note": "no dir hint; only b/solver.cpp defines relaxation_factor"
+    },
+    {
+      "id": "m9-monorepo-config-tools",
+      "repo": "mono_repo",
+      "task": "render_table misaligns values when width is less than 20",
+      "budget": 150,
+      "expect": [
+        "tools/reporter/render.py:6-11"
+      ],
+      "note": "configs of other projects/test fixtures are noise"
+    },
+    {
+      "id": "m10-monorepo-config-dep",
+      "repo": "mono_repo",
+      "task": "add a dependency on a color library so echo can print styled text",
+      "budget": 300,
+      "expect": [
+        "clicky/src/clicky/utils.py:26-34",
+        "clicky/pyproject.toml:1-8"
+      ]
+    },
+    {
+      "id": "m11-pytest-assert-dup-name",
+      "repo": "mono_repo",
+      "task": "fix the failing test",
+      "budget": 250,
+      "expect": [
+        "clicky/tests/test_utils.py:4-5",
+        "clicky/src/clicky/utils.py:12-16"
+      ],
+      "error": "    def test_format_filename_shorten():\n>       assert format_filename(\"/tmp/dir/data.csv\", shorten=True) == \"data.csv\"\nE       AssertionError: assert '/tmp/dir/data.csv' == 'data.csv'\n\nclicky/tests/test_utils.py:5: AssertionError\nFAILED clicky/tests/test_utils.py::test_format_filename_shorten - AssertionError",
+      "note": "format_filename also exists in tools/reporter/render.py"
+    },
+    {
+      "id": "m12-traceback-site-packages",
+      "repo": "mono_repo",
+      "task": "reporter crashes when writing output",
+      "budget": 400,
+      "expect": [
+        "tools/reporter/run.py:14-20",
+        "clicky/src/clicky/utils.py:26-34"
+      ],
+      "error": "Traceback (most recent call last):\n  File \"/home/dev/mono_repo/tools/reporter/run.py\", line 19, in run\n    echo(format_filename(input))\n  File \"/home/dev/.venv/lib/python3.11/site-packages/clicky/utils.py\", line 33, in echo\n    file.write(text)\nTypeError: write() argument must be str, not bytes",
+      "note": "installed-package path must map onto the src-layout file"
+    },
+    {
+      "id": "m13-vague-help-width",
+      "repo": "mono_repo",
+      "task": "help output gets cut off at the terminal width",
+      "budget": 300,
+      "expect": [
+        "clicky/src/clicky/core.py:87-94",
+        "clicky/src/clicky/utils.py:19-23"
+      ]
+    },
+    {
+      "id": "m14-bad-parameter-message",
+      "repo": "mono_repo",
+      "task": "BadParameter message should include the parameter name",
+      "budget": 200,
+      "expect": [
+        "clicky/src/clicky/exceptions.py:31-34",
+        "clicky/src/clicky/types.py:17-18"
+      ]
+    },
+    {
+      "id": "m15-cpp-vague-jacobi",
+      "repo": "mono_repo",
+      "task": "the Jacobi sweep divides by the wrong diagonal element",
+      "budget": 200,
+      "expect": [
+        "engine/a/solver.cpp:15-22"
+      ]
+    },
+    {
+      "id": "m16-cpp-relaxation",
+      "repo": "mono_repo",
+      "task": "tune the Gauss-Seidel relaxation factor for faster convergence",
+      "budget": 300,
+      "expect": [
+        "engine/b/solver.cpp:5-7",
+        "engine/b/solver.cpp:9-20"
+      ]
+    },
+    {
+      "id": "m17-traceback-required-option",
+      "repo": "mono_repo",
+      "task": "required option error raised even though --input was passed",
+      "budget": 550,
+      "expect": [
+        "clicky/src/clicky/core.py:37-42",
+        "clicky/src/clicky/core.py:59-76"
+      ],
+      "error": "Traceback (most recent call last):\n  File \"clicky/src/clicky/core.py\", line 99, in main\n    ctx = self.make_context(prog_name or self.name, args)\n  File \"clicky/src/clicky/core.py\", line 56, in make_context\n    self.parse_args(ctx, args)\n  File \"clicky/src/clicky/core.py\", line 72, in parse_args\n    ctx.params[param.name] = param.process_value(ctx, raw.pop(param.name, None))\n  File \"clicky/src/clicky/core.py\", line 40, in process_value\n    ctx.fail(f\"Missing option '--{self.name}'.\")\n  File \"clicky/src/clicky/core.py\", line 26, in fail\n    raise UsageError(message, self)\nclicky.exceptions.UsageError: Missing option '--input'."
+    }
+  ]
+}

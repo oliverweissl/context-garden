@@ -75,6 +75,65 @@ print('OK')
 " 2>&1)
 assert_contains "parser regressions: bugs #1-#4 stay fixed" "$parser_check" "OK"
 
+# --- parser fixes: literals/comments, ctor init list, operators, decorators
+cat >"$SCRATCH/fix.cpp" <<'EOF'
+const char* s = "{ oops"; // {
+/* { */ char c = '{'; auto r = R"x( { )x";
+int after() { return 1; }
+struct Vec {
+  Vec(int n) : data_(n), size_(n) {
+  }
+  bool operator==(const Vec& o) const { return true; }
+  double& operator[](int i) { return d; }
+  int operator()(int x) { return x; }
+};
+std::ostream& operator<<(std::ostream& os, const Vec& v) {
+  return os;
+}
+EOF
+printf 'import functools\n\n@functools.cache\n@staticmethod\ndef f():\n    return 1\n' >"$SCRATCH/fix.py"
+fix_check=$(python3 -c "
+import sys
+sys.path.insert(0, '$DIR/scripts')
+import pr_cpp, pr_python
+cpp = pr_cpp.parse_cpp_file(open('$SCRATCH/fix.cpp').read())
+names = {s['name']: s for s in cpp['symbols'] if s['type'] == 'function'}
+assert names.get('after', {}).get('start_line') == 3, ('brace in string/comment', names)
+assert 'Vec' in names and 'size_' not in names, ('ctor init list', names)
+for op in ['operator==', 'operator[]', 'operator()', 'operator<<']:
+    assert op in names, (op, names)
+py = pr_python.parse_python_file(open('$SCRATCH/fix.py').read())
+f = next(s for s in py['symbols'] if s['name'] == 'f')
+assert f['start_line'] == 3, ('decorator not in range', f)
+print('OK')
+" 2>&1)
+assert_contains "parser fixes: string/comment braces, ctor init list, operators, decorators" "$fix_check" "OK"
+
+# --- whole-file chunk end_line, symlink dedupe, slice staleness warning ---
+MINI="$SCRATCH/mini"
+mkdir -p "$MINI/pkg"
+printf 'a = 1\nb = 2\nc = 3\n' >"$MINI/pkg/consts.py"
+printf 'def widget_frobnicate():\n    return 1\n' >"$MINI/pkg/widget.py"
+ln -s widget.py "$MINI/pkg/widget_link.py"
+M() { python3 "$DIR/scripts/pruner.py" --repo "$MINI" "$@"; }
+M index >/dev/null
+mini_check=$(python3 -c "
+import sqlite3
+db = sqlite3.connect('$MINI/.pruner/index.sqlite')
+lc = dict(db.execute('SELECT path, line_count FROM files'))
+assert lc['pkg/consts.py'] == 3, lc
+assert 'pkg/widget_link.py' not in lc, 'symlink indexed twice'
+print('OK')
+" 2>&1)
+assert_contains "whole-file line_count exact; symlink deduped" "$mini_check" "OK"
+mini_sel=$(M select --task "fix widget_frobnicate" --json)
+mini_id=$(python3 -c "import json,sys; print(json.load(sys.stdin)['slice_id'])" <<<"$mini_sel")
+fresh=$(M show "$mini_id" 2>&1 >/dev/null)
+assert_not_contains "show: no staleness warning when unchanged" "$fresh" "changed since slice"
+echo "# edit" >>"$MINI/pkg/widget.py"
+stale=$(M show "$mini_id" 2>&1 >/dev/null)
+assert_contains "show: warns when a slice file changed" "$stale" "pkg/widget.py"
+
 # --- index -------------------------------------------------------------
 index_out=$(CS index)
 assert_contains "index: finds 15 files" "$index_out" "indexed 15 file(s)"
@@ -133,8 +192,10 @@ assert_contains "UC3: convergence test is pulled into relevant_tests" "$tests3" 
 
 # --- progressive expansion -------------------------------------------------
 slice_id=$(python3 -c "import json,sys; print(json.load(sys.stdin)['slice_id'])" <<<"$uc3")
-expand_out=$(CS expand "$slice_id" --add "csrc/solver.hpp:__file__")
-assert_contains "expand: promotes a known omitted candidate by id" "$expand_out" "promoted: csrc/solver.hpp:__file__"
+assert_contains "UC3: declaration header (mentions converge) is selected" "$(json_list supporting_context <<<"$uc3")" "csrc/solver.hpp:__file__"
+read -r omit_id omit_tok < <(python3 -c "import json,sys; c=json.load(sys.stdin)['omitted_candidates'][0]; print(c['id'], c['tokens'])" <<<"$uc3")
+expand_out=$(CS expand "$slice_id" --add "$omit_id" --budget-extra "$omit_tok")
+assert_contains "expand: promotes a known omitted candidate by id" "$expand_out" "promoted: $omit_id"
 
 overbudget_out=$(CS expand "$slice_id" --file interp/core.py --lines 1:11 2>&1)
 assert_contains "expand: ad hoc add over budget is refused without override" "$overbudget_out" "budget"
@@ -151,6 +212,131 @@ assert_not_contains "show: unknown slice id fails cleanly" "$bad_show" "Tracebac
 
 bad_expand=$(CS expand "$slice_id" --add "no/such/chunk:id" 2>&1)
 assert_contains "expand: unknown chunk id reported, not crashed" "$bad_expand" "unknown chunk id"
+
+bad_lines=$(CS expand "$slice_id" --file interp/core.py --lines abc 2>&1)
+assert_contains "expand: malformed --lines reported cleanly" "$bad_lines" "--lines must look like A:B"
+assert_not_contains "expand: malformed --lines, no traceback" "$bad_lines" "Traceback"
+
+outside=$(CS expand "$slice_id" --file ../../etc/passwd --lines 1:2 --budget-extra 999 2>&1)
+assert_contains "expand: --file outside the repo is rejected" "$outside" "outside the repository"
+
+# --- error parsing: pytest / clang / MSVC locations + error keywords -------
+loc_check=$(python3 -c "
+import sys
+sys.path.insert(0, '$DIR/scripts')
+from pr_score import parse_error_locations as p, error_identifiers as ids
+t = '''interp/core.py:11: ZeroDivisionError
+a.cpp:3:4: fatal error: foo.h: No such file
+b.hpp:7:2: note: candidate function
+c.hpp:9:10:   required from here
+x.cpp(12): error C2065: 'residual': undeclared identifier
+FAILED tests/test_interp.py::test_midpoint - ZeroDivisionError'''
+locs = set(p(t))
+for want in [('interp/core.py', 11), ('a.cpp', 3), ('b.hpp', 7), ('c.hpp', 9), ('x.cpp', 12)]:
+    assert want in locs, (want, locs)
+assert {'ZeroDivisionError', 'residual', 'test_midpoint'} <= set(ids(t)), ids(t)
+print('OK')
+" 2>&1)
+assert_contains "error parsing: pytest/clang note/fatal/required-from/MSVC locations" "$loc_check" "OK"
+
+# --- bug: pytest output via --error-file finds the source chunk ------------
+cat >"$SCRATCH/pytest_out.txt" <<'EOF'
+=================================== FAILURES ===================================
+__________________________ test_boundary_clamped_low ___________________________
+
+    def test_boundary_clamped_low():
+>       assert interpolate(-5, 0.0, 10.0) == 0.0
+
+tests/test_interp.py:5:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+>       return (x - lo) / span
+E       ZeroDivisionError: division by zero
+
+interp/core.py:11: ZeroDivisionError
+=========================== short test summary info ============================
+FAILED tests/test_interp.py::test_boundary_clamped_low - ZeroDivisionError
+EOF
+uc_pt=$(CS select --task "tests are failing" --error-file "$SCRATCH/pytest_out.txt" --json)
+assert_contains "pytest --error-file: source function is required" "$(json_list required_context <<<"$uc_pt")" "interp/core.py:interpolate"
+assert_contains "pytest --error-file: failing test is selected" "$(json_list relevant_tests <<<"$uc_pt")" "test_boundary_clamped_low"
+
+# --- bug: human output prints ids; --add accepts file:start-end ------------
+human=$(CS select --task "Change the convergence tolerance criterion in converge()" --budget 300)
+assert_contains "human output prints chunk ids" "$human" "id=csrc/solver.cpp:converge"
+hid=$(sed -n 's/^slice_id: //p' <<<"$human")
+omit_line=$(sed -n '/^Omitted candidates/{n;p;}' <<<"$human")
+hpp_range=$(awk '{print $1}' <<<"$omit_line")
+omit_hid=$(sed 's/.*id=//' <<<"$omit_line")
+range_out=$(CS expand "$hid" --add "$hpp_range" --budget-extra 500 2>&1)
+assert_contains "expand --add accepts a file:start-end range" "$range_out" "promoted: $omit_hid"
+
+# --- bug: module-level error location selects a window chunk ---------------
+{
+  echo "def load_settings():"
+  echo "    return {}"
+  for i in $(seq 1 40); do echo "SETTING_$i = $i"; done
+  echo "RESULT = load_settings()['missing_key']"
+} >"$REPO/interp/settings.py"
+modlvl=$(CS select --task "startup crash" --budget 2000 --json \
+  --error $'Traceback (most recent call last):\n  File "/x/interp/settings.py", line 43, in <module>\nKeyError: missing_key')
+assert_contains "module-level error: window chunk around the line is required" "$(json_list required_context <<<"$modlvl")" "interp/settings.py:28-"
+
+printf 'def broken(:\n    pass\n' >"$REPO/interp/broken.py"
+synerr=$(CS select --task "fix it" --budget 2000 --json --error 'File "interp/broken.py", line 1')
+assert_contains "syntax-error file: its chunk is required (whole file, or what tree-sitter recovered)" "$(json_list required_context <<<"$synerr")" "interp/broken.py:"
+
+# --- bug: duplicate qualnames get distinct ids -----------------------------
+cat >"$REPO/interp/dup.py" <<'EOF'
+import sys
+if sys.platform == "win32":
+    def dup_target():
+        return 1
+else:
+    def dup_target():
+        return 2
+EOF
+CS index >/dev/null
+dup_ids=$(python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '$DIR/scripts')
+import pr_store
+idx = pr_store.Index(pr_store.connect(Path('$REPO/.pruner/index.sqlite')), Path('$REPO'))
+ids = list(idx.by_id)
+assert len(ids) == len(set(ids)), 'duplicate ids'
+print(' '.join(i for i in ids if 'dup_target' in i))
+" 2>&1)
+assert_contains "duplicate defs: first keeps plain id" "$dup_ids" "interp/dup.py:dup_target "
+assert_contains "duplicate defs: second gets @line suffix" "$dup_ids" "interp/dup.py:dup_target@6"
+
+# --- bug: --auto-changed / --changed from a subdirectory -------------------
+if command -v git >/dev/null; then
+  G() { git -C "$REPO" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1; }
+  G init -q && G add -A && G commit -qm init
+  echo "# touched" >>"$REPO/interp/utils.py"
+  sub_auto=$(cd "$REPO/interp" && python3 "$DIR/scripts/pruner.py" select --task "review" --auto-changed --json)
+  assert_contains "auto-changed from subdir (repo=cwd): paths match index" "$sub_auto" "file was recently changed"
+  sub_changed=$(cd "$REPO/interp" && python3 "$DIR/scripts/pruner.py" --repo "$REPO" select --task "review" --changed utils.py --json)
+  assert_contains "--changed relative to subdir cwd is normalized to repo root" "$(json_list supporting_context <<<"$sub_changed") $(json_list required_context <<<"$sub_changed")" "interp/utils.py:clamp"
+
+  # gitignored dir used as --repo: warn + fall back to a filesystem walk
+  mkdir -p "$REPO/vendored" && echo "vendored/" >"$REPO/.gitignore"
+  printf 'def v():\n    return 1\n' >"$REPO/vendored/lib.py"
+  vend=$(python3 "$DIR/scripts/pruner.py" --repo "$REPO/vendored" index 2>&1)
+  assert_contains "gitignored --repo: warns" "$vend" "falling back to a filesystem walk"
+  assert_contains "gitignored --repo: still indexes files" "$vend" "indexed 1 file(s)"
+fi
+
+# --- selection-quality eval (recall/precision vs committed baseline) --------
+eval_out=$(python3 "$DIR/tests/eval/run_eval.py" 2>&1)
+eval_rc=$?
+echo "$eval_out" | tail -3
+if [ "$eval_rc" -eq 0 ]; then
+  echo "PASS: eval: recall at or above tests/eval/baseline.json"
+else
+  echo "FAIL: eval regression (run tests/eval/run_eval.py -v)"
+  fail=1
+fi
 
 echo
 if [ "$fail" -eq 0 ]; then

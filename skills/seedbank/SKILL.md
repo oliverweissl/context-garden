@@ -15,10 +15,14 @@ invalidation, `AGENTS.md` generation).
 
 ## Workflow
 
+`seedbank` is not on `PATH`: always run it as `<this-skill-dir>/bin/seedbank`
+(bare `seedbank <cmd>` below is shorthand for that). It stores state in
+`<git repo root>/.seedbank/` regardless of the current directory.
+
 1. **Before exploring**, check what's already cached:
    ```
    cat AGENTS.md                                   # hot facts, always relevant
-   python3 <this-skill-dir>/scripts/seedbank.py status
+   <this-skill-dir>/bin/seedbank status
    ```
    If `AGENTS.md` answers your question (build command, a stated invariant,
    a warm-context pointer relevant to your task), use it and skip
@@ -28,20 +32,22 @@ invalidation, `AGENTS.md` generation).
    specifically to answer a recurring question, searching for a pattern,
    or running a command to figure something out:
    ```
-   seedbank observe read <path> --task "<why you read it>" [--scope <topic>]
-   seedbank observe search "<pattern>" --task "<why>" [--scope <topic>]
-   seedbank observe run --scope <topic> -- <command...>
+   <this-skill-dir>/bin/seedbank observe read <path> --task "<why you read it>" [--scope <topic>]
+   <this-skill-dir>/bin/seedbank observe search "<pattern>" --task "<why>" [--scope <topic>]
+   <this-skill-dir>/bin/seedbank observe run --scope <topic> -- <command...>
    ```
    These are cheap to call — just do it when the read/search/run was in
    service of answering a "how does this repo work" question, not for
-   every file you touch while implementing.
+   every file you touch while implementing. With the plugin installed,
+   `Read`/`Grep`/`Glob` are recorded automatically (see below), so only
+   log `run`, `mistake` and `fact` by hand.
 
 3. **Log mistakes and invariants explicitly** — you already know the
    semantic fact; seedbank just needs the text:
    ```
-   seedbank observe mistake "Do not edit src/generated/**; regenerate with tools/codegen.py." \
+   <this-skill-dir>/bin/seedbank observe mistake "Do not edit src/generated/**; regenerate with tools/codegen.py." \
      --scope invariants --source src/generated/some_file.cpp
-   seedbank observe fact "Never weaken convergence tolerances to make tests pass; tolerance is part of the numerical accuracy contract." \
+   <this-skill-dir>/bin/seedbank observe fact "Never weaken convergence tolerances to make tests pass; tolerance is part of the numerical accuracy contract." \
      --scope invariants
    ```
    `mistake` costs more (it represents wasted work) and ranks higher for
@@ -50,31 +56,50 @@ invalidation, `AGENTS.md` generation).
 4. **Check candidates periodically** (end of task, or when asked to update
    project docs):
    ```
-   seedbank candidates
+   <this-skill-dir>/bin/seedbank candidates
    ```
    Ranks repeated-access keys by estimated value. A correctness/safety
    invariant is always worth promoting regardless of its ranked value —
    use `--critical` when you promote it so it's protected from budget-based
    eviction:
    ```
-   seedbank promote <key> --representation "<compact text>" --tier hot --critical
-   seedbank promote <key> --tier warm --scope solver   # non-critical, topic-scoped
+   <this-skill-dir>/bin/seedbank promote <key> --representation "<compact text>" --tier hot --critical
+   <this-skill-dir>/bin/seedbank promote <key> --tier warm --scope solver   # non-critical, topic-scoped
    ```
+   Value counts *distinct sessions* that rediscovered a key and decays
+   with a 30-day half-life. Promote refuses a fact that contradicts one
+   already in the same scope and shows the conflicting fact; re-run with
+   `--replace <id>` (retire the old one) or `--force` (keep both).
 
 5. **Regenerate `AGENTS.md`** after promoting/demoting:
    ```
-   seedbank compile
+   <this-skill-dir>/bin/seedbank compile
    ```
    This also re-runs invalidation, so a stale fact (its source file changed
    since promotion) is automatically excluded rather than silently served
-   as if still true.
+   as if still true — except `--critical` facts, which stay published and
+   are marked "(source changed — verify)". Only the region between
+   `<!-- seedbank:begin -->`/`<!-- seedbank:end -->` is rewritten; hand-written
+   text outside it is kept. On a fresh clone (empty store) compile refuses to
+   wipe an existing block: run `import AGENTS.md` and re-promote first.
 
 6. **Migrating an existing hand-written `AGENTS.md`/`CLAUDE.md`?**
    ```
-   seedbank import <path>
+   <this-skill-dir>/bin/seedbank import <path>
    ```
    Seeds each bullet as a review-before-trusting candidate (lower
    confidence) rather than promoting it outright.
+
+## Automatic observation (Claude Code hook)
+
+The context-garden plugin ships `hooks/hooks.json`, which runs
+`bin/seedbank hook` after every `Read`, `Grep` and `Glob` (silent, always
+exits 0, only inside a git repo). If you copied just this skill, add to
+`.claude/settings.json` (or `~/.claude/settings.json`):
+```json
+{"hooks": {"PostToolUse": [{"matcher": "Read|Grep|Glob",
+  "hooks": [{"type": "command", "command": "<this-skill-dir>/bin/seedbank hook"}]}]}}
+```
 
 ## Tiers
 
@@ -90,7 +115,7 @@ invalidation, `AGENTS.md` generation).
 
 Commit `AGENTS.md` (and any `.seedbank/warm/*.md`) — that's the whole
 point, it replaces a hand-maintained context file. Gitignore
-`.seedbank/{observations.jsonl,keystats.json,facts.json,config.json}`
+`.seedbank/{observations.jsonl,keystats.json,facts.json,config.json,.lock}`
 (the local profiler state) unless the team has decided to share observation
 history across contributors.
 
@@ -114,8 +139,8 @@ and is the officially documented approach either way.
   a deliberate `seedbank promote` call.
 - Every fact links back to the source file(s) it came from (when it has
   any); if those files change, the fact is marked stale and excluded from
-  `compile` output until revalidated (`seedbank invalidate --confirm <id>`)
-  or demoted.
+  `compile` output (or, if `--critical`, kept with a "verify" mark) until
+  revalidated (`seedbank invalidate --confirm <id>`) or demoted.
 - All scoring/bookkeeping is deterministic (no model calls) — see
   `references/scoring.md` for the exact formulas and
   `references/schema.md` for the full CLI/record reference.

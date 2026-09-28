@@ -1,7 +1,8 @@
 """Lightweight C/C++ indexing: brace-depth state machine + regex, no libclang
 dependency. This is a heuristic, not a real parser -- it does not expand
-macros, understand templates deeply, resolve overloads, or account for
-braces inside string/char literals or comments. It is good enough to
+macros, understand templates deeply, or resolve overloads. String/char
+literals and comments are blanked out (same length, newlines kept) before
+brace counting, so a `{` inside them is ignored. It is good enough to
 recover function name + line range + a naive call list, which is what
 selection scoring needs. See references/scoring.md for the tradeoff.
 """
@@ -31,7 +32,11 @@ CONTROL_KEYWORDS = {
     "decltype",
 }
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
-NAME_BEFORE_PAREN_RE = re.compile(r"([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)\s*\(")
+NAME_BEFORE_PAREN_RE = re.compile(
+    r"((?:[A-Za-z_]\w*::)*operator\s*(?:\(\s*\)|\[\s*\]|[+\-*/%^&|~!=<>,]+|new|delete)"
+    r"|[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)\s*\("
+)
+RAW_STRING_RE = re.compile(r'R"([^()\\\s]{0,16})\(')
 CALL_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 TYPE_DECL_RE = re.compile(r"^\s*(?:struct|class|enum(?:\s+class)?)\s+([A-Za-z_]\w*)\b")
 IDENTIFIER_RE = re.compile(r"\b([A-Za-z_]\w*)\b")
@@ -68,6 +73,51 @@ _PRIMITIVE_KEYWORDS = {
     "private",
     "protected",
 }
+
+
+def _blank_literals_and_comments(text: str) -> str:
+    """Replace the contents of string/char literals and comments with
+    spaces (newlines kept), so line numbers and line lengths are preserved
+    but braces/parens inside them no longer confuse the brace counter.
+    Best-effort: handles "...", '...', R"delim(...)delim", // and /* */."""
+    out = list(text)
+    i, n = 0, len(text)
+
+    def blank(a: int, b: int) -> None:
+        for k in range(a, min(b, n)):
+            if out[k] != "\n":
+                out[k] = " "
+
+    while i < n:
+        c = text[i]
+        if c == "/" and text.startswith("//", i):
+            j = text.find("\n", i)
+            j = n if j == -1 else j
+            blank(i, j)
+            i = j
+        elif c == "/" and text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            j = n if j == -1 else j + 2
+            blank(i, j)
+            i = j
+        elif c == "R" and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")) and (
+            m := RAW_STRING_RE.match(text, i)
+        ):
+            close = ")" + m.group(1) + '"'
+            j = text.find(close, m.end())
+            j = n if j == -1 else j + len(close)
+            blank(m.end(), j - len(close) if j < n else n)
+            i = j
+        elif c == '"' or (c == "'" and not (i > 0 and text[i - 1].isalnum())):
+            # a ' right after an alnum is a C++14 digit separator (1'000)
+            j = i + 1
+            while j < n and text[j] != c and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            blank(i + 1, j)
+            i = j + 1
+        else:
+            i += 1
+    return "".join(out)
 
 
 def _signature_type_refs(sig_text: str, own_name: str) -> list[str]:
@@ -139,11 +189,35 @@ def _extract_type_symbols(lines: list[str]) -> list[dict]:
     return symbols
 
 
+def _strip_ctor_init_list(sig_text: str) -> str:
+    """`Vec(int n) : data_(n), size_(n)` -> `Vec(int n)`: cut at the first
+    single `:` at paren depth 0 that follows a closing paren, so the name
+    is taken from the constructor's own parameter list, not the last
+    member initializer."""
+    depth = 0
+    seen_close = False
+    for k, ch in enumerate(sig_text):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            seen_close = True
+        elif (
+            ch == ":"
+            and depth == 0
+            and seen_close
+            and sig_text[k - 1 : k] != ":"
+            and sig_text[k + 1 : k + 2] != ":"
+        ):
+            return sig_text[:k]
+    return sig_text
+
+
 def _extract_function_name(sig_text: str) -> str | None:
-    matches = NAME_BEFORE_PAREN_RE.findall(sig_text)
+    matches = NAME_BEFORE_PAREN_RE.findall(_strip_ctor_init_list(sig_text))
     if not matches:
         return None
-    return matches[-1]
+    return re.sub(r"\s+(?=\W)|(?<=\W)\s+", "", matches[-1])
 
 
 def _collect_calls(body_text: str) -> list[str]:
@@ -152,7 +226,8 @@ def _collect_calls(body_text: str) -> list[str]:
 
 
 def parse_cpp_file(text: str) -> dict:
-    lines = text.splitlines()
+    raw_lines = text.splitlines()
+    lines = _blank_literals_and_comments(text).splitlines()
     includes = []
     symbols = []
 
@@ -192,7 +267,7 @@ def parse_cpp_file(text: str) -> dict:
         body_lines = []
 
     for i, line in enumerate(lines, start=1):
-        m = INCLUDE_RE.match(line)
+        m = INCLUDE_RE.match(raw_lines[i - 1])
         if m:
             includes.append(m.group(1))
             continue

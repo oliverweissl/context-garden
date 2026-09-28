@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
+from ._util import record_config, threshold_status
 from .schema import CheckResult, Status
 
 
-def nan_inf_check(data, name: str = "output") -> CheckResult:
+@record_config
+def nan_inf_check(data, name: str = "output", key=None) -> CheckResult:
     """FAIL if any NaN or Inf is present -- there is no WARN tier here: a
     NaN/Inf is an unambiguous numerical breakdown (overflow, division by
-    zero, an out-of-domain evaluation), not a matter of degree."""
+    zero, an out-of-domain evaluation), not a matter of degree. `data`
+    may be a result-file path (see trellis.io.load; `key` selects)."""
+    if isinstance(data, (str, os.PathLike)):
+        from . import io as _io
+
+        data = _io.load(data, key=key)
     arr = np.asarray(data, dtype=float)
     n_nan = int(np.isnan(arr).sum())
     n_inf = int(np.isinf(arr).sum())
@@ -32,22 +41,17 @@ def nan_inf_check(data, name: str = "output") -> CheckResult:
     )
 
 
+@record_config
 def magnitude_check(
     value: float, expected_range: tuple[float, float], name: str = "value"
 ) -> CheckResult:
-    """Plausibility check against an expected order-of-magnitude range.
-    WARN if outside the range but within one range-width of it (probably
-    a units/scale slip); FAIL if far outside (probably wrong entirely)."""
+    """Plausibility check against an expected order-of-magnitude range:
+    FAIL if outside [lo, hi] (no slack band -- widen the range explicitly
+    if that is what you mean), else PASS. A units/scale sanity net, not a
+    correctness proof."""
     lo, hi = expected_range
     v = float(value)
-    if lo <= v <= hi:
-        status = Status.PASS
-    else:
-        span = (hi - lo) if hi > lo else max(abs(hi), abs(lo), 1.0)
-        if (lo - span) <= v <= (hi + span):
-            status = Status.WARN
-        else:
-            status = Status.FAIL
+    status = Status.PASS if lo <= v <= hi else Status.FAIL
     return CheckResult(
         name=f"magnitude:{name}",
         status=status.value,
@@ -56,9 +60,11 @@ def magnitude_check(
         expected=f"[{lo}, {hi}]",
         observed=v,
         evidence={},
+        notes="" if status == Status.PASS else f"{v:.6g} lies outside the expected range [{lo}, {hi}].",
     )
 
 
+@record_config
 def reproducibility_check(
     fn,
     args: tuple = (),
@@ -86,30 +92,43 @@ def reproducibility_check(
                 observed=f"shapes {base.shape} vs {r.shape}",
                 evidence={},
             )
-    max_diff = (
-        float(max((np.max(np.abs(r - base)) if base.size else 0.0) for r in runs[1:]))
-        if len(runs) > 1
-        else 0.0
-    )
-    matches = all(np.allclose(r, base, rtol=rtol, atol=atol) for r in runs[1:])
+
+    def _diff(r):
+        # NaN==NaN and inf==inf count as equal; any other NaN mismatch is inf
+        same = (r == base) | (np.isnan(r) & np.isnan(base))
+        d = np.where(same, 0.0, np.abs(r - base))
+        return float(np.max(np.where(np.isnan(d), np.inf, d))) if base.size else 0.0
+
+    max_diff = float(max(_diff(r) for r in runs[1:])) if len(runs) > 1 else 0.0
+    matches = all(np.allclose(r, base, rtol=rtol, atol=atol, equal_nan=True) for r in runs[1:])
+    n_nan = int(sum(np.isnan(r).sum() for r in runs))
     status = Status.PASS if matches else Status.FAIL
+    notes = (
+        ""
+        if matches
+        else "Non-deterministic output across identical calls -- check for uninitialized memory, unseeded RNG, "
+        "or floating-point-summation order dependence (e.g. unordered parallel reduction)."
+    )
+    if n_nan:
+        if status == Status.PASS:
+            status = Status.WARN
+        notes = (notes + " " if notes else "") + (
+            f"Output contains NaN ({n_nan} value(s) across runs) -- reproducible NaN is still a numerical "
+            "breakdown; run nan_inf_check."
+        )
     return CheckResult(
         name=f"reproducibility:{name}",
         status=status.value,
         category="implementation",
-        metric={"max_abs_diff": max_diff, "n_runs": n_runs},
-        expected=f"identical within rtol={rtol}, atol={atol}",
+        metric={"max_abs_diff": max_diff, "n_runs": n_runs, "n_nan": n_nan},
+        expected=f"identical within rtol={rtol}, atol={atol} (NaN == NaN)",
         observed=f"max abs diff {max_diff:.3e}",
         evidence={},
-        notes=(
-            ""
-            if matches
-            else "Non-deterministic output across identical calls -- check for uninitialized memory, unseeded RNG, "
-            "or floating-point-summation order dependence (e.g. unordered parallel reduction)."
-        ),
+        notes=notes,
     )
 
 
+@record_config
 def parameter_sanity_check(params: dict, constraints: dict, name: str = "params") -> CheckResult:
     """`constraints` maps a parameter name to a predicate(value) -> bool,
     e.g. {"dt": lambda v: v > 0, "cfl": lambda v: 0 < v <= 1}."""
@@ -134,4 +153,36 @@ def parameter_sanity_check(params: dict, constraints: dict, name: str = "params"
         expected="all parameter constraints satisfied",
         observed=violations if violations else "all satisfied",
         evidence={"params": params},
+    )
+
+
+@record_config
+def threshold_check(
+    value, tol: float, name: str = "value", key=None, category: str = "numerical", metric_name: str = "value"
+) -> CheckResult:
+    """Generic `value <= tol` gate for a scalar your solver already
+    computed -- e.g. a residual or error written to JSON by a C++/Fortran/
+    MPI job: threshold_check("out/result.json", 1e-8, key="residual").
+    `value` may be a number or a result-file path (trellis.io.load with
+    `key`). Strict: value > tol (or NaN) is FAIL."""
+    source = None
+    if isinstance(value, (str, os.PathLike)):
+        from . import io as _io
+
+        source = os.fspath(value)
+        value = _io.load(value, key=key)
+    arr = np.asarray(value, dtype=float)
+    if arr.size != 1:
+        raise ValueError(f"threshold_check:{name}: expected a scalar, got shape {arr.shape}")
+    v = float(arr.reshape(()))
+    status = threshold_status(v, tol)
+    return CheckResult(
+        name=f"threshold:{name}",
+        status=status.value,
+        category=category,
+        metric={metric_name: v},
+        expected=f"<= {tol}",
+        observed=v,
+        evidence={"source": source, "key": key},
+        notes="" if status == Status.PASS else f"{metric_name} {v:.6g} exceeds tol={tol}.",
     )

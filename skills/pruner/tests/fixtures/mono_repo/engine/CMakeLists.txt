@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(engine CXX)
+add_subdirectory(a)
+add_subdirectory(b)
+add_executable(engine_tests tests/test_solver.cpp)
+target_link_libraries(engine_tests solver_a solver_b)

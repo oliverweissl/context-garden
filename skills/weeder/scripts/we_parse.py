@@ -11,11 +11,15 @@ off-topic content, or vice versa, will be misclassified.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
+FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z][\w-]*):\s*(.*)$")
 HEADING_RE = re.compile(r"^(#{1,2})\s+(.*)$")
+FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+_BLOCK_INDICATOR_RE = re.compile(r"^[>|][+-]?[0-9]?\s*")
 
 CATEGORIES = (
     "routing_metadata",
@@ -39,9 +43,26 @@ _CATEGORY_PATTERNS = [
 ]
 
 
+def _clean_scalar(value: str) -> str:
+    """Strips a `>`/`|` block-scalar indicator and unquotes a single- or
+    double-quoted value, so a description's text (not its YAML syntax) is
+    what gets measured and routed on."""
+    if value[:1] in (">", "|"):
+        return _BLOCK_INDICATOR_RE.sub("", value, count=1)
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        try:
+            return json.loads(value)
+        except ValueError:
+            return value[1:-1]
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    return value
+
+
 def parse_frontmatter(text: str) -> tuple[dict, str]:
     """Minimal frontmatter parser: single-line `key: value` pairs, with
-    continuation lines (no leading `key:`) folded into the previous value.
+    continuation lines (no leading `key:`) folded into the previous value,
+    `>`/`|` block indicators dropped and quoted values unquoted.
     Not a general YAML parser -- sufficient for this suite's SKILL.md
     frontmatter (name/description only)."""
     m = FRONTMATTER_RE.match(text)
@@ -52,24 +73,33 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
     fm: dict[str, str] = {}
     current_key = None
     for line in fm_text.splitlines():
-        kv = re.match(r"^([A-Za-z][\w-]*):\s*(.*)$", line)
+        kv = FRONTMATTER_KEY_RE.match(line)
         if kv:
             current_key = kv.group(1)
             fm[current_key] = kv.group(2).strip()
         elif current_key and line.strip():
             fm[current_key] += " " + line.strip()
-    return fm, body
+    return {k: _clean_scalar(v) for k, v in fm.items()}, body
 
 
 def split_sections(body: str) -> list[dict]:
     """Splits on H1/H2 headings only (H3+ stays nested inside its parent
     section's content, since finer granularity isn't needed for token
-    accounting or progressive-disclosure moves at this scale)."""
+    accounting or progressive-disclosure moves at this scale). `#` lines
+    inside ``` / ~~~ fenced code blocks are content, not headings."""
     lines = body.splitlines()
     sections = []
     current = {"level": 0, "heading": None, "lines": []}
+    fence = None  # the opening fence string while inside a code block
     for line in lines:
-        m = HEADING_RE.match(line)
+        f = FENCE_RE.match(line)
+        if f:
+            marker = f.group(1)
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+        m = HEADING_RE.match(line) if fence is None and not f else None
         if m:
             if current["lines"] or current["heading"] is not None:
                 sections.append(current)

@@ -1,0 +1,4 @@
+# sample project used by test_core.py to exercise config discovery
+[project]
+name = "sample-cli"
+version = "0.0.1"

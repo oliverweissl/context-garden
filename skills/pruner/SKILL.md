@@ -16,7 +16,7 @@ membership, test relationships) — no embeddings, no LLM calls. See
 
 1. **Select a slice** for the task at hand:
    ```
-   python3 <this-skill-dir>/scripts/pruner.py select --task "<what you're doing>" --budget <N>
+   <this-skill-dir>/bin/pruner select --task "<what you're doing>" --budget <N>
    ```
    Add whichever of these apply — they meaningfully sharpen the result:
    - `--error "<compiler error / traceback text>"` or `--error-file <path>` —
@@ -28,17 +28,18 @@ membership, test relationships) — no embeddings, no LLM calls. See
      (e.g. from Graphify) to merge in, `{"edges": [{"from": id, "to": id}]}`;
      never required.
 
-   First run indexes the repo (cached under `.pruner/`, incrementally
-   re-parsed on later calls — only changed files are re-parsed). Output is
+   First run indexes the repo (a SQLite cache under `.pruner/`; later
+   calls only re-parse changed files). Output is
    `required_context` / `supporting_context` / `relevant_tests` /
-   `relevant_config`, each with exact `file:start-end` ranges, a score, and
-   *why* each chunk was selected. Read those ranges — not whole files, not
-   the whole package.
+   `relevant_config`, each with exact `file:start-end` ranges, a chunk
+   `id=`, a score, and *why* each chunk was selected. Read those ranges —
+   not whole files, not the whole package.
 
-2. **Start from what's returned.** Don't independently grep/explore the
-   repo first "just in case" — that's exactly the redundant work this
-   tool exists to avoid. If the slice turns out insufficient, that's what
-   step 3 is for.
+2. **Use the slice as your starting point**, not as the only thing you
+   may look at. Read it before any broad exploration. But if confidence
+   is `low`/`medium` (a `hint:` line is printed), the slice is thin, or
+   it doesn't explain the error/behavior you're seeing, fall back to
+   targeted `grep` and reads — lexical scoring can miss the real cause.
 
 3. **If you hit a missing dependency** (an undefined name, a test that
    needs a fixture you don't have context on, reasoning that stalls
@@ -47,16 +48,16 @@ membership, test relationships) — no embeddings, no LLM calls. See
    output first — it lists likely-relevant chunks that were cut for budget
    or score — then:
    ```
-   pruner expand <slice_id> --add <chunk_id_from_omitted_candidates>
-   pruner expand <slice_id> --file <path> --lines A:B   # anything not listed at all
+   <this-skill-dir>/bin/pruner expand <slice_id> --add <id or file:start-end>
+   <this-skill-dir>/bin/pruner expand <slice_id> --file <path> --lines A:B   # anything not listed
    ```
    Expansion is targeted (you name exactly what's missing) and still
    budget-enforced by default — pass `--budget-extra N` if you deliberately
    need to go over.
 
-4. `pruner show <slice_id>` re-prints a saved slice cheaply (no re-scoring)
-   if you need to recall it later in the same task. `pruner list` shows
-   all saved slices.
+4. `<this-skill-dir>/bin/pruner show <slice_id>` re-prints a saved slice
+   cheaply (no re-scoring) if you need to recall it later in the same task.
+   `... list` shows all saved slices.
 
 ## Guarantees
 
@@ -73,7 +74,10 @@ membership, test relationships) — no embeddings, no LLM calls. See
 ## Known scope (MVP)
 
 Python (via `ast`) and C/C++ (via a lightweight regex/state-machine
-parser, not libclang) are supported. Everything else (docs, config,
+parser, not libclang) are supported. If the optional `tree_sitter`,
+`tree_sitter_python` and `tree_sitter_cpp` packages are importable they are
+used instead (`--parser {auto,builtin,tree-sitter}`, default `auto`); they
+are never required. Everything else (docs, config,
 unparsed languages) is still indexed and selectable as whole-file chunks,
 just without symbol-level granularity or call-graph edges. See
 `references/schema.md` for the full CLI reference and

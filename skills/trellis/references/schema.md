@@ -13,7 +13,18 @@ expected:    # what was required to PASS
 observed:    # what was actually measured
 evidence:    # supporting raw data (arrays, samples, ...) -- truncated where large
 notes:       # human-readable explanation, always populated for WARN/FAIL
+config:      # strictness configuration (tol, expected_order, alpha, resolutions,
+             # seeds, reference fingerprints, ...) -- what `trellis lock` pins
 ```
+
+`config` is filled automatically (`_util.record_config` decorates every
+public check): scalar/list arguments incl. defaults are recorded, the data
+under test (`A`, `x`, `values`, callables, ...) is not, and reference data
+is stored as `{"sha256", "shape", "fingerprint"}` (exact hash plus a float
+fingerprint so last-ulp platform noise is not a "change"). For callable
+references the fingerprint is taken over the *evaluated* reference values
+(per resolution; a KS CDF at fixed probe points), so editing the reference
+function's behaviour — not just its source — is detected.
 
 `metric`/`expected`/`observed`/`evidence` are passed through
 `_util.to_jsonable` automatically, so numpy scalars/arrays in them become
@@ -60,11 +71,12 @@ repeated every run).
 `Report.render_human()` — the text format the CLI prints by default.
 `Report.to_dict()` — the JSON-serializable form (`--json` / `.save()`).
 `Report.save(path)` — writes the JSON form, creating parent dirs.
-`Report.exit_code()` — `1` if `status == "FAIL"`, else `0`.
+`Report.exit_code(allow_warn=False)` — `1` if `status == "FAIL"`, `3` if
+`"WARN"` (WARN = not verified; `0` with `allow_warn=True` / `--allow-warn`), else `0`.
 
 ## CLI (`scripts/trellis.py`)
 
-### `trellis run <spec.py> [--save PATH] [--json]`
+### `trellis run <spec.py> [--save PATH] [--json] [--allow-warn] [--update-lock] [--save-baseline] [--baseline SHA|latest] [--regression-factor F] [--trellis-dir DIR]`
 
 Executes `spec.py` as a Python module (so its top-level code — which
 calls check functions and builds the `RESULTS` list — runs). Requires the
@@ -73,7 +85,58 @@ spec to define a module-level `RESULTS: list[CheckResult]`; optionally
 you already know about beyond what `auto_gaps` adds automatically. Prints
 the report, saves it to `--save` (default:
 `<spec_dir>/.trellis/<spec_stem>_report.json`), exits via
-`Report.exit_code()`.
+`Report.exit_code()`. Relative result-file paths in the spec resolve
+against the cwd, then the spec's directory (`trellis.io.BASE_DIR`).
+
+Two CLI-generated checks (category `implementation`) are appended:
+
+- `spec_lock:<spec>` — compares every check's `config` with the spec's
+  entry in `<trellis-dir>/spec.lock`:
+  - **FAIL** on anything looser: larger `tol`/`tol_order`/`rtol`/`atol`/
+    `tol_spread`/`floor_rtol`/`f_rtol`/`fd_safety`/`confidence`/
+    `warn_threshold`/`fail_threshold`; smaller `expected_order`/`alpha`/
+    `n_samples`/`n_runs`; `cond` no longer passed; a pinned value set to
+    `None`; a check removed; a *must-match* key changed (`reference`,
+    `expected*`, resolutions/`param_values`/`dts`, `seeds`, `param_kind`,
+    `relative`, `ord`, `direction`, `assume_normal`). Note on `alpha`:
+    every trellis test FAILs only when it *rejects*, so a smaller alpha
+    rejects less often — that is the looser direction.
+  - **PASS** with the change listed for tighter changes / new checks;
+    other keys (e.g. `eps`, file templates) are reported as `[changed]`.
+  - **WARN** "unpinned spec" when the lock has no entry for this spec.
+  - `--update-lock` rewrites the entry (WARN if it loosened anything,
+    so it never looks silently green). **Human-only** — review the
+    `git diff` of the lock before committing.
+- `baseline:<sha>` (only with `--baseline`) — compares metrics with
+  `<trellis-dir>/baselines/<sha>.json` (`latest` = most recently saved
+  for this spec; a sha prefix works): FAIL if `observed_order` dropped by
+  more than the check's `tol_order` (or became uncomputable), or an
+  error/residual metric (`finest_error`, `relative_residual`,
+  `residual_norm`, `relative_error`, `max_relative_drift`,
+  `max_relative_error`, `max_violation`, `max_asymmetry`, `spread`,
+  `residual`, `error`, ...) grew by more than `--regression-factor`
+  (default 2) and above 1e-13. Missing baseline → WARN.
+
+`--save-baseline` writes the current metrics to
+`<trellis-dir>/baselines/<git HEAD sha>.json` (records whether the tree was
+dirty); requires a git repository.
+
+`--trellis-dir` defaults to `<git root>/.trellis` (or `<spec_dir>/.trellis`
+outside git). Commit `spec.lock`; baselines are optional; reports are
+throwaway:
+
+```gitignore
+.trellis/*
+!.trellis/spec.lock
+# !.trellis/baselines/   # if you want per-commit baselines shared
+```
+
+### `trellis lock <spec.py> [--trellis-dir DIR]`
+
+Runs the spec and writes its checks' `config` to `spec.lock`
+(`{"version": 1, "specs": {"<path relative to git root>": {"locked_at",
+"checks": {"<check name>": {"category", "config"}}}}}`; duplicate check
+names get `#2`, `#3`, ...). Other specs' entries are preserved.
 
 ### `trellis list-modules`
 

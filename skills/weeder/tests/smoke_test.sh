@@ -149,9 +149,69 @@ assert_not_contains "routing: negative prompts never predicted as this skill (va
 # --- diff: full before/after report shape matches the spec's example ------
 diff_out=$(WE diff "$FIX/bloated_skill" "$opt_out" --examples "$FIX/routing_examples.json" --competing "$FIX/competing_skill")
 assert_contains "diff: reports Before/After token sections" "$diff_out" "Before"
-assert_contains "diff: reports always-loaded reduction percentage" "$diff_out" "Always-loaded reduction:"
+assert_contains "diff: reports SKILL.md reduction percentage" "$diff_out" "SKILL.md (description + on-trigger body) reduction:"
 assert_contains "diff: reports routing before/after" "$diff_out" "Routing (lexical-overlap proxy"
 assert_contains "diff: reports functional constraint preservation" "$diff_out" "Constraints preserved: 7/7"
+
+# --- regressions: --out overlapping the source, fences, polarity, YAML ----
+over_out=$(WE optimize "$opt_out" --out "$opt_out" 2>&1); over_exit=$?
+if [ "$over_exit" -ne 0 ] && [ -f "$opt_out/SKILL.md" ]; then
+  echo "PASS: optimize: refuses --out equal to the source (source kept)"
+else
+  echo "FAIL: optimize: --out equal to the source must be refused ($over_out)"; fail=1
+fi
+WE apply-suggestion "$opt_out" --answer "$FIX/answer_lot.json" --out "$opt_out/nested" >/dev/null 2>&1 \
+  && { echo "FAIL: apply-suggestion: --out inside the source must be refused"; fail=1; } \
+  || echo "PASS: apply-suggestion: refuses --out inside the source"
+
+fence="$SCRATCH/fence_skill"; mkdir -p "$fence"
+printf -- '---\nname: fence\ndescription: >\n  multi-line\n  folded description\n---\n\n# Fence\n\n## Workflow\n\n```bash\n# Examples of a comment, not a heading\necho hi\n```\n\nNever skip the\nconfirmation step.\n' > "$fence/SKILL.md"
+fence_audit=$(WE audit "$fence" --json)
+assert_not_contains "audit: '#' inside a fenced code block is not a heading" "$fence_audit" '"heading": "Examples of a comment'
+flipped="$SCRATCH/fence_flipped"; cp -R "$fence" "$flipped"
+sed -i.bak 's/^Never skip the$/Always skip the/' "$flipped/SKILL.md"
+flip_out=$(WE test-function "$fence" "$flipped"); flip_exit=$?
+assert_contains "test-function: joins a hard-wrapped constraint into one sentence" "$flip_out" "Never skip the confirmation step."
+[ "$flip_exit" -ne 0 ] && echo "PASS: test-function: Never -> Always polarity flip is caught" \
+  || { echo "FAIL: test-function: Never -> Always polarity flip passed"; fail=1; }
+printf '{"description_shorten": {"new_description": "Use: when \\"x\\" \\\\1 happens # really"}}' > "$SCRATCH/desc.json"
+WE apply-suggestion "$fence" --answer "$SCRATCH/desc.json" --out "$SCRATCH/fence_desc" >/dev/null
+desc_json=$(WE audit "$SCRATCH/fence_desc" --json)
+assert_contains "apply-suggestion: replaces a whole folded description, safely quoted" "$desc_json" '"description": "Use: when \"x\" \\1 happens # really"'
+assert_not_contains "apply-suggestion: no leftover continuation lines" "$(cat "$SCRATCH/fence_desc/SKILL.md")" "folded description"
+
+# --- filler detector: never flags instructions, >= 80% recall on filler ----
+filler_out=$(python3 - "$DIR/scripts" "$FIX/filler_sentences.json" <<'PY'
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from we_filler import is_filler
+d = json.load(open(sys.argv[2]))
+bad = [s for s in d["instruction"] if is_filler(s)]
+hit = sum(is_filler(s) for s in d["filler"])
+print(f"instruction_flagged={len(bad)} filler_recall={hit / len(d['filler']):.2f}")
+for s in bad:
+    print(f"  wrongly flagged: {s}")
+sys.exit(0 if not bad and hit / len(d["filler"]) >= 0.8 else 1)
+PY
+); filler_exit=$?
+[ "$filler_exit" -eq 0 ] && echo "PASS: filler: 0 instruction sentences flagged, recall >= 80% ($filler_out)" \
+  || { echo "FAIL: filler: $filler_out"; fail=1; }
+assert_not_contains "audit: 'you should always be careful' (a constraint) is not filler" "$audit_out" "As an AI assistant, it's important to note"
+
+# --- token estimates are labelled; calibration file changes the ratio -------
+assert_contains "audit: uncalibrated estimate is labelled" \
+  "$(WEEDER_TOKEN_CALIBRATION="$SCRATCH/none.json" WE audit "$FIX/bloated_skill")" "estimated (uncalibrated chars/4)"
+cat > "$SCRATCH/cal.json" <<'EOF'
+{"date": "2026-01-02", "categories": {"markdown": {"chars_per_token": 2.0}, "code": {"chars_per_token": 2.0}, "yaml": {"chars_per_token": 2.0}}, "overall_error_range_pct": [-3.5, 4.25]}
+EOF
+cal_audit=$(WEEDER_TOKEN_CALIBRATION="$SCRATCH/cal.json" WE audit "$FIX/bloated_skill")
+assert_contains "audit: calibrated estimate is labelled with its date" "$cal_audit" "estimated (calibrated 2026-01-02)"
+assert_contains "audit: calibrated estimate reports observed error range" "$cal_audit" "-3.5% to +4.2%"
+uncal_desc=$(WEEDER_TOKEN_CALIBRATION="$SCRATCH/none.json" WE audit "$FIX/bloated_skill" --json | python3 -c "import json,sys; print(json.load(sys.stdin)['description_tokens'])")
+cal_desc=$(WEEDER_TOKEN_CALIBRATION="$SCRATCH/cal.json" WE audit "$FIX/bloated_skill" --json | python3 -c "import json,sys; print(json.load(sys.stdin)['description_tokens'])")
+python3 -c "exit(0 if abs($cal_desc - 2 * $uncal_desc) <= 1 else 1)" \
+  && echo "PASS: tokens: calibrated 2.0 chars/token doubles the chars/4 estimate ($uncal_desc -> $cal_desc)" \
+  || { echo "FAIL: tokens: expected ~2x ($uncal_desc -> $cal_desc)"; fail=1; }
 
 # --- clean error handling ---------------------------------------------------
 bad_audit=$(WE audit "$FIX/does_not_exist" 2>&1)

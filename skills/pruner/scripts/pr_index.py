@@ -1,15 +1,21 @@
 """Repository indexer: walks the repo, parses Python/C/C++ files, and
-builds a flat symbol table + name-resolved call graph + test-to-source
-links. Incremental: unchanged files (by content hash) are not re-parsed.
+stores files, symbols and name references in a SQLite store
+(`.pruner/index.sqlite`, see pr_store.py). Incremental: files whose
+(mtime, size) is unchanged are not even read; files whose content hash is
+unchanged are not re-parsed; only changed files' rows are rewritten.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
+import pr_store
 from pr_common import (
+    CPP_SUFFIXES,
+    PYTHON_SUFFIXES,
     classify_file,
     discover_files,
     estimate_tokens,
@@ -19,236 +25,366 @@ from pr_common import (
 from pr_cpp import parse_cpp_file
 from pr_python import parse_python_file
 
-INDEX_FILENAME = "index.json"
+DB_FILENAME = "index.sqlite"
+LEGACY_INDEX_FILENAME = "index.json"  # pre-v4 store; removed + rebuilt on sight
+INDEX_VERSION = 4  # bump when id/format semantics change, forces a rebuild
+PACKAGE_DECL_NAMES = {"pyproject.toml", "setup.cfg", "setup.py"}
+PARSERS = ("auto", "builtin", "tree-sitter")
 
 
-def _resolve_python_import(module: str, importing_file: str, all_files: set[str]) -> str | None:
-    """Best-effort: only resolves imports that map onto a file actually in
-    this repo (relative imports, or a top-level package/module name that
-    matches a file/package at the repo root). Does not consult sys.path or
-    installed packages -- external imports (numpy, os, ...) intentionally
-    resolve to None."""
-    if module.startswith("."):
-        base_dir = Path(importing_file).parent
-        level = len(module) - len(module.lstrip("."))
-        for _ in range(level - 1):
-            base_dir = base_dir.parent
-        rest = module.lstrip(".")
-        target_dir = base_dir / rest.replace(".", "/") if rest else base_dir
-    else:
-        target_dir = Path(module.replace(".", "/"))
-
-    for candidate in (
-        str(target_dir) + ".py",
-        str(target_dir / "__init__.py"),
-    ):
-        candidate = candidate.replace("\\", "/").lstrip("./")
-        if candidate in all_files:
-            return candidate
-    return None
+# ---------------------------------------------------------------- import resolution
 
 
-def _resolve_cpp_include(header: str, importing_file: str, all_files: set[str]) -> str | None:
-    importing_dir = Path(importing_file).parent
-    same_dir = str(importing_dir / header).replace("\\", "/")
-    if same_dir in all_files:
-        return same_dir
+def python_source_roots(all_files) -> list[str]:
+    """Directories absolute imports may be rooted at: the repo root, any
+    `src/` directory, and any directory holding a package declaration
+    (pyproject.toml / setup.cfg / setup.py) plus its `src/`."""
+    roots = {""}
     for f in all_files:
-        if f.endswith("/" + header) or f == header:
-            return f
-    return None
+        p = PurePosixPath(f)
+        parent = "" if str(p.parent) == "." else str(p.parent)
+        if p.name in PACKAGE_DECL_NAMES:
+            roots.add(parent)
+            roots.add(f"{parent}/src" if parent else "src")
+        parts = p.parts[:-1]
+        if "src" in parts:
+            roots.add("/".join(parts[: parts.index("src") + 1]))
+    return sorted(roots, key=lambda r: (r.count("/"), r))
 
 
-_PY_SUFFIXES = {".py"}
-_CPP_SUFFIXES = {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh"}
+class _PyResolver:
+    def __init__(self, all_files: set[str]):
+        self.all_files = all_files
+        # first path component under each root -> roots, so resolving
+        # `a.b` only probes roots that actually contain `a`
+        self.roots_by_top: dict[str, list[str]] = {}
+        roots = python_source_roots(all_files)
+        root_set = set(roots)
+        for f in all_files:
+            if not f.endswith(".py"):
+                continue
+            parts = PurePosixPath(f).parts
+            for k in range(len(parts)):
+                root = "/".join(parts[:k])
+                if root in root_set:
+                    top = parts[k][:-3] if k == len(parts) - 1 else parts[k]
+                    lst = self.roots_by_top.setdefault(top, [])
+                    if root not in lst:
+                        lst.append(root)
+
+    def resolve(self, module: str, importing_file: str) -> str | None:
+        """Best-effort: only resolves imports that map onto a file in this
+        repo (relative imports, or absolute ones under a source root).
+        External imports (numpy, os, ...) resolve to None."""
+        if module.startswith("."):
+            base_dir = PurePosixPath(importing_file).parent
+            level = len(module) - len(module.lstrip("."))
+            for _ in range(level - 1):
+                base_dir = base_dir.parent
+            rest = module.lstrip(".")
+            target = base_dir / rest.replace(".", "/") if rest else base_dir
+            return self._probe([str(target)])
+        top = module.split(".", 1)[0]
+        rel = module.replace(".", "/")
+        roots = self.roots_by_top.get(top, [])
+        found = [c for r in roots if (c := self._probe([f"{r}/{rel}" if r else rel]))]
+        if len(found) > 1:
+            # several roots provide the package (monorepo): prefer the one
+            # sharing the longest directory prefix with the importer
+            found.sort(key=lambda c: -_common_prefix(c, importing_file))
+        return found[0] if found else None
+
+    def _probe(self, targets: list[str]) -> str | None:
+        for t in targets:
+            t = os.path.normpath(t).replace("\\", "/")
+            t = "" if t == "." else t
+            for cand in (f"{t}.py", f"{t}/__init__.py" if t else "__init__.py"):
+                if cand in self.all_files:
+                    return cand
+        return None
 
 
-def _test_targets(rel_path: str, all_files) -> list[str]:
-    """Which source files this test file most likely exercises, by a
-    filename-convention guess (test_foo.py <-> foo.py). Constrained to
-    files of the *same language family* as the test file itself -- without
-    this, e.g. `csrc/test_solver.cpp` and `tests/test_solver.py` would both
-    stem-match both `interp/solver.py` and `csrc/solver.cpp`, wrongly
-    cross-linking a Python test to a C++ source file and vice versa."""
-    stem = Path(rel_path).stem
-    suffix = Path(rel_path).suffix.lower()
-    if suffix in _PY_SUFFIXES:
-        allowed_suffixes = _PY_SUFFIXES
-    elif suffix in _CPP_SUFFIXES:
-        allowed_suffixes = _CPP_SUFFIXES
-    else:
-        allowed_suffixes = {suffix}
-
-    guesses = set()
-    if stem.startswith("test_"):
-        guesses.add(stem[len("test_") :])
-    if stem.endswith("_test"):
-        guesses.add(stem[: -len("_test")])
-
-    targets = set()
-    for f in all_files:
-        if Path(f).suffix.lower() in allowed_suffixes and Path(f).stem in guesses:
-            targets.add(f)
-    return sorted(targets)
+def _common_prefix(a: str, b: str) -> int:
+    n = 0
+    for x, y in zip(PurePosixPath(a).parts, PurePosixPath(b).parts):
+        if x != y:
+            break
+        n += 1
+    return n
 
 
-def _parse_files(repo_root: Path, old_files: dict) -> tuple[dict, int, int]:
-    """Returns (files_meta, reused_count, reparsed_count). Files whose
-    content hash matches `old_files` are reused verbatim (no re-parse)."""
-    files_meta: dict[str, dict] = {}
+class _CppResolver:
+    def __init__(self, all_files: set[str]):
+        self.all_files = all_files
+        self.by_basename: dict[str, list[str]] = {}
+        for f in all_files:
+            self.by_basename.setdefault(PurePosixPath(f).name, []).append(f)
+
+    def resolve(self, header: str, importing_file: str) -> str | None:
+        joined = os.path.normpath(str(PurePosixPath(importing_file).parent / header))
+        joined = joined.replace("\\", "/")
+        if joined in self.all_files:
+            return joined
+        tail = header.replace("\\", "/")
+        while tail.startswith("../") or tail.startswith("./"):
+            tail = tail.split("/", 1)[1]
+        cands = [
+            f
+            for f in self.by_basename.get(PurePosixPath(tail).name, [])
+            if f == tail or f.endswith("/" + tail)
+        ]
+        if not cands:
+            return None
+        cands.sort(key=lambda c: (-_common_prefix(c, importing_file), c))
+        return cands[0]
+
+
+# ---------------------------------------------------------------- parsing
+
+
+def _parse_source(rel: str, text: str, kind: str, parser: str) -> tuple[str | None, dict]:
+    suffix = Path(rel).suffix.lower()
+    language = None
+    if kind in ("python", "test") and suffix in PYTHON_SUFFIXES:
+        language = "python"
+    elif kind in ("cpp", "test") and suffix in CPP_SUFFIXES:
+        language = "cpp"
+    if language is None:
+        return None, {"imports": [], "symbols": [], "parse_error": False}
+    if parser != "builtin":
+        import pr_treesitter
+
+        parsed = pr_treesitter.parse(language, text)
+        if parsed is not None:
+            return language, parsed
+    if language == "python":
+        return language, parse_python_file(text)
+    return language, parse_cpp_file(text)
+
+
+def resolve_parser(requested: str) -> str:
+    """'auto' -> 'tree-sitter' when the optional packages import, else 'builtin'."""
+    if requested == "builtin":
+        return "builtin"
+    import pr_treesitter
+
+    if pr_treesitter.available():
+        return "tree-sitter"
+    if requested == "tree-sitter":
+        raise ValueError(
+            "--parser tree-sitter requested but `tree_sitter` + `tree_sitter_python`/"
+            "`tree_sitter_cpp` are not importable (pip install tree-sitter "
+            "tree-sitter-python tree-sitter-cpp), or use --parser builtin"
+        )
+    return "builtin"
+
+
+def _symbol_rows(text: str, symbols: list[dict]) -> tuple[list[list], list[tuple]]:
+    """Symbol rows with file-local indices (row[0]; row[8] = parent's local
+    index) -- turned into global row ids at insert time -- plus
+    (local index, referenced name) edge rows."""
+    lines = text.splitlines()
+    seen: set[str] = set()
+    by_qual: dict[str, int] = {}
+    sym_rows, edge_rows = [], []
+    for i, sym in enumerate(symbols):
+        qual = sym["qualname"]
+        dup = qual in seen  # @overload stubs, if/else defs, C++ overloads
+        seen.add(qual)
+        by_qual.setdefault(qual, i)
+        sep = "::" if "::" in qual else "."
+        parent = by_qual.get(qual.rsplit(sep, 1)[0]) if sep in qual else None
+        tokens = estimate_tokens("\n".join(lines[sym["start_line"] - 1 : sym["end_line"]]))
+        sym_rows.append(
+            [
+                i,
+                sym["name"],
+                qual,
+                sym["type"],
+                sym["start_line"],
+                sym["end_line"],
+                sym.get("doc", ""),
+                tokens,
+                parent,
+                int(dup),
+            ]
+        )
+        for name in sorted(set(sym.get("calls", []))):
+            edge_rows.append((i, name))
+    return sym_rows, edge_rows
+
+
+def _discover(repo_root: Path) -> list[str]:
+    """discover_files, minus symlinked files whose target is another indexed
+    in-repo file (so the same content isn't indexed/selected twice)."""
     rel_paths = discover_files(repo_root)
-    reused = reparsed = 0
+    links = [r for r in rel_paths if (repo_root / r).is_symlink()]
+    if not links:
+        return rel_paths
+    root_real = repo_root.resolve()
+    direct = set(rel_paths) - set(links)
+    seen_targets: set[Path] = set()
+    skip = set()
+    for rel in links:
+        real = (repo_root / rel).resolve()
+        if real.is_relative_to(root_real):
+            if real.relative_to(root_real).as_posix() in direct or real in seen_targets:
+                skip.add(rel)
+                continue
+        seen_targets.add(real)
+    return [r for r in rel_paths if r not in skip]
 
+
+# ---------------------------------------------------------------- build / update
+
+
+def load_or_build_index(
+    repo_root: Path, store_dir: Path, force: bool = False, parser: str = "auto"
+) -> tuple[pr_store.Index, dict]:
+    """Returns (index, report). Incremental: unchanged files (by mtime+size,
+    then content hash) are neither re-read nor re-parsed."""
+    store_dir.mkdir(parents=True, exist_ok=True)
+    migrated = False
+    legacy = store_dir / LEGACY_INDEX_FILENAME
+    if legacy.exists():
+        legacy.unlink()  # old JSON store: rebuilt below as sqlite
+        migrated = True
+    parser_used = resolve_parser(parser)
+    conn = pr_store.connect(store_dir / DB_FILENAME)
+    if (
+        force
+        or pr_store.get_meta(conn, "version") != str(INDEX_VERSION)
+        or pr_store.get_meta(conn, "parser") != parser_used
+    ):
+        pr_store.reset(conn)
+
+    existing = {
+        row[0]: (row[1], row[2], row[3])
+        for row in conn.execute("SELECT path, hash, mtime, size FROM files")
+    }
+    rel_paths = _discover(repo_root)
+    reused = reparsed = 0
+    touched: list[tuple] = []  # (rel, mtime, size) for hash-equal files with new stat
+    new_files: dict[str, dict] = {}
+    seen: set[str] = set()
     for rel in rel_paths:
         full = repo_root / rel
+        try:
+            st = full.stat()
+        except OSError:
+            continue
+        old = existing.get(rel)
+        if old and old[1] == st.st_mtime and old[2] == st.st_size:
+            seen.add(rel)
+            reused += 1
+            continue
         text = read_text(full)
         if text is None:
             continue
+        seen.add(rel)
         content_hash = sha256_text(text)
-        old_entry = old_files.get(rel)
-        if old_entry and old_entry.get("hash") == content_hash:
-            files_meta[rel] = old_entry
+        if old and old[0] == content_hash:
+            touched.append((st.st_mtime, st.st_size, rel))
             reused += 1
             continue
-
         reparsed += 1
         kind = classify_file(rel)
-        entry = {
-            "hash": content_hash,
-            "kind": kind,
-            "language": None,
-            "size_tokens": estimate_tokens(text),
-            "line_count": text.count("\n") + 1,
-            "imports": [],
-            "resolved_imports": [],
-            "symbols": [],
+        language, parsed = _parse_source(rel, text, kind, parser_used)
+        sym_rows, edge_rows = _symbol_rows(text, parsed["symbols"])
+        new_files[rel] = {
+            "row": [
+                None,
+                rel,
+                content_hash,
+                st.st_mtime,
+                st.st_size,
+                kind,
+                language,
+                estimate_tokens(text),
+                len(text.splitlines()),
+                int(parsed.get("parse_error", False)),
+                json.dumps(parsed["imports"]),
+                "[]",
+            ],
+            "symbols": sym_rows,
+            "edges": edge_rows,
         }
-        if kind in ("python",) or (kind == "test" and rel.endswith(".py")):
-            parsed = parse_python_file(text)
-            entry["language"] = "python"
-        elif kind in ("cpp",) or (
-            kind == "test"
-            and Path(rel).suffix.lower() in {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh"}
-        ):
-            parsed = parse_cpp_file(text)
-            entry["language"] = "cpp"
-        else:
-            parsed = {"imports": [], "symbols": [], "parse_error": False}
-        entry["imports"] = parsed["imports"]
-        entry["symbols"] = parsed["symbols"]
-        entry["parse_error"] = parsed.get("parse_error", False)
-        files_meta[rel] = entry
 
-    return files_meta, reused, reparsed
+    removed = set(existing) - seen  # deleted, or no longer readable
+    file_set_changed = bool(removed) or any(r not in existing for r in new_files)
 
+    if new_files or removed or touched:
+        bulk = not existing and len(new_files) > 200
+        if bulk:  # fresh store: build indexes once, after the inserts
+            conn.executescript(pr_store.DROP_INDEXES)
+        with conn:
+            for rel in list(removed) + [r for r in new_files if r in existing]:
+                (fid,) = conn.execute("SELECT id FROM files WHERE path=?", (rel,)).fetchone()
+                conn.execute(
+                    "DELETE FROM edges WHERE src IN (SELECT id FROM symbols WHERE file_id=?)",
+                    (fid,),
+                )
+                conn.execute("DELETE FROM symbols WHERE file_id=?", (fid,))
+                conn.execute("DELETE FROM files WHERE id=?", (fid,))
+            conn.executemany("UPDATE files SET mtime=?, size=? WHERE path=?", touched)
+            next_id = (conn.execute("SELECT max(id) FROM symbols").fetchone()[0] or 0) + 1
+            for rec in new_files.values():
+                fid = conn.execute(
+                    "INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rec["row"]
+                ).lastrowid
+                for row in rec["symbols"]:
+                    row[0] += next_id
+                    row[8] = None if row[8] is None else row[8] + next_id
+                    row.insert(1, fid)
+                conn.executemany("INSERT INTO symbols VALUES (?,?,?,?,?,?,?,?,?,?,?)", rec["symbols"])
+                conn.executemany(
+                    "INSERT INTO edges VALUES (?,?)", ((i + next_id, n) for i, n in rec["edges"])
+                )
+                next_id += len(rec["symbols"])
+            _resolve_imports(conn, None if file_set_changed else set(new_files))
+            for key, value in (
+                ("version", str(INDEX_VERSION)),
+                ("parser", parser_used),
+                ("repo_root", str(repo_root)),
+                ("indexed_at", str(time.time())),
+            ):
+                conn.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", (key, value))
+        if bulk:
+            conn.executescript(pr_store.INDEXES)
 
-def _finish_index(repo_root: Path, files_meta: dict) -> dict:
-    """Import resolution, symbol table, call-graph, test links. Always runs
-    over the *full* current file set (reused + reparsed alike), since a
-    newly added/changed file can change what an unrelated, unchanged file's
-    imports resolve to."""
-    all_files_set = set(files_meta.keys())
-
-    # resolve imports/includes to in-repo files
-    for rel, entry in files_meta.items():
-        resolved = []
-        for imp in entry["imports"]:
-            if entry["language"] == "python":
-                target = _resolve_python_import(imp, rel, all_files_set)
-            elif entry["language"] == "cpp":
-                target = _resolve_cpp_include(imp, rel, all_files_set)
-            else:
-                target = None
-            if target:
-                resolved.append(target)
-        entry["resolved_imports"] = sorted(set(resolved))
-
-    # flat symbol table + name index for call resolution
-    symbol_index: dict[str, list[str]] = {}
-    for rel, entry in files_meta.items():
-        for sym in entry["symbols"]:
-            sid = f"{rel}:{sym['qualname']}"
-            sym["id"] = sid
-            symbol_index.setdefault(sym["name"], []).append(sid)
-
-    # name-based call edges: within the same file first (unambiguous),
-    # else any same-named symbol among files this file imports, else any
-    # same-named symbol repo-wide (last resort, most likely to be wrong --
-    # flagged as such in the edge).
-    call_edges = []
-    for rel, entry in files_meta.items():
-        file_symbol_ids = {s["qualname"]: s["id"] for s in entry["symbols"]}
-        imported_files = set(entry["resolved_imports"])
-        for sym in entry["symbols"]:
-            for callee_name in sym["calls"]:
-                target_id = None
-                precision = None
-                if callee_name in file_symbol_ids:
-                    target_id = file_symbol_ids[callee_name]
-                    precision = "same_file"
-                else:
-                    candidates = symbol_index.get(callee_name, [])
-                    in_imports = [c for c in candidates if c.split(":")[0] in imported_files]
-                    if len(in_imports) == 1:
-                        target_id = in_imports[0]
-                        precision = "resolved_import"
-                    elif len(candidates) == 1:
-                        target_id = candidates[0]
-                        precision = "unique_name_repo_wide"
-                    elif len(candidates) > 1:
-                        precision = "ambiguous"
-                if target_id:
-                    call_edges.append({"from": sym["id"], "to": target_id, "precision": precision})
-
-    # test -> source links
-    test_links: dict[str, list[str]] = {}
-    for rel, entry in files_meta.items():
-        if entry["kind"] != "test":
-            continue
-        targets = set(entry["resolved_imports"])
-        targets |= set(_test_targets(rel, files_meta))
-        for target in targets:
-            test_links.setdefault(target, []).append(rel)
-
-    return {
-        "repo_root": str(repo_root),
-        "indexed_at": time.time(),
-        "files": files_meta,
-        "symbol_index": symbol_index,
-        "call_edges": call_edges,
-        "test_links": test_links,
-    }
-
-
-def build_index(repo_root: Path, old_files: dict | None = None) -> dict:
-    """One-shot convenience: parse everything (or reuse from `old_files`)
-    and return the finished index. Discards reused/reparsed counts --
-    use load_or_build_index for that."""
-    files_meta, _reused, _reparsed = _parse_files(repo_root, old_files or {})
-    return _finish_index(repo_root, files_meta)
-
-
-def load_or_build_index(repo_root: Path, store_dir: Path, force: bool = False) -> tuple[dict, dict]:
-    """Returns (index, report). Incremental: files whose content hash is
-    unchanged since the last index are reused verbatim, not re-parsed."""
-    index_path = store_dir / INDEX_FILENAME
-    old_files = {}
-    if index_path.exists() and not force:
-        try:
-            old_files = json.loads(index_path.read_text()).get("files", {})
-        except json.JSONDecodeError:
-            old_files = {}
-
-    files_meta, reused, reparsed = _parse_files(repo_root, old_files)
-    new_index = _finish_index(repo_root, files_meta)
-
-    store_dir.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(json.dumps(new_index, indent=2))
+    index = pr_store.Index(conn, repo_root)
+    counts = index.counts()
     report = {
-        "files_indexed": len(new_index["files"]),
+        "files_indexed": counts["files"],
         "files_unchanged": reused,
         "files_reparsed_or_new": reparsed,
-        "symbols": sum(len(e["symbols"]) for e in new_index["files"].values()),
-        "call_edges": len(new_index["call_edges"]),
+        "files_removed": len(removed),
+        "symbols": counts["symbols"],
+        "call_edges": counts["edges"],
+        "parser": parser_used,
+        "migrated_legacy_json": migrated,
     }
-    return new_index, report
+    return index, report
+
+
+def _resolve_imports(conn, only: set[str] | None) -> None:
+    """Resolve imports/includes to in-repo files. Re-run for every file
+    when the file set changed (a new file can change what an unchanged
+    file's imports resolve to), otherwise only for re-parsed files."""
+    rows = conn.execute("SELECT path, language, imports FROM files").fetchall()
+    all_files = {r[0] for r in rows}
+    py = _PyResolver(all_files)
+    cpp = _CppResolver(all_files)
+    updates = []
+    for rel, language, imports in rows:
+        if only is not None and rel not in only:
+            continue
+        resolver = py if language == "python" else cpp if language == "cpp" else None
+        resolved = set()
+        if resolver is not None:
+            for imp in json.loads(imports or "[]"):
+                target = resolver.resolve(imp, rel)
+                if target and target != rel:
+                    resolved.add(target)
+        updates.append((json.dumps(sorted(resolved)), rel))
+    conn.executemany("UPDATE files SET resolved_imports=? WHERE path=?", updates)

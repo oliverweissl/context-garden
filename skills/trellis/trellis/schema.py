@@ -35,6 +35,11 @@ class CheckResult:
     observed: object
     evidence: dict = field(default_factory=dict)
     notes: str = ""
+    # the check's *strictness configuration* (tolerances, expected orders,
+    # alpha, resolutions, reference fingerprints, ...) -- what `trellis lock`
+    # pins and `trellis run` compares against .trellis/spec.lock. Filled in
+    # automatically by _util.record_config for every public check.
+    config: dict = field(default_factory=dict)
 
     def __post_init__(self):
         from ._util import to_jsonable
@@ -43,6 +48,7 @@ class CheckResult:
         self.expected = to_jsonable(self.expected)
         self.observed = to_jsonable(self.observed)
         self.evidence = to_jsonable(self.evidence)
+        self.config = to_jsonable(self.config or {})
 
     def to_dict(self) -> dict:
         return {
@@ -54,6 +60,7 @@ class CheckResult:
             "observed": self.observed,
             "evidence": self.evidence,
             "notes": self.notes,
+            "config": self.config,
         }
 
 
@@ -97,8 +104,14 @@ class Report:
             lines += [f"  - {r}" for r in self.remaining_risks]
         return "\n".join(lines)
 
-    def exit_code(self) -> int:
-        return 1 if self.status == Status.FAIL.value else 0
+    def exit_code(self, allow_warn: bool = False) -> int:
+        """1 on FAIL; 3 on WARN (WARN means *not verified*, so it must not
+        look like success to a CI gate) unless allow_warn; else 0."""
+        if self.status == Status.FAIL.value:
+            return 1
+        if self.status == Status.WARN.value and not allow_warn:
+            return 3
+        return 0
 
 
 def build_report(

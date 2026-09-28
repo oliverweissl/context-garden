@@ -1,0 +1,117 @@
+{
+  "mean_recall": 0.9318,
+  "mean_recall_tight": 0.8636,
+  "mean_precision": 0.3454,
+  "cases": {
+    "s1-bugfix-named": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3466
+    },
+    "s2-gcc-undeclared": {
+      "recall": 1.0,
+      "recall_tight": 0.5,
+      "precision": 0.2481
+    },
+    "s3-converge-change": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3269
+    },
+    "s4-pytest-zerodiv": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.4171
+    },
+    "s5-vague-clamp": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.223
+    },
+    "m1-idf-choice": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.4023
+    },
+    "m2-idf-intrange-clamp": {
+      "recall": 1.0,
+      "recall_tight": 0.5,
+      "precision": 0.3667
+    },
+    "m3-pytest-assert-src-layout": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3987
+    },
+    "m4-vague-group-dispatch": {
+      "recall": 0.5,
+      "recall_tight": 0.5,
+      "precision": 0.0685
+    },
+    "m5-class-vs-method": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3835
+    },
+    "m6-method-main": {
+      "recall": 0.5,
+      "recall_tight": 0.5,
+      "precision": 0.2197
+    },
+    "m7-gcc-dup-basename-dirhint": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.4031
+    },
+    "m8-gcc-dup-basename-symbols": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.398
+    },
+    "m9-monorepo-config-tools": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3867
+    },
+    "m10-monorepo-config-dep": {
+      "recall": 0.5,
+      "recall_tight": 0.5,
+      "precision": 0.2718
+    },
+    "m11-pytest-assert-dup-name": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.4308
+    },
+    "m12-traceback-site-packages": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3722
+    },
+    "m13-vague-help-width": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3907
+    },
+    "m14-bad-parameter-message": {
+      "recall": 1.0,
+      "recall_tight": 0.5,
+      "precision": 0.3869
+    },
+    "m15-cpp-vague-jacobi": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3659
+    },
+    "m16-cpp-relaxation": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3966
+    },
+    "m17-traceback-required-option": {
+      "recall": 1.0,
+      "recall_tight": 1.0,
+      "precision": 0.3948
+    }
+  }
+}

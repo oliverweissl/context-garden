@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
 # Thin wrapper so `seedbank` can be invoked without spelling out the python path.
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ "${1:-}" = "hook" ]; then
+  # Claude Code hook: never print, never fail the tool call.
+  python3 "$DIR/scripts/seedbank.py" hook >/dev/null 2>&1
+  exit 0
+fi
 exec python3 "$DIR/scripts/seedbank.py" "$@"

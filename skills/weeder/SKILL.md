@@ -1,12 +1,13 @@
 ---
 name: weeder
-description: Measure and reduce a Skill's always-loaded token footprint (SKILL.md description + core instructions) without regressing routing accuracy or losing instructions — use when a SKILL.md feels oversized, has rules repeated in multiple places, or has a vague/generic description that might mis-route. Treats Skills like software that gets compiled and optimized, with before/after measurement, not guesswork.
+description: Measure and reduce a Skill's token footprint (always-loaded description + on-trigger SKILL.md body) without regressing routing accuracy or losing instructions — use when a SKILL.md feels oversized, has rules repeated in multiple places, or has a vague/generic description that might mis-route. Treats Skills like software that gets compiled and optimized, with before/after measurement, not guesswork.
 ---
 
 # weeder
 
-Skills are read into context on every invocation — an oversized `SKILL.md`
-is a permanent tax paid every time the skill triggers, whether or not that
+A skill's `name` + `description` sit in context every session; its
+`SKILL.md` body is read in full every time the skill triggers — an
+oversized body is a tax paid on every invocation, whether or not that
 session needed the tutorial/background/examples bloating it. This skill
 measures that tax, mechanically removes the part of it that's pure
 overhead (content that's already fully reachable via a reference file, not
@@ -33,8 +34,10 @@ made blind.
    repeated paragraphs and, separately, the same core sentence embedded in
    otherwise-different surrounding prose, which is the more common real
    shape of this problem), and likely-unnecessary content (generic filler
-   phrasing, background/example sections eating into the always-loaded
-   budget). **Read the whole thing** — the mechanical `optimize` step
+   phrasing, background/example sections eating into the on-trigger
+   body budget). Tokens are reported as always-loaded (description) and
+   on-trigger (body) separately, labelled as estimates (chars/4 unless
+   calibrated — see `references/classification.md`). **Read the whole thing** — the mechanical `optimize` step
    below only acts on part of what audit finds.
 
 2. **Apply the mechanical, safe pass**:
@@ -104,9 +107,10 @@ made blind.
    python3 <this-skill-dir>/scripts/weeder.py test-function <skill_dir> <skill_dir>-optimized
    ```
    Extracts every imperative/constraint sentence ("never...", "must...",
-   "do not...") from the original and checks each one's key terms still
-   appear somewhere in the rewrite (SKILL.md or any reference — a move
-   doesn't count as loss). A constraint reported MISSING means content was
+   "do not...") from the original and checks each one is still stated in
+   a single sentence of the rewrite — key terms plus the same
+   never/always/not/must/only markers and polarity (SKILL.md or any
+   reference — a move doesn't count as loss). A constraint reported MISSING means content was
    actually deleted, not relocated — treat that as a hard blocker, not a
    warning.
 
@@ -115,7 +119,8 @@ made blind.
    python3 <this-skill-dir>/scripts/weeder.py diff <skill_dir> <skill_dir>-optimized \
      --examples <examples.json> --competing <other_skill_dir> ...
    ```
-   One before/after report: token breakdown, always-loaded reduction %,
+   One before/after report: token breakdown (always-loaded description vs.
+   on-trigger body), SKILL.md reduction %,
    routing accuracy before/after, constraint-preservation ratio.
 
 7. **Accept only if**: routing accuracy after >= before minus a small

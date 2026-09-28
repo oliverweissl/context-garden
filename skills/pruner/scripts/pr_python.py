@@ -38,12 +38,14 @@ def parse_python_file(text: str) -> dict:
                 doc_first_line = doc.strip().splitlines()[0] if doc.strip() else ""
                 calls = sorted(set(_collect_calls(child)) | set(_collect_annotation_names(child)))
                 end_line = getattr(child, "end_lineno", child.lineno)
+                # start at the first decorator line so the chunk includes it
+                start_line = min([d.lineno for d in child.decorator_list] + [child.lineno])
                 symbols.append(
                     {
                         "name": child.name,
                         "qualname": qualname,
                         "type": kind,
-                        "start_line": child.lineno,
+                        "start_line": start_line,
                         "end_line": end_line,
                         "doc": doc_first_line,
                         "calls": calls,

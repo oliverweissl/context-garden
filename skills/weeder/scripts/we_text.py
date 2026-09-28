@@ -41,3 +41,22 @@ def strip_markdown_structure(text: str) -> str:
 def split_into_sentences(text: str) -> list[str]:
     cleaned = strip_markdown_structure(text).replace("\n", " ")
     return [s.strip() for s in _SENTENCE_RE.split(cleaned) if s.strip()]
+
+
+_BOUNDARY = "\x00"
+
+
+def split_into_original_sentences(text: str) -> list[str]:
+    """Like split_into_sentences, but each sentence is a verbatim span of
+    `text` (inline code kept; only newlines flattened): code blocks, heading
+    lines and list markers become sentence *boundaries* instead of being
+    deleted mid-span. Duplicate-group members must be findable in the
+    original file by apply-suggestion -- a sentence with its `inline code`
+    stripped is not. Callers compute similarity on strip_code(sentence)."""
+    marked = _CODE_FENCE_RE.sub(_BOUNDARY, text)
+    marked = _HEADING_LINE_RE.sub(_BOUNDARY, marked)
+    marked = _LIST_MARKER_RE.sub(_BOUNDARY, marked)
+    out = []
+    for block in marked.split(_BOUNDARY):
+        out.extend(s.strip() for s in _SENTENCE_RE.split(block.replace("\n", " ")) if s.strip())
+    return out

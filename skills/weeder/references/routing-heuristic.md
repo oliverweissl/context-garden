@@ -10,13 +10,17 @@ they approximate.
 
 ## `test-routing`: lexical-overlap proxy, not model prediction
 
-`we_routing.py`'s `relevance_score` is a symmetric Jaccard similarity
-between a skill description's keywords and a prompt's keywords (same
-keyword-extraction approach as pruner's lexical relevance scoring —
-lowercased, `snake_case`/`camelCase` split into sub-words, stopwords
-removed). `predict_trigger` picks whichever candidate description (the
-skill under test, plus any `--competing` descriptions supplied) scores
-highest; ties/all-zero resolve to "no prediction".
+`we_routing.py`'s `relevance_score` is a coverage score: the fraction of
+a prompt's keywords that the skill description contains
+(|prompt ∩ description| / |prompt|; same keyword-extraction approach as
+pruner's lexical relevance scoring — lowercased, `snake_case`/`camelCase`
+split into sub-words, stopwords removed — plus light suffix stripping so
+"files"/"file" and "deleting"/"delete" match). Unlike a symmetric Jaccard
+score, it doesn't penalise a longer description for words the prompt
+doesn't use, so adding concrete trigger vocabulary never lowers a score.
+`predict_trigger` picks whichever candidate description (the skill under
+test, plus any `--competing` descriptions supplied) scores highest; a
+best score below `MIN_SCORE` (0.2) resolves to "no prediction".
 
 **What this predicts reasonably well**: whether a description contains
 the concrete nouns/verbs a real prompt about this skill's domain would
@@ -33,8 +37,8 @@ reasons about intent, ambiguity, and multi-skill applicability in ways no
 keyword-overlap heuristic captures. Two failure directions to watch for:
 
 - **False confidence without competitors.** With no `--competing`
-  descriptions, almost any prompt that shares even one keyword with the
-  description "wins" by default (there's nothing to lose to). Always pass
+  descriptions, any prompt clearing the `MIN_SCORE` overlap floor "wins"
+  by default (there's nothing to lose to). Always pass
   real sibling-skill directories via `--competing` when they exist; a
   100% accuracy score against zero competitors means much less than the
   same score against five real ones.
@@ -46,6 +50,17 @@ keyword-overlap heuristic captures. Two failure directions to watch for:
   check — spot-check genuinely ambiguous/borderline prompts with a real
   agent session before finalizing a rewrite — the same manual check every
   skill in this suite needs for its approximated pieces.
+
+**Measuring the proxy against real routing.** The context-garden repo
+ships a manual `validate-routing` script (top-level `scripts/`, not part
+of this skill, never run in CI) that installs the skill plus its
+competitors into a temp project's `.claude/skills/`, runs each example
+prompt through `claude -p --output-format stream-json --verbose`, and
+records which `Skill` tool call actually fires. It reports real-routing
+accuracy, this proxy's accuracy on the same prompts, and a real-vs-proxy
+confusion table — use it to find prompts where the proxy is wrong before
+trusting it on a rewrite. It spends the user's own Claude Code usage
+(about one short turn per prompt); weeder itself stays offline.
 
 **Tolerance for accepting a change**: routing accuracy after >= before
 minus a couple percentage points is noise-level for this proxy given
@@ -60,10 +75,16 @@ correct to incorrect, not just the aggregate number.
 `we_constraints.py` extracts sentences matching an imperative/constraint
 pattern (`never`, `always`, `must`, `do not`, `required`, `critical`,
 `cannot`, `shall not`, `prohibited`, `forbidden`) from the **before**
-skill's full reachable text (SKILL.md + every reference), and checks each
-one's non-trivial keywords (>3 chars, common words excluded) appear
-somewhere — at a >=60% coverage ratio by default — in the **after**
-skill's full reachable text. A move to a reference file counts as
+skill's full reachable text (SKILL.md + every reference), one per
+sentence (hard-wrapped lines within a paragraph or list item are joined
+first), and checks each one is still stated within a **single sentence**
+of the **after** skill's full reachable text: that sentence must contain
+the constraint's non-trivial keywords (>3 chars, common words excluded)
+at a >=60% coverage ratio by default, every negation/modal marker it uses
+(`never`, `always`, `not`/`don't`/`do not`, `must`, `only`, ...), and the
+same polarity (negated or not). So deleting a rule, flipping "Never X" to
+"Always X", or "must X" to "must not X" is reported MISSING even though
+the vocabulary survives elsewhere. A move to a reference file counts as
 preserved; the check operates on everything reachable, not just
 `SKILL.md` itself.
 
@@ -75,10 +96,10 @@ immediately: 7/7 -> 5/7 preserved, with the missing sentences listed
 verbatim).
 
 **What this does NOT prove**: that the *meaning* survived a rewrite that
-kept similar words but changed what they say (e.g. softening "never
-relax the tolerance" into "avoid relaxing the tolerance where possible"
-would likely still pass this coverage check, since the keywords overlap,
-even though the constraint's actual force changed). Keyword coverage is a
+kept similar words but changed what they say (e.g. rephrasing "always
+confirm first" as "confirm first where practical" drops the marker and is
+caught, but a subtler hedge added alongside the original markers would
+still pass). Keyword coverage is a
 floor, not a ceiling — read the actual diff for anything `test-function`
 reports as preserved before trusting that the *rule*, not just its
 vocabulary, survived.

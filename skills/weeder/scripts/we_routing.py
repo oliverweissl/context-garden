@@ -62,25 +62,41 @@ def _split_identifier(token: str) -> list[str]:
     return [m.lower() for m in _CAMEL_RE.findall(token) if m]
 
 
+# Below this, a best match is too weak to count as a trigger -- matters
+# most with no --competing descriptions, where anything nonzero would
+# otherwise "win" by default.
+MIN_SCORE = 0.2
+
+
+def _stem(word: str) -> str:
+    """Light suffix stripping so "files"/"file", "deleting"/"delete"
+    match; not a real stemmer (see routing-heuristic.md)."""
+    for suffix, min_len in (("ing", 6), ("ed", 5), ("es", 5), ("s", 4)):
+        if word.endswith(suffix) and len(word) >= min_len and not word.endswith("ss"):
+            word = word[: -len(suffix)]
+            break
+    return word.rstrip("e") if len(word) > 4 else word
+
+
 def extract_keywords(text: str) -> set[str]:
     words = _WORD_RE.findall(text or "")
     out = set()
     for w in words:
         out.add(w.lower())
         out.update(_split_identifier(w))
-    return {w for w in out if len(w) > 1 and w not in _STOPWORDS}
+    return {_stem(w) for w in out if len(w) > 1 and w not in _STOPWORDS}
 
 
 def relevance_score(description: str, prompt: str) -> float:
-    """Symmetric keyword-overlap (Jaccard) between a skill description and
-    a candidate prompt. Deliberately simple and explainable over a more
-    "accurate" asymmetric/weighted scheme -- see routing-heuristic.md."""
+    """Coverage-style keyword overlap: the fraction of the prompt's
+    (lightly stemmed) keywords the description contains. Unlike Jaccard,
+    this doesn't penalise a longer, more thorough description for words
+    the prompt doesn't use -- see routing-heuristic.md."""
     desc_kw = extract_keywords(description)
     prompt_kw = extract_keywords(prompt)
     if not desc_kw or not prompt_kw:
         return 0.0
-    union = len(desc_kw | prompt_kw)
-    return len(desc_kw & prompt_kw) / union if union else 0.0
+    return len(desc_kw & prompt_kw) / len(prompt_kw)
 
 
 def predict_trigger(
@@ -88,13 +104,13 @@ def predict_trigger(
 ) -> tuple[str | None, dict[str, float]]:
     """`descriptions`: {skill_name: description_text}, at minimum the
     skill under test plus any --competing descriptions supplied. Returns
-    (winning_skill_name_or_None, all_scores). None if every score is 0
-    (nothing matched at all)."""
+    (winning_skill_name_or_None, all_scores). None if the best score is
+    below MIN_SCORE (nothing matched meaningfully)."""
     scores = {name: relevance_score(desc, prompt) for name, desc in descriptions.items()}
     if not scores:
         return None, scores
     best = max(scores, key=lambda k: scores[k])
-    if scores[best] <= 0.0:
+    if scores[best] < MIN_SCORE:
         return None, scores
     return best, scores
 

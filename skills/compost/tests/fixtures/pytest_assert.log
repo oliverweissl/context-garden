@@ -1,0 +1,35 @@
+============================= test session starts ==============================
+collected 3 items / 1 error
+
+tests/test_io.py F.F                                                     [100%]
+
+==================================== ERRORS ====================================
+____________________ ERROR collecting tests/test_broken.py _____________________
+ImportError while importing test module '/repo/tests/test_broken.py'.
+Traceback:
+tests/test_broken.py:1: in <module>
+    import missing_mod
+E   ModuleNotFoundError: No module named 'missing_mod'
+=================================== FAILURES ===================================
+_________________________________ test_parse __________________________________
+
+    def test_parse():
+>       assert parse("a,b") == ["a", "b", "c"]
+E       AssertionError: assert ['a', 'b'] == ['a', 'b', 'c']
+E         Right contains one more item: 'c'
+E         Use -v to get more diff
+
+tests/test_io.py:5: AssertionError
+_________________________________ test_write __________________________________
+
+    def test_write():
+>       assert write(1) == 2
+E       assert 1 == 2
+E        +  where 1 = write(1)
+
+tests/test_io.py:9: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_io.py::test_parse - AssertionError: assert ['a', 'b'] == ['a', 'b', 'c']
+FAILED tests/test_io.py::test_write
+ERROR tests/test_broken.py
+==================== 2 failed, 1 passed, 1 error in 0.12s =====================

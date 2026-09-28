@@ -14,8 +14,8 @@ import shutil
 from pathlib import Path
 
 from we_audit import audit_skill
-
-_DESCRIPTION_LINE_RE = re.compile(r"^description:.*$", re.MULTILINE)
+from we_optimize import check_out_dir
+from we_parse import FRONTMATTER_KEY_RE, FRONTMATTER_RE
 
 
 def _whitespace_pattern(text: str) -> re.Pattern:
@@ -34,13 +34,34 @@ def _target_path(out_dir: Path, source: str) -> Path:
     return out_dir / "SKILL.md"  # source looks like "SKILL.md#<heading>"
 
 
+def _yaml_double_quoted(text: str) -> str:
+    """Always-valid YAML scalar for arbitrary agent text (": ", "#",
+    leading quotes, backslashes...): flattened to one line, double-quoted,
+    with backslashes and double quotes escaped."""
+    flat = " ".join(text.split())
+    return '"' + flat.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def _apply_description(out_dir: Path, new_description: str) -> None:
+    """Replaces the whole `description:` value in the frontmatter --
+    including folded/literal block scalars (`>`/`|`) and plain/quoted
+    values continued over several lines -- not just its first line."""
+    if not isinstance(new_description, str) or not new_description.strip():
+        raise ValueError("description_shorten.new_description must be a non-empty string")
     skill_md = out_dir / "SKILL.md"
     text = skill_md.read_text()
-    new_text, n = _DESCRIPTION_LINE_RE.subn(f"description: {new_description}", text, count=1)
-    if n == 0:
+    m = FRONTMATTER_RE.match(text)
+    if not m:
+        raise ValueError("SKILL.md has no frontmatter to replace a `description:` in")
+    lines = m.group(1).split("\n")
+    start = next((i for i, line in enumerate(lines) if line.startswith("description:")), None)
+    if start is None:
         raise ValueError("could not find a `description:` line in SKILL.md frontmatter to replace")
-    skill_md.write_text(new_text)
+    end = start + 1
+    while end < len(lines) and not FRONTMATTER_KEY_RE.match(lines[end]):
+        end += 1  # continuation lines of the same value, up to the next top-level key
+    lines[start:end] = [f"description: {_yaml_double_quoted(new_description)}"]
+    skill_md.write_text(text[: m.start(1)] + "\n".join(lines) + text[m.end(1) :])
 
 
 def _apply_duplicate_consolidation(
@@ -73,7 +94,9 @@ def _apply_duplicate_consolidation(
             path = _target_path(out_dir, member["source"])
             text = path.read_text()
             replacement = canonical if member_idx == keep_idx else ""
-            new_text, n = _whitespace_pattern(member["text"]).subn(replacement, text, count=1)
+            new_text, n = _whitespace_pattern(member["text"]).subn(
+                lambda _m, r=replacement: r, text, count=1
+            )
             if n == 0:
                 warnings.append(
                     f"duplicate_consolidation: could not find group {idx} member {member_idx}'s text "
@@ -90,7 +113,7 @@ def _apply_unnecessary_removal(out_dir: Path, removals: list[dict]) -> list[str]
     path = out_dir / "SKILL.md"
     for r in removals:
         text = path.read_text()
-        new_text, n = _whitespace_pattern(r["text_to_remove"]).subn("", text, count=1)
+        new_text, n = _whitespace_pattern(r["text_to_remove"]).subn(lambda _m: "", text, count=1)
         if n == 0:
             warnings.append(
                 f"unnecessary_removal: could not find {r['text_to_remove']!r} verbatim, skipped"
@@ -103,6 +126,7 @@ def _apply_unnecessary_removal(out_dir: Path, removals: list[dict]) -> list[str]
 def apply_suggestion(skill_dir, out_dir, answer: dict, dup_threshold: float = 0.6) -> dict:
     skill_dir = Path(skill_dir)
     out_dir = Path(out_dir)
+    check_out_dir(skill_dir, out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
     shutil.copytree(skill_dir, out_dir)

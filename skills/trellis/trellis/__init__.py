@@ -22,10 +22,12 @@ except ImportError as e:  # pragma: no cover
         "in this skill suite that isn't stdlib-only -- see SKILL.md for why."
     ) from e
 
-from . import linalg, ode, optimization, pde, stochastic, universal
+from . import io, linalg, lock, ode, optimization, pde, stochastic, universal
 from .schema import CATEGORIES, CheckResult, Report, Status, build_report
 
 __all__ = [
+    "io",
+    "lock",
     "linalg",
     "ode",
     "optimization",

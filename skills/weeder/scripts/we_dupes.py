@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from itertools import combinations
 
-from we_text import split_into_sentences, strip_code
+from we_text import _CODE_FENCE_RE, split_into_original_sentences, strip_code
 from we_tokens import estimate_tokens
 
 MIN_WORDS = 8
@@ -58,14 +58,18 @@ def split_paragraphs(text: str, source: str) -> list[dict]:
     every subcommand's usage block starts with the same `python3 .../x.py`
     prefix) and is not the kind of duplicated *rule* this is looking for
     -- left in, it's a reliable source of false positives (caught by
-    running this tool on its own SKILL.md)."""
-    cleaned = strip_code(text)
+    running this tool on its own SKILL.md). Fences become paragraph breaks
+    and inline code is kept in `text` (only excluded from the similarity
+    words), so each member's `text` is a verbatim span apply-suggestion can
+    find in the original file."""
+    cleaned = _CODE_FENCE_RE.sub("\n\n", text)
     paras = [p.strip() for p in re.split(r"\n\s*\n", cleaned) if p.strip()]
     out = []
     for p in paras:
-        if len(p.split()) < MIN_WORDS:
+        prose = strip_code(p)
+        if len(prose.split()) < MIN_WORDS:
             continue
-        out.append({"text": p, "source": source, "words": _normalize_words(p)})
+        out.append({"text": p, "source": source, "words": _normalize_words(prose)})
     return out
 
 
@@ -78,12 +82,16 @@ def split_sentences(text: str, source: str) -> list[dict]:
     granularity catches that; paragraph granularity catches large repeated
     blocks. Both run, results in we_dupes.find_duplicates_in_skill are
     reported separately. See we_text.split_into_sentences for why code
-    blocks/headings/list markers are stripped first."""
+    blocks/headings/list markers are stripped first; `text` keeps inline
+    code verbatim (see split_into_original_sentences), similarity doesn't."""
     out = []
-    for s in split_into_sentences(text):
-        if len(s.split()) < MIN_SENTENCE_WORDS:
+    for s in split_into_original_sentences(text):
+        prose = strip_code(s)
+        if len(prose.split()) < MIN_SENTENCE_WORDS:
             continue
-        out.append({"text": s, "source": source, "words": _normalize_words(s), "seq": _word_seq(s)})
+        out.append(
+            {"text": s, "source": source, "words": _normalize_words(prose), "seq": _word_seq(prose)}
+        )
     return out
 
 
@@ -184,10 +192,12 @@ def find_duplicates_in_skill(
     )
     # a sentence group whose members are already fully covered by a
     # reported paragraph group is redundant noise -- drop it
-    paragraph_texts = {m["text"] for g in paragraph_groups for m in g["members"]}
+    paragraph_texts = {" ".join(m["text"].split()) for g in paragraph_groups for m in g["members"]}
     sentence_groups = [
         g
         for g in sentence_groups
-        if not all(any(m["text"] in p for p in paragraph_texts) for m in g["members"])
+        if not all(
+            any(" ".join(m["text"].split()) in p for p in paragraph_texts) for m in g["members"]
+        )
     ]
     return {"paragraphs": paragraph_groups, "sentences": sentence_groups}

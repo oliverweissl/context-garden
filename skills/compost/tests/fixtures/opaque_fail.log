@@ -1,0 +1,6 @@
+loading mesh 128x128x64
+assembling operator
+step 1 dt=1e-3
+step 2 dt=1e-3
+step 3 dt=5e-4
+aborting: invariant violated in cell 4411 (rho < 0)

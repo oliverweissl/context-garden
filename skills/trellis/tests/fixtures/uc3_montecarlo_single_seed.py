@@ -18,7 +18,9 @@ def metric(seed):
     """Simulates a noisy benchmark metric with NO true underlying
     improvement (mean stays at BASELINE) -- any single-seed reading that
     looks like an improvement is purely sampling noise."""
-    rng = np.random.RandomState(seed)
+    # default_rng: legacy RandomState(0..19) first draws happen to average
+    # ~2.9 above the mean (t~3), which a bias check correctly rejects
+    rng = np.random.default_rng(seed)
     return BASELINE + rng.normal(0, 5.0)
 
 
@@ -26,7 +28,9 @@ def metric(seed):
 _single_seed_reading = metric(seed=1)
 
 RESULTS = [
-    S.stochastic.seed_replication_check(metric, seeds=list(range(20)), name="benchmark_metric"),
+    S.stochastic.seed_replication_check(
+        metric, seeds=list(range(20)), expected=BASELINE, name="benchmark_metric"
+    ),
 ]
 
 REMAINING_RISKS = [

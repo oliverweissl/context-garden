@@ -29,7 +29,7 @@ from we_optimize import optimize_skill
 from we_parse import parse_skill
 from we_routing import evaluate_routing
 from we_suggest import build_suggestions, render_suggestions_human
-from we_tokens import estimate_tokens
+from we_tokens import estimate_note
 
 
 def cmd_audit(args) -> int:
@@ -50,9 +50,11 @@ def cmd_optimize(args) -> int:
     for m in result["moves"]:
         print(f"  moved '{m['heading']}' ({m['tokens_moved']} tok) -> {m['to']}")
     print(
-        f"always-loaded tokens: {result['before_always_loaded_tokens']} -> {result['after_always_loaded_tokens']} "
+        "SKILL.md tokens (description + on-trigger body): "
+        f"{result['before_skill_md_tokens']} -> {result['after_skill_md_tokens']} "
         f"({result['reduction_pct']}% reduction from this mechanical pass alone)"
     )
+    print(estimate_note())
     print("\nThis is ONLY the mechanical pass (progressive disclosure of background/examples).")
     print("Description shortening and duplicate-rule consolidation still need agent judgment --")
     print(
@@ -74,7 +76,10 @@ def cmd_suggest(args) -> int:
 def cmd_apply_suggestion(args) -> int:
     answer = json.loads(Path(args.answer).read_text())
     out_dir = args.out or f"{str(args.skill_dir).rstrip('/')}-optimized"
-    result = apply_suggestion(args.skill_dir, out_dir, answer, dup_threshold=args.dup_threshold)
+    try:
+        result = apply_suggestion(args.skill_dir, out_dir, answer, dup_threshold=args.dup_threshold)
+    except (KeyError, TypeError, AttributeError) as e:
+        raise ValueError(f"malformed answer file {args.answer}: {e!r}") from e
     print(f"wrote suggestion-applied copy to {result['out_dir']}")
     print(
         f"applied: {', '.join(result['applied']) or '(nothing -- answer file had no recognized keys)'}"
@@ -128,7 +133,7 @@ def cmd_test_function(args) -> int:
     else:
         print(f"constraints found in before: {result['total']}")
         print(
-            f"preserved in after (found somewhere in SKILL.md+references): {result['preserved']} "
+            f"preserved in after (one sentence, same markers/polarity, in SKILL.md+references): {result['preserved']} "
             f"({result['preserved_ratio']:.0%})"
         )
         if result["missing"]:
@@ -142,21 +147,21 @@ def cmd_diff(args) -> int:
     before_report = audit_skill(args.before)
     after_report = audit_skill(args.after)
 
+    print(estimate_note())
+    print()
     print("Before")
-    print(f"  Description:        {before_report['description_tokens']:>5} tokens")
-    print(f"  Always-loaded:      {before_report['always_loaded_tokens']:>5} tokens")
-    print(f"  References:         {before_report['total_reference_tokens']:>5} tokens")
+    print(f"  Always-loaded (description): {before_report['always_loaded_tokens']:>5} tokens")
+    print(f"  On-trigger (body):           {before_report['on_trigger_body_tokens']:>5} tokens")
+    print(f"  References:                  {before_report['total_reference_tokens']:>5} tokens")
     print()
     print("After")
-    print(f"  Description:        {after_report['description_tokens']:>5} tokens")
-    print(f"  Always-loaded:      {after_report['always_loaded_tokens']:>5} tokens")
-    print(f"  On-demand refs:     {after_report['total_reference_tokens']:>5} tokens")
+    print(f"  Always-loaded (description): {after_report['always_loaded_tokens']:>5} tokens")
+    print(f"  On-trigger (body):           {after_report['on_trigger_body_tokens']:>5} tokens")
+    print(f"  On-demand refs:              {after_report['total_reference_tokens']:>5} tokens")
     print()
-    if before_report["always_loaded_tokens"]:
-        reduction = 100 * (
-            1 - after_report["always_loaded_tokens"] / before_report["always_loaded_tokens"]
-        )
-        print(f"Always-loaded reduction: {reduction:.0f}%")
+    if before_report["skill_md_tokens"]:
+        reduction = 100 * (1 - after_report["skill_md_tokens"] / before_report["skill_md_tokens"])
+        print(f"SKILL.md (description + on-trigger body) reduction: {reduction:.0f}%")
 
     if args.examples:
         examples = json.loads(Path(args.examples).read_text())
@@ -277,7 +282,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_func = sub.add_parser(
         "test-function",
-        help="check before-skill's constraints are still present somewhere in after-skill",
+        help="check before-skill's constraints are still stated "
+        "(same sentence, same polarity) in after-skill",
     )
     p_func.add_argument("before")
     p_func.add_argument("after")
