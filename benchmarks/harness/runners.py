@@ -126,6 +126,7 @@ def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> tuple[int,
     skills_root = (workdir / ".claude" / "skills").resolve()
     tool_use_is_skill: dict[str, bool] = {}
     invoked: list[str] = []
+    skill_call: dict[str, str] = {}
     seen_message_ids: set[str] = set()
     pending_skill_result = False
     total = 0
@@ -148,8 +149,8 @@ def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> tuple[int,
                         if isinstance(block, dict) and block.get("type") == "tool_use":
                             tool_id = block.get("id")
                             name = _invoked_skill_name(block, skills_root)
-                            if name is not None and name not in invoked:
-                                invoked.append(name)
+                            if name is not None and tool_id is not None:
+                                skill_call[tool_id] = name
                             path = _tool_use_path(block)
                             if tool_id is not None and (name is not None or path is not None):
                                 tool_use_is_skill[tool_id] = name is not None or _is_under(
@@ -167,7 +168,11 @@ def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> tuple[int,
                     for block in content:
                         if isinstance(block, dict) and block.get("type") == "tool_result":
                             tool_id = block.get("tool_use_id")
-                            if tool_use_is_skill.get(tool_id):
+                            # a denied/failed Skill call loaded nothing: not invoked
+                            name = skill_call.get(tool_id)
+                            if name and not block.get("is_error") and name not in invoked:
+                                invoked.append(name)
+                            if tool_use_is_skill.get(tool_id) and not block.get("is_error"):
                                 pending_skill_result = True
     except OSError:
         return 0, []
@@ -208,11 +213,11 @@ class ClaudeCodeRunner:
         max_budget_usd: float = 1.0,
         timeout_seconds: float = 900.0,
         claude_bin: str = "claude",
-        allowed_tools: tuple[str, ...] = ("Bash",),
+        allowed_tools: tuple[str, ...] = ("Bash", "Skill"),
     ) -> None:
         self.model = model
-        # acceptEdits alone auto-denies Bash in headless runs, so allow it
-        # explicitly (safe: each run is in a throwaway temp worktree).
+        # acceptEdits alone auto-denies Bash and Skill in headless runs, so
+        # allow them explicitly (safe: each run is in a throwaway temp worktree).
         self.allowed_tools = allowed_tools
         self.permission_mode = permission_mode
         self.max_budget_usd = max_budget_usd

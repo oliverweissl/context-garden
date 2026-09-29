@@ -11,8 +11,9 @@ Self-contained Agent Skills that cut an agent's context usage — deterministic,
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
 <!-- benchmark-figure:begin -->
-No valid published benchmark yet: the v0.2.0 run is invalid (headless Bash was
-auto-denied, so no skill CLI ever ran); see [`docs/benchmarks/`](docs/benchmarks).
+Benchmark results for **v0.2.0** on the small fixtures in this repo, run with Claude Code ([summary](docs/benchmarks/v0.2.0/summary.md); older versions in [`docs/benchmarks/`](docs/benchmarks)):
+
+![Benchmark results for context-garden v0.2.0](docs/benchmarks/v0.2.0/benchmark.png)
 <!-- benchmark-figure:end -->
 
 ## Install

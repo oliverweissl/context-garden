@@ -149,3 +149,25 @@ def test_plot_writes_png(tmp_path):
     (tmp_path / "records.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     out = plot_results_dir(tmp_path, version="0.2.0")
     assert out.exists() and out.stat().st_size > 0
+
+
+def test_plot_deltas_cover_mycelium_subagents_and_skip_infra_errors():
+    pytest.importorskip("numpy")
+    from harness.analyze import _is_infra_error
+    from harness.plot import METRICS, bootstrap_deltas
+
+    def row(arm, agents, infra=""):
+        return BenchmarkRecord(
+            task_id="mycelium-overlapping-investigation", component="mycelium", level="repo",
+            condition=arm, model="m", success=True, verification_success=True,
+            verification_notes="", input_tokens=10, output_tokens=10, subagent_count=agents,
+            subagent_tokens=1000 * agents, infra_error=infra,
+        ).to_dict()  # fmt: skip
+
+    rows = [row("baseline", 4)] * 3 + [row("treatment-forced", 2)] * 3
+    rows += [row("treatment-forced", 0, infra="rate limit")]  # would drag the mean down
+    kept = [r for r in rows if not _is_infra_error(r)]
+    deltas = bootstrap_deltas(kept, "treatment-forced", ["mycelium"])["mycelium"]
+    assert "subagent_count" in METRICS and "subagent_tokens" in METRICS
+    assert deltas["subagent_count"][0] == pytest.approx(-50.0)
+    assert deltas["subagent_tokens"][0] == pytest.approx(-50.0)

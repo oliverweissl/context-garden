@@ -154,3 +154,39 @@ def test_skill_tool_invocation_counts_tokens_and_names(tmp_path):
     tokens, invoked = runners._skill_tokens_from_transcript(transcript, tmp_path)
     assert tokens == 700
     assert invoked == ["pruner"]
+
+
+def test_denied_skill_call_is_not_counted_as_invoked(tmp_path):
+    lines = [
+        {
+            "type": "assistant",
+            "message": {
+                "id": "m1",
+                "content": [
+                    {"type": "tool_use", "id": "t1", "name": "Skill",
+                     "input": {"skill": "mycelium"}},  # fmt: skip
+                ],
+                "usage": {"cache_creation_input_tokens": 5},
+            },
+        },
+        {
+            "type": "user",
+            "message": {
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "t1", "is_error": True,
+                     "content": "Permission for this tool use was denied."}
+                ]
+            },
+        },  # fmt: skip
+        {
+            "type": "assistant",
+            "message": {"id": "m2", "content": [], "usage": {"cache_creation_input_tokens": 700}},
+        },
+    ]
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("\n".join(json.dumps(line) for line in lines))
+    assert runners._skill_tokens_from_transcript(transcript, tmp_path) == (0, [])
+
+
+def test_runner_allows_bash_and_skill_by_default():
+    assert {"Bash", "Skill"} <= set(runners.ClaudeCodeRunner().allowed_tools)

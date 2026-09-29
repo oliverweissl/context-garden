@@ -266,6 +266,17 @@ class TestMycelium:
 
         assert _run(self.overlap, "treatment-natural", answer, tmp_path).verification_success
 
+    def test_wrong_or_missing_answers_fail(self, tmp_path):
+        def wrong(prompt: str, workdir: Path) -> AgentRunResult:
+            (workdir / "ANSWERS.txt").write_text(
+                "COMPOST_KEEP: 20\nCOMPOST_MB: 200\nSEEDBANK_LOCK: fcntl.flock\n"
+                "SEEDBANK_WINDOWS: no-op\nPRUNER_WRITE: os.rename\nVERSION: 0.2.0\n"
+            )
+            return AgentRunResult(success=True)
+
+        assert not _run(self.overlap, "baseline", wrong, tmp_path).verification_success
+        assert not _run(self.overlap, "baseline", _do_nothing, tmp_path).verification_success
+
     def test_answers_are_true_of_the_repo(self):
         # the fixture's expected values must track the code they describe
         co = (REPO_ROOT / "skills/compost/scripts/co_store.py").read_text()

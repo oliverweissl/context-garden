@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .analyze import _is_infra_error
 from .types import ARMS
 
 METRICS = {
@@ -25,6 +26,9 @@ METRICS = {
     "tool_calls": "Tool calls",
     "runtime": "Runtime",
     "cost_usd": "Cost $",
+    # Delegation (mycelium): None where the baseline spawned no agents.
+    "subagent_count": "Subagents",
+    "subagent_tokens": "Subagent tokens",
 }
 BOOTSTRAP_SAMPLES = 10_000
 BOOTSTRAP_SEED = 42
@@ -95,7 +99,7 @@ def plot_records(
     components = sorted({r["component"] for r in records})
 
     x, w = np.arange(len(METRICS)), 0.75 / len(components)
-    fig, axes = plt.subplots(len(arms), 1, figsize=(12, 6 * len(arms)), squeeze=False)
+    fig, axes = plt.subplots(len(arms), 1, figsize=(14, 6 * len(arms)), squeeze=False)
     for ax, arm in zip(axes[:, 0], arms):
         deltas = bootstrap_deltas(records, arm, components)
         for i, component in enumerate(components):
@@ -111,6 +115,7 @@ def plot_records(
             xticks=x, xticklabels=list(METRICS.values()),
             ylabel="Treatment vs baseline delta (%)",
         )  # fmt: skip
+        ax.tick_params(axis="x", labelrotation=20)
         if len(arms) > 1:
             ax.set_title(f"{arm} vs baseline", loc="left", fontsize=11)
         ax.legend(frameon=False)
@@ -136,4 +141,5 @@ def plot_results_dir(
     results_dir = Path(results_dir)
     lines = (results_dir / "records.jsonl").read_text(encoding="utf-8").splitlines()
     records = [json.loads(line) for line in lines if line.strip()]
+    records = [r for r in records if not _is_infra_error(r)]  # same exclusion as the summary
     return plot_records(records, results_dir / out_name, version)
