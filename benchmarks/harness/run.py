@@ -166,6 +166,7 @@ def run_condition(
             cache_read_tokens=result.cache_read_tokens,
             cost_usd=result.cost_usd,
             skill_invoked=list(result.skill_invoked),
+            infra_error=result.infra_error,
             rep=rep,
             seed=seed,
             order_index=order_index,

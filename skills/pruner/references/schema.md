@@ -167,7 +167,7 @@ Both modes are still budget-enforced: an add that would push `used_tokens`
 over `budget` is refused (reported, not silently applied) unless
 `--budget-extra` raises the ceiling first. This does not re-run scoring —
 it's a targeted, cheap promotion of one specific thing, which is the point
-(see SKILL.md's "if you hit a missing dependency" step).
+(see SKILL.md step 3, "Missing a dependency?").
 
 ## `pruner show <slice_id> [--json]` / `pruner list`
 

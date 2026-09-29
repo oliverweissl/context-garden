@@ -1,9 +1,6 @@
 """Structural validation for distributable Skills.
 
 Discovers every skills/*/SKILL.md and checks basic structural requirements.
-No Skill implementations exist yet, so this test currently has nothing to
-validate and passes trivially -- it starts enforcing structure the moment
-the first SKILL.md is added.
 """
 
 from pathlib import Path

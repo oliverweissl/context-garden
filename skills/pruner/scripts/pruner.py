@@ -19,6 +19,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Absolute wrapper path so printed handles run as-is (pruner is not on PATH).
+BIN = str(Path(__file__).resolve().parent.parent / "bin" / "pruner")
+
 from pr_common import changed_files_from_git
 from pr_index import load_or_build_index
 from pr_select import (
@@ -134,10 +137,10 @@ def render_human(result: dict) -> str:
         out.append("")
         out.append("Expansion: if reasoning/tests fail because something's missing,")
         out.append(
-            f"  pruner expand {result['slice_id']} --add <id or file:start-end from the omitted list above>"
+            f"  {BIN} expand {result['slice_id']} --add <id or file:start-end from the omitted list above>"
         )
         out.append(
-            f"  pruner expand {result['slice_id']} --file <path> --lines A:B   # anything not listed at all"
+            f"  {BIN} expand {result['slice_id']} --file <path> --lines A:B   # anything not listed at all"
         )
     return "\n".join(out)
 

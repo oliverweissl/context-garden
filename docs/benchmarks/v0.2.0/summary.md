@@ -1,3 +1,5 @@
+> **INVALID RUN.** Headless Bash was auto-denied (no skill CLI ever executed) and 22/72 trials were zero-token infra failures counted as FAILs. See `docs/benchmarks/README.md`.
+
 # Benchmark summary
 
 72 record(s); schedule seed(s): 0. Intervals are 95% CIs (pass rate: Wilson; pass-rate delta: Newcombe; means and mean deltas: t / Welch t).

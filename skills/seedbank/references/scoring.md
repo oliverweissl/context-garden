@@ -32,7 +32,7 @@ ranking, not an optimal control policy.
   costs 10x a mistake made once. `mistake` defaults to 300 per
   occurrence (`--failure-cost`), a failed `run` to 150. A declared `fact`
   defaults to `fact_failure_cost` from `config.json` (60) per declaration,
-  so a stated invariant that was never "rediscovered" (e.g. the UC3
+  so a stated invariant that was never "rediscovered" (e.g. a
   tolerance contract) still gets a nonzero base value instead of 0.
 - **`stability = 1 / (1 + hash_changes)`** — a fact whose backing file
   keeps changing between observations is less trustworthy to persist.

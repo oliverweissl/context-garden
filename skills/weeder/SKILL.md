@@ -1,137 +1,42 @@
 ---
 name: weeder
-description: Measure and reduce a Skill's token footprint (always-loaded description + on-trigger SKILL.md body) without regressing routing accuracy or losing instructions — use when a SKILL.md feels oversized, has rules repeated in multiple places, or has a vague/generic description that might mis-route. Treats Skills like software that gets compiled and optimized, with before/after measurement, not guesswork.
+description: Measure and reduce a Skill's token footprint (always-loaded description + on-trigger SKILL.md body) without regressing routing accuracy or losing instructions. Use when a SKILL.md feels oversized, repeats rules, or has a vague description that might mis-route.
 ---
 
 # weeder
 
-A skill's `name` + `description` sit in context every session; its
-`SKILL.md` body is read in full every time the skill triggers — an
-oversized body is a tax paid on every invocation, whether or not that
-session needed the tutorial/background/examples bloating it. This skill
-measures that tax, mechanically removes the part of it that's pure
-overhead (content that's already fully reachable via a reference file, not
-lost), and validates — with executable checks, not eyeballing — that
-routing and functional behavior didn't regress before you'd ever accept
-the smaller version.
+The description loads every session; the SKILL.md body loads on every
+trigger. **Never optimize on token count alone**: a shorter SKILL.md that
+routes worse or drops an instruction is a regression. Every step below
+produces before/after evidence. Run all commands as
+`python3 <this-skill-dir>/scripts/weeder.py <cmd>`.
 
-**Never optimize on token count alone.** A shorter `SKILL.md` that routes
-worse or silently drops an instruction is a regression dressed up as a
-win. Every step below produces evidence for the other two before/after
-comparisons (tokens, routing, function) specifically so that trade isn't
-made blind.
+1. **Audit:** `audit <skill_dir>`. Token counts per section (description
+   vs. body, chars/4 estimates unless calibrated), duplicate rules, filler,
+   movable background/examples. Read all of it; `optimize` acts on only part.
+2. **Mechanical pass:** `optimize <skill_dir> --out <skill_dir>-optimized`.
+   Moves background/examples sections into `references/` with a pointer.
+   Lossless and reversible; does not touch the description or duplicates.
+3. **Judgment pass, in the `-optimized` copy:** shorten the description
+   (keep concrete trigger nouns/verbs), state each duplicated rule once
+   where the workflow needs it, cut only instructions that are genuinely
+   obvious. Optional structured help: `suggest <skill_dir> --assist slight --json`,
+   then `apply-suggestion <skill_dir> --answer <answer.json> --out <skill_dir>-optimized`
+   (see `references/llm-assist.md`; an assisted answer gets no free pass).
+4. **Routing:** `test-routing <skill_dir> --examples <examples.json> [--competing <other_skill_dir> ...]`
+   on both original and copy. `examples.json` = `{"positive": [...],
+   "negative": [...], "ambiguous": [{"prompt":, "expected": "trigger"|"no_trigger"|"either"}]}`;
+   if none exists, write 5-10 real triggers, a few unrelated prompts and
+   borderline cases. Always pass sibling skills as `--competing`.
+   Limits of this lexical proxy: `references/routing-heuristic.md`.
+5. **Function:** `test-function <skill_dir> <skill_dir>-optimized` checks
+   every never/must/do-not sentence survives (in SKILL.md or a reference).
+   A MISSING constraint is a hard blocker, not a warning.
+6. **Report:** `diff <skill_dir> <skill_dir>-optimized --examples <examples.json> --competing ...`.
+7. **Accept only if** routing accuracy after >= before (minus a small
+   tolerance: a couple of points of a lexical proxy is noise) AND
+   constraint preservation is 100%. Otherwise do another pass in step 3;
+   don't lower the bar to make a bad result pass.
 
-## Workflow
-
-1. **Audit** the skill:
-   ```
-   python3 <this-skill-dir>/scripts/weeder.py audit <skill_dir>
-   ```
-   Reports, deterministically: token count per section (classified as
-   `routing_metadata` / `mandatory_instructions` / `workflow` /
-   `constraints` / `examples` / `background` / `external_reference`),
-   duplicate content (a rule restated in multiple places — both whole
-   repeated paragraphs and, separately, the same core sentence embedded in
-   otherwise-different surrounding prose, which is the more common real
-   shape of this problem), and likely-unnecessary content (generic filler
-   phrasing, background/example sections eating into the on-trigger
-   body budget). Tokens are reported as always-loaded (description) and
-   on-trigger (body) separately, labelled as estimates (chars/4 unless
-   calibrated — see `references/classification.md`). **Read the whole thing** — the mechanical `optimize` step
-   below only acts on part of what audit finds.
-
-2. **Apply the mechanical, safe pass**:
-   ```
-   python3 <this-skill-dir>/scripts/weeder.py optimize <skill_dir> --out <skill_dir>-optimized
-   ```
-   Moves `background`/`examples` sections into `references/<slug>.md`
-   files, replacing them in `SKILL.md` with a one-line pointer. This is
-   lossless (every word survives, just relocated) and reversible, so it's
-   safe to always apply — it never needs judgment. It does **not**
-   shorten the description or touch duplicate rules; see step 3.
-
-3. **Do the parts that need judgment, in the `-optimized` copy**:
-   - **Shorten the routing description** using `audit`'s token count and
-     the skill's actual purpose — cut generic phrasing
-     ("this skill helps you with...", "use this whenever you need..."),
-     keep concrete trigger nouns/verbs a real prompt would contain.
-   - **Consolidate duplicate rules**: `audit`'s duplicate groups show every
-     restatement of the same rule — pick the clearest wording, state it
-     once (in the section where an agent following the workflow would
-     actually need it), delete the rest.
-   - **Remove genuinely obvious/general instructions** flagged under
-     "likely unnecessary content" — but only ones that are actually
-     obvious to a capable agent; don't cut something just because it's
-     short.
-
-   None of this is mechanically automated — see `references/classification.md`
-   for why. How much of the judgment step gets structured for you as an
-   explicit request/answer file, vs. you editing the copy directly, is
-   controlled by this repo's LLM-assist level (`none` default, `slight`,
-   `lot` — resolved from `--assist`, `$CONTEXT_GARDEN_LLM_ASSIST`, or
-   `.context-garden/config.yaml`'s `llm_assist.level`; see
-   `references/llm-assist.md` for what each level structures and why
-   this never involves a second model call):
-   ```
-   python3 <this-skill-dir>/scripts/weeder.py suggest <skill_dir> --assist slight --json
-   ```
-   At `none` this reports zero requests — do step 3 freehand. Otherwise,
-   write your answer to a JSON file (shape in the command's own output
-   and `references/llm-assist.md`) and apply it:
-   ```
-   python3 <this-skill-dir>/scripts/weeder.py apply-suggestion <skill_dir> --answer <answer.json> --out <skill_dir>-optimized
-   ```
-   This only applies the answer — it doesn't validate it. Steps 4-7
-   below hold an assist-drafted answer to the same bar as a freehand
-   edit; it gets no free pass.
-
-4. **Validate routing** before trusting the rewrite:
-   ```
-   python3 <this-skill-dir>/scripts/weeder.py test-routing <skill_dir> \
-     --examples <examples.json> [--competing <other_skill_dir> ...]
-   ```
-   `examples.json`: `{"positive": [prompt, ...], "negative": [prompt, ...],
-   "ambiguous": [{"prompt":, "expected": "trigger"|"no_trigger"|"either"}]}`.
-   If none exists for this skill, **write one** (5-10 prompts covering the
-   skill's real triggers, a few clearly-unrelated prompts, and any
-   genuinely borderline case) — this is the routing test suite, treat it
-   like one. Pass `--competing` with sibling skills' directories whenever
-   they exist; without any competitor, almost any nonzero keyword overlap
-   "wins" trivially, which tells you much less. Run this on **both** the
-   original and the `-optimized` copy and compare — see
-   `references/routing-heuristic.md` for exactly what this proxy does and
-   doesn't predict about real model routing.
-
-5. **Validate function**:
-   ```
-   python3 <this-skill-dir>/scripts/weeder.py test-function <skill_dir> <skill_dir>-optimized
-   ```
-   Extracts every imperative/constraint sentence ("never...", "must...",
-   "do not...") from the original and checks each one is still stated in
-   a single sentence of the rewrite — key terms plus the same
-   never/always/not/must/only markers and polarity (SKILL.md or any
-   reference — a move doesn't count as loss). A constraint reported MISSING means content was
-   actually deleted, not relocated — treat that as a hard blocker, not a
-   warning.
-
-6. **Get the combined report**:
-   ```
-   python3 <this-skill-dir>/scripts/weeder.py diff <skill_dir> <skill_dir>-optimized \
-     --examples <examples.json> --competing <other_skill_dir> ...
-   ```
-   One before/after report: token breakdown (always-loaded description vs.
-   on-trigger body), SKILL.md reduction %,
-   routing accuracy before/after, constraint-preservation ratio.
-
-7. **Accept only if**: routing accuracy after >= before minus a small
-   tolerance (a couple percentage points of a lexical proxy is noise, not
-   signal — see `references/routing-heuristic.md`), AND constraint
-   preservation is 100% (anything less needs the missing constraint
-   restored, not accepted as a rounding error). If both hold, replace the
-   original with the `-optimized` copy. If either doesn't, the rewrite in
-   step 3 needs another pass — don't lower the bar to make a bad result
-   pass.
-
-## Modes reference
-
-See `references/modes.md`.
+Classification rules and why step 3 isn't automated:
+`references/classification.md`. Modes: `references/modes.md`. More: `references/guide.md`.

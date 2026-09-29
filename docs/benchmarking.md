@@ -56,6 +56,8 @@ The working copy excludes the Skill's repository copy, fixture answers and harne
 
 Every arm uses `--setting-sources project` and `--strict-mcp-config`, without `--plugin-dir`. User settings, enabled plugins and their hooks, and user MCP servers therefore do not load. **One remaining leak is `~/.claude/skills/`: Claude Code can still load Skills from there.** Keep it empty on the benchmark machine, or use a clean `HOME` with only the `claude` login credentials.
 
+Every arm passes `--allowedTools Bash`. With `--permission-mode acceptEdits` alone, a headless run has no approval surface and auto-denies every Bash call (pytest and skill CLIs included), which silently invalidated v0.2.0. Trials where the model produced no tokens are recorded with `infra_error` and excluded from analysis; check that count before trusting a run.
+
 `ClaudeCodeRunner` adds a unique nonce to each call's system prompt. This prevents one run from benefiting from another run's warm prompt cache; caching within a run still works.
 
 ## Reading the results

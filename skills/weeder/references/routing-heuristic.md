@@ -1,12 +1,8 @@
 # The routing and function proxies: what they do and don't guarantee
 
 Neither `test-routing` nor `test-function` calls a model. Both are
-deterministic, offline, explainable proxies — the same design choice
-compost/seedbank/pruner/trellis all make for their
-own approximated pieces (lexical relevance instead of embeddings, CI-
-overlap instead of a formal hypothesis test, and so on). They're useful
-for exactly what they measure, and should not be mistaken for the thing
-they approximate.
+deterministic, offline proxies: useful for exactly what they measure, not
+a substitute for the thing they approximate.
 
 ## `test-routing`: lexical-overlap proxy, not model prediction
 

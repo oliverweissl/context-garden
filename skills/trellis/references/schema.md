@@ -62,8 +62,7 @@ created_at:
 from a list of `CheckResult`. With `auto_gaps=True` (the default), it
 inspects which `category` values are present across `results` and appends
 a `remaining_risks`/`unsupported_claims` entry for each tier that's
-**entirely absent** — see `SKILL.md`'s point about this not being
-something you have to remember to write yourself. Pass `auto_gaps=False`
+**entirely absent**, so you don't have to write those yourself. Pass `auto_gaps=False`
 to suppress this if you have a specific reason to (e.g. a spec that is
 deliberately implementation-tier-only and you don't want the reminder
 repeated every run).
@@ -123,12 +122,14 @@ dirty); requires a git repository.
 
 `--trellis-dir` defaults to `<git root>/.trellis` (or `<spec_dir>/.trellis`
 outside git). Commit `spec.lock`; baselines are optional; reports are
-throwaway:
+throwaway. Reports are written next to the spec (`<spec_dir>/.trellis/`),
+so a spec in a subdirectory needs the `**/` line:
 
 ```gitignore
 .trellis/*
 !.trellis/spec.lock
 # !.trellis/baselines/   # if you want per-commit baselines shared
+**/.trellis/*_report.json
 ```
 
 ### `trellis lock <spec.py> [--trellis-dir DIR]`

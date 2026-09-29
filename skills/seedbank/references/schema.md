@@ -66,6 +66,8 @@ explicitly at promote time.
 
 ## `seedbank promote <key> [--representation TEXT] [--tier hot|warm] [--scope S] [--critical] [--budget N] [--force] [--replace FACT_ID]`
 
+`--tier` defaults to `warm`.
+
 Creates a new fact from `key`'s aggregate stats (falls back to the
 observation-supplied representation if `--representation` is omitted;
 errors if neither exists). `sources` are copied from the key's current
@@ -115,7 +117,7 @@ outright (this is the only way to remove a fact in the current CLI).
 No args: re-hashes every fact's sources; a fact with any source whose hash
 no longer matches (or that no longer exists on disk) is marked
 `stale: true` with a `stale_reason`. Facts with no sources (pure policy
-statements, e.g. the UC3 tolerance invariant) are never marked stale by
+statements, e.g. "never weaken a convergence tolerance") are never marked stale by
 this scan — there's nothing to check. `compile` always runs this scan
 first and excludes stale facts from its output.
 
@@ -135,14 +137,16 @@ optionally deletes facts still marked stale (`--purge-stale`), and prunes
 — aggregates in `keystats.json` are untouched by this, so `access_count`
 etc. are never lost.
 
-## `seedbank compile [--targets AGENTS.md,CLAUDE.md,...]`
+## `seedbank compile [--targets AGENTS.md,CLAUDE.md,...] [--force]`
 
 Runs invalidation, then writes the hot section + warm-scope pointers to
 each target file (default: just `AGENTS.md`) and one `.seedbank/warm/<scope>.md`
-per warm scope that has at least one active fact.
+per warm scope that has at least one active fact. With an empty store it
+refuses to wipe an existing seedbank block (fresh clone); `--force`
+overrides that.
 
 For Claude Code specifically, prefer a one-time `@AGENTS.md` import line
-in a committed `CLAUDE.md` (see SKILL.md's "In the target repository")
+in a committed `CLAUDE.md` (see `guide.md`, "In the target repository")
 over adding `CLAUDE.md` to `--targets` — Claude Code never reads
 `AGENTS.md` on its own, and the import keeps one source of truth instead
 of two full copies that both need regenerating on every `compile`.

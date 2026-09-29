@@ -89,6 +89,10 @@ class AgentRunResult:
     # Skill names the agent actually invoked (Skill tool / SKILL.md read),
     # when the runner can tell; empty otherwise.
     skill_invoked: list[str] = field(default_factory=list)
+    # Non-empty when the session never really ran (CLI error, usage/rate
+    # limit, unparseable output): the trial measures the infrastructure,
+    # not the agent, so analysis excludes it instead of scoring a FAIL.
+    infra_error: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -117,6 +121,7 @@ class BenchmarkRecord:
     cache_read_tokens: int = 0
     cost_usd: float = 0.0
     skill_invoked: list[str] = field(default_factory=list)
+    infra_error: str = ""
     # Scheduling metadata: repetition index within (task, arm), the
     # schedule seed, and this trial's position in the randomised order.
     rep: int = 0

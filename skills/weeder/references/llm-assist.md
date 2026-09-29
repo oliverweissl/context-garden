@@ -37,8 +37,7 @@ Precedence, highest first:
    ```
 4. `none`, if nothing above sets it.
 
-`.context-garden/config.yaml` is repo-local, committed config (see
-`docs/architecture.md`) — set it once per repo instead of passing
+`.context-garden/config.yaml` is repo-local, committed config — set it once per repo instead of passing
 `--assist` on every invocation. The parser only understands flat
 `key: value` lines and one level of indented nesting (exactly the shape
 above); it is not a general YAML parser, to avoid adding a PyYAML

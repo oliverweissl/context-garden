@@ -20,7 +20,8 @@ import re
 
 _CONSTRAINT_RE = re.compile(
     r"\b(never|always|must not|must|do not|don't|required|critical(?:ly)?|"
-    r"cannot|shall not|prohibited|forbidden)\b",
+    # (?!-): "always-loaded" is an adjective, not a constraint.
+    r"cannot|shall not|prohibited|forbidden)\b(?!-)",
     re.IGNORECASE,
 )
 _WORD_RE = re.compile(r"[a-z0-9]+")

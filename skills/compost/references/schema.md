@@ -8,14 +8,16 @@ same data as JSON with `--json`. The JSON shape (also what's persisted in
 command: str                  # the exact command / label
 exit_code: int
 duration_seconds: float       # 0.0 for `ingest` (no live execution)
-status: pass | fail | timeout | killed | signaled
+status: pass | fail | timeout | killed | signaled | error
                                # fail if exit_code != 0, any error-severity
                                # event exists, or a numerical check (e.g.
                                # NaN/Inf) flags failure; timeout = --timeout
                                # hit (exit 124); killed = compost got
                                # SIGINT/SIGTERM and forwarded it (exit
                                # 128+N, meta.json `signal`); signaled = the
-                               # command itself died from a signal
+                               # command itself died from a signal;
+                               # error = command could not start (not
+                               # found: exit 127, not executable: 126)
 profile: str                  # which parser was used (see profiles.md)
 
 root_events:                  # the group of the root error: the first error

@@ -10,7 +10,7 @@
 | `docs/` | Documentation, including this file, `skill-development.md`, and `benchmarking.md`. |
 | `scripts/` | Repository tools: `validate-skills`, `build-skills`, and `benchmark`. |
 
-## The key packaging rule
+## Skill self-containment (critical rule)
 
 **A Skill must work using only files inside its own directory.** An installer may copy just `skills/<name>/`, so a reference such as `../../benchmarks/...` can break after installation.
 

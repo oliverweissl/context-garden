@@ -192,8 +192,14 @@ class ClaudeCodeRunner:
         max_budget_usd: float = 1.0,
         timeout_seconds: float = 900.0,
         claude_bin: str = "claude",
+        allowed_tools: tuple[str, ...] = ("Bash",),
     ) -> None:
         self.model = model
+        # acceptEdits alone auto-denies every Bash call in a headless run
+        # (no approval surface), so neither arm could run pytest and no
+        # skill CLI ever executed -- the treatment arms only paid for
+        # reading SKILL.md. Each run is in a throwaway temp worktree.
+        self.allowed_tools = allowed_tools
         self.permission_mode = permission_mode
         self.max_budget_usd = max_budget_usd
         self.timeout_seconds = timeout_seconds
@@ -218,6 +224,8 @@ class ClaudeCodeRunner:
             "project",
             "--strict-mcp-config",
         ]
+        if self.allowed_tools:
+            cmd += ["--allowedTools", *self.allowed_tools]
         if self.model:
             cmd += ["--model", self.model]
 
@@ -238,6 +246,8 @@ class ClaudeCodeRunner:
                 success=False,
                 output_text=proc.stdout,
                 runtime_seconds=runtime,
+                infra_error=f"unparseable output (rc={proc.returncode}): "
+                + (proc.stderr or proc.stdout)[-500:],
                 raw={"stderr": proc.stderr, "returncode": proc.returncode},
             )
 
@@ -258,6 +268,12 @@ class ClaudeCodeRunner:
                 skill_tokens, skill_invoked = _skill_tokens_from_transcript(transcript, workdir)
                 repo_tokens = max(0, repo_tokens - skill_tokens)
 
+        infra_error = ""
+        if not usage.get("output_tokens") and not usage.get("input_tokens"):
+            # The model never produced a turn (usage/rate limit, auth, CLI
+            # error): v0.2.0 scored 22/72 of these as agent failures.
+            infra_error = f"no model usage: {str(payload.get('result', ''))[:300]}"
+
         return AgentRunResult(
             success=(proc.returncode == 0) and not payload.get("is_error", False),
             output_text=payload.get("result", ""),
@@ -274,5 +290,6 @@ class ClaudeCodeRunner:
             cache_read_tokens=usage.get("cache_read_input_tokens", 0),
             cost_usd=payload.get("total_cost_usd", 0.0),
             skill_invoked=skill_invoked,
+            infra_error=infra_error,
             raw=payload,
         )

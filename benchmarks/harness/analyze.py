@@ -147,6 +147,14 @@ def _total_tokens(row: dict[str, Any]) -> int:
     )
 
 
+def _is_infra_error(row: dict[str, Any]) -> bool:
+    """A trial where the model never ran. Records from before the
+    `infra_error` field existed are recognised by zero model tokens."""
+    if row.get("infra_error"):
+        return True
+    return not row.get("input_tokens") and not row.get("output_tokens")
+
+
 def _invoked(row: dict[str, Any], component: str) -> bool:
     # Plugin-installed skills are reported as "<plugin>:<name>".
     return any(name.split(":")[-1] == component for name in row.get("skill_invoked") or [])
@@ -194,7 +202,8 @@ def _arm_stats(rows: list[dict[str, Any]], component: str) -> dict[str, Any]:
 
 def analyze(records: Iterable[dict[str, Any] | BenchmarkRecord]) -> dict[str, Any]:
     """Per-(task, arm) statistics; see module docstring for the metrics."""
-    rows = [r.to_dict() if isinstance(r, BenchmarkRecord) else r for r in records]
+    all_rows = [r.to_dict() if isinstance(r, BenchmarkRecord) else r for r in records]
+    rows = [r for r in all_rows if not _is_infra_error(r)]
     by_task: dict[str, dict[str, list[dict[str, Any]]]] = {}
     components: dict[str, str] = {}
     for row in rows:
@@ -231,7 +240,12 @@ def analyze(records: Iterable[dict[str, Any] | BenchmarkRecord]) -> dict[str, An
                 "arms": {a: arms[a] for a in _arm_order(arms)},
             }
         )
-    return {"n_records": len(rows), "seeds": seeds, "tasks": tasks}
+    return {
+        "n_records": len(rows),
+        "n_infra_errors": len(all_rows) - len(rows),
+        "seeds": seeds,
+        "tasks": tasks,
+    }
 
 
 # ---------------------------------------------------------------------- render
@@ -258,7 +272,9 @@ def render_markdown(analysis: dict[str, Any]) -> str:
         return "No records.\n"
     seeds = ", ".join(str(s) for s in analysis["seeds"]) or "n/a"
     out = [
-        f"# Benchmark summary\n\n{analysis['n_records']} record(s); schedule seed(s): {seeds}. "
+        f"# Benchmark summary\n\n{analysis['n_records']} record(s)"
+        f" ({analysis.get('n_infra_errors', 0)} infra-error trial(s) excluded);"
+        f" schedule seed(s): {seeds}. "
         "Intervals are 95% CIs (pass rate: Wilson; pass-rate delta: Newcombe; "
         "means and mean deltas: t / Welch t).\n",
         "## Primary: verified pass rate\n",

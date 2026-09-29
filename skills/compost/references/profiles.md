@@ -17,7 +17,8 @@ order (first match wins) unless `--profile` is passed explicitly:
    Parses the `N - test_name (Failed)` lines under "The following tests
    FAILED:".
 
-3. **cmake** — command contains `cmake`, or output contains a
+3. **cmake** — command contains `cmake` (but not `cmake --build`, which
+   is a build driver and gets gcc/clang parsing), or output contains a
    `CMake Error at file:line` / `CMake Warning at file:line` block. Each
    block (the header line plus its indented message lines) becomes one
    event.
@@ -59,7 +60,9 @@ order (first match wins) unless `--profile` is passed explicitly:
 
 8. **generic** (fallback) — lines matching
    `\b(error|exception|fatal|failed|failure)\b` (case-insensitive) become
-   error events; lines matching `\bwarning\b` become warning events.
+   error events only when the exit code is non-zero (warnings on exit 0);
+   zero counts such as "0 failed" or "no errors" are ignored. Lines
+   matching `\bwarning\b` become warning events.
 
 ## Cross-profile supplement
 

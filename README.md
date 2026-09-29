@@ -13,9 +13,8 @@ deterministic, offline, no LLM calls inside the tooling itself. This management 
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
 <!-- benchmark-figure:begin -->
-Benchmark results for **v0.2.0** on the small fixtures in this repo, run with Claude Code ([summary](docs/benchmarks/v0.2.0/summary.md); older versions in [`docs/benchmarks/`](docs/benchmarks)):
-
-![Benchmark results for context-garden v0.2.0](docs/benchmarks/v0.2.0/benchmark.png)
+No valid published benchmark yet: the v0.2.0 run is invalid (headless Bash was
+auto-denied, so no skill CLI ever ran); see [`docs/benchmarks/`](docs/benchmarks).
 <!-- benchmark-figure:end -->
 
 See [`docs/benchmarking.md`](docs/benchmarking.md) for how to run the benchmarks and plot their results.
@@ -26,9 +25,9 @@ Replace `{skill}` with the skills name to install the skill for your agent.
 cp -r skills/{skill} ~/.claude/skills/{skill}   # or project's .claude/skills/
 ```
 
-To run tests of a skill run:
+CLI help and offline smoke tests:
 ```bash
-skills/compost/bin/{skill} --help
+skills/{skill}/bin/{skill} --help
 bash skills/{skill}/tests/smoke_test.sh   # offline, bundled fixtures
 ```
 
