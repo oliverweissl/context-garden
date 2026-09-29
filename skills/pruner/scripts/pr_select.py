@@ -7,9 +7,17 @@ is explainable in `reasons`; tokens are counted without overlap. See references/
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
+
+try:
+    import fcntl
+except ImportError:  # Windows: no flock; locking degrades to a no-op
+    fcntl = None
 
 from pr_common import estimate_tokens, is_fixture_path, read_text, sha256_text
 from pr_graph import bfs_distances, file_of, merge_external_graph
@@ -389,7 +397,39 @@ def _slice_dir(store_dir: Path) -> Path:
     return d
 
 
-def next_slice_id(store_dir: Path) -> str:
+@contextmanager
+def _slices_lock(store_dir: Path):
+    """Exclusive cross-process lock over the slices dir; hold it across a
+    whole load -> modify -> write sequence. Not reentrant."""
+    with (_slice_dir(store_dir) / ".lock").open("a") as fh:
+        if fcntl is not None:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def _write_slice(store_dir: Path, record: dict) -> Path:
+    """Temp file in the same dir + os.replace: readers never see a partial slice."""
+    path = _slice_dir(store_dir) / f"{record['slice_id']}.json"
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(record, indent=2))
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return path
+
+
+def _next_slice_id(store_dir: Path) -> str:
+    """Caller must hold _slices_lock, or two selects can claim the same id."""
     d = _slice_dir(store_dir)
     existing = [p.stem for p in d.glob("s*.json")]
     n = 0
@@ -430,17 +470,14 @@ def changed_since_slice(record: dict) -> list[str]:
     )
 
 
-def save_slice(store_dir: Path, slice_id: str, repo_root: Path, result: dict) -> Path:
-    record = {
-        "slice_id": slice_id,
-        "repo_root": str(repo_root),
-        "created_at": time.time(),
-        **result,
-    }
+def create_slice(store_dir: Path, repo_root: Path, result: dict) -> str:
+    """Allocate the next slice id and persist `result` under it atomically."""
+    record = {"repo_root": str(repo_root), "created_at": time.time(), **result}
     _record_file_hashes(record)
-    path = _slice_dir(store_dir) / f"{slice_id}.json"
-    path.write_text(json.dumps(record, indent=2))
-    return path
+    with _slices_lock(store_dir):
+        record["slice_id"] = _next_slice_id(store_dir)
+        _write_slice(store_dir, record)
+    return record["slice_id"]
 
 
 def load_slice(store_dir: Path, slice_id: str) -> dict:
@@ -455,6 +492,13 @@ def expand_slice(
 ) -> dict:
     """Promote omitted candidates (by chunk id, or file:start-end) into the
     slice's supporting_context without rescoring; still budget-enforced."""
+    with _slices_lock(store_dir):
+        return _expand_locked(store_dir, slice_id, add_chunk_ids, extra_budget)
+
+
+def _expand_locked(
+    store_dir: Path, slice_id: str, add_chunk_ids: list[str], extra_budget: int | None
+) -> dict:
     record = load_slice(store_dir, slice_id)
     budget = record["budget"] + (extra_budget or 0)
     omitted_by_id = {c["id"]: c for c in record["omitted_candidates"]}
@@ -482,8 +526,7 @@ def expand_slice(
 
     record["budget"] = budget
     _record_file_hashes(record)
-    path = _slice_dir(store_dir) / f"{slice_id}.json"
-    path.write_text(json.dumps(record, indent=2))
+    _write_slice(store_dir, record)
     return {
         "record": record,
         "promoted": promoted,
@@ -504,6 +547,22 @@ def add_ad_hoc_chunk(
 ) -> dict:
     """Inject a file:line range the scorer never surfaced (e.g. a doc file).
     Budget-enforced: callers raise the ceiling via extra_budget, never silently."""
+    with _slices_lock(store_dir):
+        return _add_ad_hoc_locked(
+            store_dir, slice_id, repo_root, file, start_line, end_line, reason, extra_budget
+        )
+
+
+def _add_ad_hoc_locked(
+    store_dir: Path,
+    slice_id: str,
+    repo_root: Path,
+    file: str,
+    start_line: int,
+    end_line: int,
+    reason: str,
+    extra_budget: int | None,
+) -> dict:
     record = load_slice(store_dir, slice_id)
     budget = record["budget"] + (extra_budget or 0)
     chunk = {
@@ -532,6 +591,5 @@ def add_ad_hoc_chunk(
     record["supporting_context"].append(chunk)
     record["used_tokens"] += chunk["tokens"]
     _record_file_hashes(record)
-    path = _slice_dir(store_dir) / f"{slice_id}.json"
-    path.write_text(json.dumps(record, indent=2))
+    _write_slice(store_dir, record)
     return {"record": record, "added": True, "error": None}

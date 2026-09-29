@@ -379,10 +379,6 @@ class GccParser(_Parser):
             self.pending.append(("include", _loc(m)))
 
 
-def parse_gcc(lines, exit_code: int = 0) -> dict:
-    return _run(GccParser, lines, exit_code)
-
-
 _LINKER_RE = re.compile(
     r"undefined reference to|ld: symbol\(s\) not found|ld returned \d+ exit status"
     r"|Undefined symbols for architecture"
@@ -526,8 +522,7 @@ _ITER_RE = re.compile(
 )
 # standalone numeric nan/inf tokens only: not "inf-norm", "info", "x-inf"
 _NANINF_RE = re.compile(r"(?<![\w.-])[-+]?(?:nan|inf(?:inity)?)(?![\w-])", re.IGNORECASE)
-# trend is computed over the last _RESID_TAIL residuals only (_RESID_HEAD is unused)
-_RESID_HEAD = 16
+# trend is computed over the last _RESID_TAIL residuals only
 _RESID_TAIL = 4096
 
 
@@ -594,34 +589,6 @@ PARSERS = {
     "slurm": SlurmParser,
     "numerical_solver": NumericalSolverParser,
 }
-
-
-def parse_generic(lines, exit_code):
-    return _run(GenericParser, lines, exit_code)
-
-
-def parse_pytest(lines, exit_code):
-    return _run(PytestParser, lines, exit_code)
-
-
-def parse_ctest(lines, exit_code):
-    return _run(CtestParser, lines, exit_code)
-
-
-def parse_cmake(lines, exit_code):
-    return _run(CmakeParser, lines, exit_code)
-
-
-def parse_python_traceback(lines, exit_code):
-    return _run(PythonTracebackParser, lines, exit_code)
-
-
-def parse_slurm(lines, exit_code):
-    return _run(SlurmParser, lines, exit_code)
-
-
-def parse_numerical_solver(lines, exit_code):
-    return _run(NumericalSolverParser, lines, exit_code)
 
 
 # ---------------------------------------------------------------- one-pass driver

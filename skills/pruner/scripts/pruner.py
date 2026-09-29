@@ -24,10 +24,9 @@ from pr_index import load_or_build_index
 from pr_select import (
     add_ad_hoc_chunk,
     changed_since_slice,
+    create_slice,
     expand_slice,
     load_slice,
-    next_slice_id,
-    save_slice,
     select,
 )
 
@@ -177,8 +176,7 @@ def cmd_select(args, repo_root: Path, store_dir: Path) -> int:
         external_graph = json.loads(Path(args.graph).read_text())
 
     result = select(index, repo_root, args.task, args.budget, changed, error_text, external_graph)
-    slice_id = next_slice_id(store_dir)
-    save_slice(store_dir, slice_id, repo_root, result)
+    slice_id = create_slice(store_dir, repo_root, result)
     result = {"slice_id": slice_id, **result}
 
     if args.json:
@@ -249,7 +247,7 @@ def cmd_expand(args, repo_root: Path, store_dir: Path) -> int:
             continue
         print(
             f"unknown chunk id (not in this slice's omitted candidates): {cid} "
-            f"-- use an id= value or file:start-end from `pruner show {args.slice_id}`",
+            f"-- use an id= value or file:start-end from `{BIN} show {args.slice_id}`",
             file=sys.stderr,
         )
         rc = 1
