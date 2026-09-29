@@ -23,10 +23,11 @@ from harness.verify import run_verification  # noqa: E402
 TASKS = {t.task_id: t for t in discover_tasks()}
 
 
-def test_discovers_all_five_fixtures():
+def test_discovers_all_fixtures():
     assert set(TASKS) == {
         "pruner-file-tokenusage-bug",
-        "trellis-toy-solver-order-regression",
+        "mycelium-overlapping-investigation",
+        "mycelium-notes-reuse",
         "compost-noisy-failure-cluster",
         "seedbank-recurring-facts",
         "weeder-bloated-skill-audit",
@@ -74,8 +75,9 @@ class TestPruner:
             target = workdir / "benchmarks" / "harness" / "types.py"
             text = target.read_text()
             fixed = text.replace(
-                "            + self.skill_tokens\n        )",
-                "            + self.skill_tokens\n            + self.output_tokens\n        )",
+                "            + self.skill_tokens\n            + self.subagent_tokens\n",
+                "            + self.skill_tokens\n            + self.output_tokens\n"
+                "            + self.subagent_tokens\n",
             )
             assert fixed != text
             target.write_text(fixed)
@@ -85,41 +87,6 @@ class TestPruner:
         assert record.verification_success is True
 
     def test_no_op_fails_verification(self, tmp_path):
-        record = _run(self.task, "baseline", _do_nothing, tmp_path)
-        assert record.verification_success is False
-
-
-class TestTrellis:
-    task = TASKS["trellis-toy-solver-order-regression"]
-
-    def test_correct_verdict_passes(self, tmp_path):
-        def verdict_regression(prompt: str, workdir: Path) -> AgentRunResult:
-            path = workdir / "examples" / "toy_heat_solver" / "VERDICT.txt"
-            path.write_text("VERDICT: REGRESSION\n")
-            return AgentRunResult(success=True)
-
-        record = _run(self.task, "treatment-natural", verdict_regression, tmp_path)
-        assert record.verification_success is True
-
-    def test_wrong_verdict_fails(self, tmp_path):
-        def verdict_correct(prompt: str, workdir: Path) -> AgentRunResult:
-            path = workdir / "examples" / "toy_heat_solver" / "VERDICT.txt"
-            path.write_text("VERDICT: OK\n")
-            return AgentRunResult(success=True)
-
-        record = _run(self.task, "treatment-natural", verdict_correct, tmp_path)
-        assert record.verification_success is False
-
-    def test_hedged_verdict_fails(self, tmp_path):
-        def both(prompt: str, workdir: Path) -> AgentRunResult:
-            path = workdir / "examples" / "toy_heat_solver" / "VERDICT.txt"
-            path.write_text("VERDICT: OK\nVERDICT: REGRESSION\n")
-            return AgentRunResult(success=True)
-
-        record = _run(self.task, "treatment-forced", both, tmp_path)
-        assert record.verification_success is False
-
-    def test_missing_verdict_file_fails(self, tmp_path):
         record = _run(self.task, "baseline", _do_nothing, tmp_path)
         assert record.verification_success is False
 
@@ -244,6 +211,116 @@ class TestWeeder:
         record = _run(self.task, "baseline", _do_nothing, tmp_path)
         assert record.verification_success is False
 
+
+
+class TestMycelium:
+    overlap = TASKS["mycelium-overlapping-investigation"]
+    reuse = TASKS["mycelium-notes-reuse"]
+
+    def test_treatment_gets_skill_hooks_and_scout_baseline_does_not(self, tmp_path):
+        treat = tmp_path / "treatment"
+        treat.mkdir()
+        materialize(self.overlap, "treatment-natural", treat)
+        assert (treat / ".claude" / "skills" / "mycelium" / "bin" / "mycelium").exists()
+        settings = (treat / ".claude" / "settings.json").read_text()
+        assert "mycelium/bin/mycelium" in settings and '"Agent"' in settings
+        assert (treat / ".claude" / "agents" / "scout.md").exists()
+
+        base = tmp_path / "baseline"
+        base.mkdir()
+        materialize(self.overlap, "baseline", base)
+        assert not (base / ".claude").exists()
+        assert not (base / "skills" / "mycelium").exists()
+
+    def test_materialized_gate_hook_denies_a_vague_brief(self, tmp_path):
+        import json
+
+        treat = tmp_path / "treatment"
+        treat.mkdir()
+        materialize(self.overlap, "treatment-natural", treat)
+        settings = json.loads((treat / ".claude" / "settings.json").read_text())
+        command = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        payload = {"session_id": "s", "cwd": str(treat), "tool_name": "Agent",
+                   "tool_input": {"description": "look", "prompt": "explore the stores"}}
+        proc = subprocess.run(
+            ["bash", "-c", command], input=json.dumps(payload), capture_output=True, text=True,
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CLAUDE_PROJECT_DIR": str(treat)},
+        )
+        out = json.loads(proc.stdout)["hookSpecificOutput"]
+        assert out["permissionDecision"] == "deny"
+        assert "`Task:`" in out["permissionDecisionReason"]
+
+    def test_overlay_scout_matches_skill_template(self):
+        overlay = self.overlap.fixture_dir / "treatment_overlay" / ".claude" / "agents" / "scout.md"
+        template = REPO_ROOT / "skills" / "mycelium" / "agents" / "scout.md"
+        assert overlay.read_text() == template.read_text()
+
+    def test_correct_answers_pass(self, tmp_path):
+        def answer(prompt: str, workdir: Path) -> AgentRunResult:
+            (workdir / "ANSWERS.txt").write_text(
+                "COMPOST_KEEP: 10\nCOMPOST_MB: 200\nSEEDBANK_LOCK: fcntl.flock\n"
+                "SEEDBANK_WINDOWS: no-op (no locking)\nPRUNER_WRITE: os.replace\nVERSION: 0.2.0\n"
+            )
+            return AgentRunResult(success=True)
+
+        assert _run(self.overlap, "treatment-natural", answer, tmp_path).verification_success
+
+    def test_answers_are_true_of_the_repo(self):
+        # the fixture's expected values must track the code they describe
+        co = (REPO_ROOT / "skills/compost/scripts/co_store.py").read_text()
+        assert '{"keep_per_command": 10, "max_store_mb": 200}' in co and "def gc(" in co
+        assert "fcntl.flock" in (REPO_ROOT / "skills/seedbank/scripts/sb_store.py").read_text()
+        assert "os.replace" in (REPO_ROOT / "skills/pruner/scripts/pr_select.py").read_text()
+        assert 'version = "0.2.0"' in (REPO_ROOT / "pyproject.toml").read_text()
+
+    def test_followup_runs_second_session_and_sums_usage(self, tmp_path):
+        prompts = []
+
+        def two_sessions(prompt: str, workdir: Path) -> AgentRunResult:
+            prompts.append(prompt)
+            out = workdir / "RETENTION.txt"
+            if len(prompts) == 1:
+                out.write_text("RETENTION_FUNCTION: Store.gc\nDEFAULT_KEEP: 10\nDEFAULT_MB: 200\n")
+            else:
+                out.write_text(out.read_text() + "LATEST_DELETABLE: no\nLOCK_CALL: fcntl.flock\n")
+            return AgentRunResult(
+                success=True, input_tokens=100, output_tokens=10, subagent_count=1,
+                subagent_tokens=500,
+            )
+
+        record = _run(self.reuse, "treatment-natural", two_sessions, tmp_path)
+        assert len(prompts) == 2 and "follow-up" in prompts[1]
+        assert record.verification_success is True
+        assert record.sessions == 2
+        assert record.input_tokens == 200
+        assert (record.subagent_count, record.subagent_tokens) == (2, 1000)
+        assert record.total_tokens == 200 + 20 + 1000
+
+    def test_first_session_alone_fails(self, tmp_path):
+        def only_first(prompt: str, workdir: Path) -> AgentRunResult:
+            if "follow-up" not in prompt:
+                (workdir / "RETENTION.txt").write_text(
+                    "RETENTION_FUNCTION: gc\nDEFAULT_KEEP: 10\nDEFAULT_MB: 200\n"
+                )
+            return AgentRunResult(success=True)
+
+        assert not _run(self.reuse, "baseline", only_first, tmp_path).verification_success
+
+
+def test_subagent_usage_counts_each_message_once(tmp_path):
+    from harness.runners import _subagent_usage
+
+    transcript = tmp_path / "sess.jsonl"
+    transcript.write_text("")
+    sub = tmp_path / "sess" / "subagents"
+    sub.mkdir(parents=True)
+    line = (
+        '{"message": {"id": "m1", "usage": {"input_tokens": 5, '
+        '"cache_creation_input_tokens": 100, "output_tokens": 20, "cache_read_input_tokens": 999}}}'
+    )
+    (sub / "agent-a.jsonl").write_text(line + "\n" + line + "\n")  # same message repeated
+    (sub / "agent-b.jsonl").write_text(line.replace("m1", "m2") + "\n")
+    assert _subagent_usage(transcript) == (2, 250)
 
 @pytest.mark.parametrize("condition", ["baseline", "treatment-natural", "treatment-forced"])
 def test_working_copy_excludes_answers_and_skill_under_test(condition, tmp_path):

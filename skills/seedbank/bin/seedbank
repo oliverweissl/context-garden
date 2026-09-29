@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Thin wrapper so `seedbank` can be invoked without spelling out the python path.
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ "${1:-}" = "mode" ]; then
+  shift; exec python3 "$DIR/scripts/cg_mode.py" seedbank "$@"
+fi
 if [ "${1:-}" = "hook" ]; then
-  # Claude Code hook: never print, never fail the tool call.
+  # Claude Code hook: never print, never fail the tool call; only observe while on.
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" seedbank --is-on) 2>/dev/null || exit 0
   python3 "$DIR/scripts/seedbank.py" hook >/dev/null 2>&1
   exit 0
 fi

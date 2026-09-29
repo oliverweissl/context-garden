@@ -1,9 +1,12 @@
 ---
 name: pruner
 description: Pick the smallest set of file:line ranges relevant to a concrete task (bug, compiler error, failing test, change) in a large Python or C/C++ repository, instead of grep-exploring or reading whole files. Skip when the task or traceback already names the file.
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/pruner *)
 ---
 
 # pruner
+
+!`${CLAUDE_SKILL_DIR}/bin/pruner mode --banner`
 
 Offline indexer + lexical/structural relevance scorer (keyword overlap,
 call graph, error-stack membership, test relationships; no embeddings,

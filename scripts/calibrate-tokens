@@ -38,7 +38,7 @@ CODE_SAMPLES = [
     "skills/weeder/scripts/we_dupes.py",
     "skills/pruner/scripts/pr_score.py",
     "skills/compost/scripts/co_cluster.py",
-    "skills/trellis/trellis/convergence.py",
+    "skills/seedbank/scripts/sb_store.py",
 ]
 PROSE_SAMPLES = ["docs/architecture.md", "docs/skill-development.md", "docs/benchmarking.md"]
 YAML_EXTRA_SAMPLES = [

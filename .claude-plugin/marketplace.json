@@ -9,7 +9,7 @@
     {
       "name": "context-garden",
       "source": ".",
-      "description": "Installs compost, pruner, seedbank, trellis, and weeder."
+      "description": "Installs compost, pruner, seedbank, mycelium, and weeder."
     }
   ]
 }

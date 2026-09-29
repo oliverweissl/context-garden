@@ -34,6 +34,7 @@ EXCLUDED_PATHS = (
     ".claude-plugin/",
     "hooks/",
     ".seedbank/",
+    ".mycelium/",
     "AGENTS.md",
     "CLAUDE.md",
     "benchmarks/fixtures/",
@@ -154,6 +155,8 @@ def materialize(task: TaskSpec, condition: str, dest: Path) -> Path:
         if task.treatment_mode == "skill_available":
             for name in task.skill_relevance:
                 _install_skill(name, dest)
+            if task.treatment_overlay:  # e.g. .claude/settings.json enabling the skill's hooks
+                _copy_overlay(task.fixture_dir / task.treatment_overlay, dest)
         elif task.treatment_mode == "preseeded":
             _copy_overlay(task.fixture_dir / task.treatment_overlay, dest)
 

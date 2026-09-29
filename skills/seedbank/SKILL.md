@@ -1,9 +1,12 @@
 ---
 name: seedbank
 description: Maintain a small, generated AGENTS.md of repository facts (build commands, conventions, invariants, past mistakes) that were rediscovered often or were costly to get wrong. Use at task start to check cached facts, and at task end to log and promote what you had to dig for.
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/seedbank *)
 ---
 
 # seedbank
+
+!`${CLAUDE_SKILL_DIR}/bin/seedbank mode --banner`
 
 Offline fact store + profiler. It counts rediscoveries and mistake cost;
 you supply the fact text and decide what to promote. Nothing is promoted

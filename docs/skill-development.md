@@ -20,10 +20,14 @@ Only create the directories a Skill actually needs — most don't need `referenc
 - Self-containment and progressive disclosure: [`architecture.md`](architecture.md). `scripts/validate-skills`
   is the single command that validates every Skill's structure (frontmatter, referenced files exist,
   no path outside the Skill; inline code and fenced blocks are exempt).
-- Stdlib only (trellis may use numpy); never import a sibling Skill's code — vendor or bundle it.
+- Stdlib only; never import a sibling Skill's code — vendor or bundle it.
   compost must stay Python 3.9-compatible.
 - `SKILL.md` and printed handles invoke `<skill-dir>/bin/<name>`, never a bare command: Skill CLIs are not on PATH.
-- The Skill's own `tests/smoke_test.sh` is what travels with it when copied out standalone; CI skips it.
+- The Skill's own `tests/smoke_test.sh` is what travels with it when copied out standalone; CI runs it too.
+- Modes (on/manual/off, see the README): copy `scripts/cg_mode.py` unchanged from another Skill,
+  dispatch `bin/<name> mode` to it, put `` !`${CLAUDE_SKILL_DIR}/bin/<name> mode --banner` `` under the
+  `SKILL.md` title with `allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/<name> *)`, and make every hook
+  exit early unless `cg_mode.py <name> --is-on`. `tests/skills/test_modes.py` checks all of this.
 
 ## Adding a Skill
 

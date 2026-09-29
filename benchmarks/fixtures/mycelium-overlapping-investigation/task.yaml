@@ -1,0 +1,38 @@
+task_id: mycelium-overlapping-investigation
+component: mycelium
+level: repo
+skill_relevance: [mycelium]
+description: >
+  A four-part question about how three skills persist their stores. Three
+  parts overlap (the same lock + atomic-write pattern in compost, seedbank
+  and pruner), which invites fanning out three agents that each rediscover
+  it; the fourth is a one-line lookup that should never be delegated.
+notes: >
+  mycelium's claim is fewer, better-briefed agents at equal correctness:
+  the gate denies briefs without a bounded task/return format/budget and
+  near-duplicate spawns, and its text steers single lookups back to the
+  main thread. Treatment installs the skill plus .claude/settings.json
+  enabling the gate hooks and the scout agent. Headline metrics: pass rate,
+  total tokens INCLUDING subagents, subagents spawned.
+base_ref: worktree
+treatment_mode: skill_available
+treatment_overlay: treatment_overlay
+prompt: |
+  This is a multi-part investigation of this repository; use subagents if
+  that is efficient. Write exactly these lines to ANSWERS.txt at the
+  repository root (values only, no explanation):
+  COMPOST_KEEP: <default number of runs compost keeps per command>
+  COMPOST_MB: <default compost store size cap in MB>
+  SEEDBANK_LOCK: <the Python call seedbank's store uses to take its cross-process lock>
+  SEEDBANK_WINDOWS: <what that locking does on Windows>
+  PRUNER_WRITE: <the os function pruner uses to make slice-file writes atomic>
+  VERSION: <the project version in pyproject.toml>
+verify:
+  type: all
+  checks:
+    - {type: answer_key, path: ANSWERS.txt, key: COMPOST_KEEP, expected: "10"}
+    - {type: answer_key, path: ANSWERS.txt, key: COMPOST_MB, pattern: '200(\s*MB)?'}
+    - {type: answer_key, path: ANSWERS.txt, key: SEEDBANK_LOCK, pattern: '(?i).*flock.*'}
+    - {type: answer_key, path: ANSWERS.txt, key: SEEDBANK_WINDOWS, pattern: '(?i).*(no[- ]?op|nothing|disabled|skip|not lock|no lock|none|degrad).*'}
+    - {type: answer_key, path: ANSWERS.txt, key: PRUNER_WRITE, pattern: '(?i).*os\.replace.*'}
+    - {type: answer_key, path: ANSWERS.txt, key: VERSION, expected: "0.2.0"}

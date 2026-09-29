@@ -1,0 +1,40 @@
+task_id: mycelium-notes-reuse
+component: mycelium
+level: repo
+skill_relevance: [mycelium]
+description: >
+  Two sessions in one working copy, asking related questions about the same
+  subsystem (compost's store retention). Measures whether findings recorded
+  in session 1 cut session 2's rediscovery. Both arms run both sessions;
+  usage is summed, so recording notes is charged against the benefit.
+notes: >
+  Unlike seedbank-recurring-facts, nothing is pre-written: any shared note
+  must be produced by the treatment's own first session (the post-agent
+  hook reminds it to record findings; the gate surfaces them in session 2).
+  Baseline gets the same two prompts with no skill and no hooks. If session
+  1 never delegates and never records, the arms should tie -- that outcome
+  is informative, not a harness failure.
+base_ref: worktree
+treatment_mode: skill_available
+treatment_overlay: ../mycelium-overlapping-investigation/treatment_overlay
+prompt: |
+  Investigate how compost limits the size of its run store; use subagents
+  if that is efficient. Write exactly these lines to RETENTION.txt at the
+  repository root (values only):
+  RETENTION_FUNCTION: <name of the method that deletes old runs>
+  DEFAULT_KEEP: <default runs kept per command>
+  DEFAULT_MB: <default store cap in MB>
+followup_prompt: |
+  A follow-up on compost's run store; use subagents if that is efficient.
+  Append exactly these lines to RETENTION.txt at the repository root
+  (values only):
+  LATEST_DELETABLE: <yes or no: can retention delete the most recent run of a command?>
+  LOCK_CALL: <the Python call that serialises concurrent retention passes>
+verify:
+  type: all
+  checks:
+    - {type: answer_key, path: RETENTION.txt, key: RETENTION_FUNCTION, pattern: '(?:[\w.]*\.)?gc(?:\(\))?'}
+    - {type: answer_key, path: RETENTION.txt, key: DEFAULT_KEEP, expected: "10"}
+    - {type: answer_key, path: RETENTION.txt, key: DEFAULT_MB, pattern: '200(\s*MB)?'}
+    - {type: answer_key, path: RETENTION.txt, key: LATEST_DELETABLE, pattern: '(?i)no\b.*'}
+    - {type: answer_key, path: RETENTION.txt, key: LOCK_CALL, pattern: '(?i).*flock.*'}

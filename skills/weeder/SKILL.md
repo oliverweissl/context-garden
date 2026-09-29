@@ -1,9 +1,12 @@
 ---
 name: weeder
 description: Measure and reduce a Skill's token footprint (always-loaded description + on-trigger SKILL.md body) without regressing routing accuracy or losing instructions. Use when a SKILL.md feels oversized, repeats rules, or has a vague description that might mis-route.
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/weeder *)
 ---
 
 # weeder
+
+!`${CLAUDE_SKILL_DIR}/bin/weeder mode --banner`
 
 The description loads every session; the SKILL.md body loads on every
 trigger. **Never optimize on token count alone**: a shorter SKILL.md that

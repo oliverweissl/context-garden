@@ -142,6 +142,7 @@ def _total_tokens(row: dict[str, Any]) -> int:
             "tool_result_tokens",
             "skill_tokens",
             "output_tokens",
+            "subagent_tokens",
         )
     )
 
@@ -194,6 +195,10 @@ def _arm_stats(rows: list[dict[str, Any]], component: str) -> dict[str, Any]:
             "n": len(not_inv),
             **_triple(mean_ci([_total_tokens(r) for r in not_inv])),
         },
+        "subagents": _triple(mean_ci([float(r.get("subagent_count", 0) or 0) for r in rows])),
+        "subagent_tokens": _triple(
+            mean_ci([float(r.get("subagent_tokens", 0) or 0) for r in rows])
+        ),
         "_tokens": tokens,
         "_costs": costs,
     }
@@ -308,6 +313,24 @@ def render_markdown(analysis: dict[str, Any]) -> str:
                 f"{_fmt_ci(ti) if ti['n'] else '—'} (n={ti['n']}) | "
                 f"{_fmt_ci(tn) if tn['n'] else '—'} (n={tn['n']}) |"
             )
+
+    delegating = [
+        (t["task_id"], a, s)
+        for t in analysis["tasks"]
+        for a, s in t["arms"].items()
+        if (s["subagents"]["value"] or 0) > 0
+    ]
+    if delegating:
+        out += [
+            "\n## Delegation: subagents spawned (tokens above include theirs)\n",
+            "| task | arm | subagents mean [95% CI] | subagent tokens mean [95% CI] |",
+            "|---|---|---:|---:|",
+        ]
+        out += [
+            f"| {tid} | {arm} | {_fmt_ci(s['subagents'], '{:.1f}')} | "
+            f"{_fmt_ci(s['subagent_tokens'])} |"
+            for tid, arm, s in delegating
+        ]
 
     routing = [
         (t["task_id"], a, s)

@@ -24,3 +24,20 @@ def test_total_tokens_sums_all_five_fields():
         output_tokens=10,
     )
     assert record.total_tokens == 385
+
+
+def test_total_tokens_includes_subagent_tokens():
+    record = BenchmarkRecord(
+        task_id="t",
+        component="c",
+        level="file",
+        condition="baseline",
+        model="m",
+        success=True,
+        verification_success=True,
+        verification_notes="",
+        input_tokens=100,
+        output_tokens=10,
+        subagent_tokens=1000,
+    )
+    assert record.total_tokens == 1110

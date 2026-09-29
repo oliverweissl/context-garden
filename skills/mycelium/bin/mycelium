@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Thin wrapper so `mycelium` can be invoked without spelling out the python path.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ "${1:-}" = "mode" ]; then
+  shift; exec python3 "$DIR/scripts/cg_mode.py" mycelium "$@"
+fi
+if [ "${1:-}" = "hook" ]; then
+  # Claude Code hook: stdout is the hook's JSON answer; never fail the tool call.
+  # The gate runs only while mycelium is on (manual/off: Agent calls pass untouched).
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" mycelium --is-on) 2>/dev/null || exit 0
+  python3 "$DIR/scripts/mycelium.py" "$@" 2>/dev/null
+  exit 0
+fi
+exec python3 "$DIR/scripts/mycelium.py" "$@"

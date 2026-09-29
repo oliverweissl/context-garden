@@ -7,7 +7,7 @@ pip install -e '.[dev]'
 pytest
 ruff check .
 python scripts/validate-skills
-bash skills/<name>/tests/smoke_test.sh   # CI skips smoke tests; run them yourself
+bash skills/<name>/tests/smoke_test.sh   # offline; CI runs these too
 ```
 
 ## Before opening a PR

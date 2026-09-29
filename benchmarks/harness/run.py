@@ -26,7 +26,7 @@ from typing import Any
 
 from .fixtures import materialize
 from .runners import AgentRunner
-from .types import ARMS, BenchmarkRecord, TaskSpec
+from .types import ARMS, AgentRunResult, BenchmarkRecord, TaskSpec
 from .verify import run_verification
 
 SCHEDULE_FILE = "schedule.json"
@@ -52,13 +52,35 @@ def forced_prefix(task: TaskSpec) -> str:
     return f"Use the {names} {noun} (installed under .claude/skills/) for this task."
 
 
-def prompt_for(task: TaskSpec, arm: str) -> str:
+def prompt_for(task: TaskSpec, arm: str, prompt: str | None = None) -> str:
     """The prompt an arm sends: identical for baseline and
     treatment-natural; treatment-forced prefixes an explicit instruction
     to use the task's skill(s)."""
+    prompt = task.prompt if prompt is None else prompt
     if arm == "treatment-forced":
-        return f"{forced_prefix(task)}\n\n{task.prompt}"
-    return task.prompt
+        return f"{forced_prefix(task)}\n\n{prompt}"
+    return prompt
+
+
+_SUMMED = (
+    "input_tokens", "output_tokens", "tool_result_tokens", "repository_tokens", "skill_tokens",
+    "tool_calls", "repository_reads", "retries", "runtime_seconds", "cache_read_tokens",
+    "cost_usd", "subagent_count", "subagent_tokens",
+)
+
+
+def _merge(first: AgentRunResult, second: AgentRunResult) -> AgentRunResult:
+    """One result for two sequential sessions: usage summed, success only if both succeeded."""
+    merged = AgentRunResult(
+        success=first.success and second.success,
+        output_text=second.output_text,
+        model=first.model or second.model,
+        skill_invoked=list(dict.fromkeys(first.skill_invoked + second.skill_invoked)),
+        infra_error=first.infra_error or second.infra_error,
+    )
+    for k in _SUMMED:
+        setattr(merged, k, getattr(first, k) + getattr(second, k))
+    return merged
 
 
 def plan_schedule(
@@ -139,6 +161,10 @@ def run_condition(
     with _workdir(workdir_base) as dest:
         materialize(task, condition, dest)
         result = runner.run(prompt=prompt_for(task, condition), workdir=dest)
+        if task.followup_prompt and not result.infra_error:
+            followup_prompt = prompt_for(task, condition, task.followup_prompt)
+            followup = runner.run(prompt=followup_prompt, workdir=dest)
+            result = _merge(result, followup)
         verification_success, notes = run_verification(task, dest)
 
         if keep_workdir_to is not None:
@@ -167,6 +193,9 @@ def run_condition(
             cost_usd=result.cost_usd,
             skill_invoked=list(result.skill_invoked),
             infra_error=result.infra_error,
+            subagent_count=result.subagent_count,
+            subagent_tokens=result.subagent_tokens,
+            sessions=2 if task.followup_prompt else 1,
             rep=rep,
             seed=seed,
             order_index=order_index,

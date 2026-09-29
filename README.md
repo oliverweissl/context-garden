@@ -7,7 +7,7 @@ Self-contained Agent Skills that cut an agent's context usage — deterministic,
 | 🌰 [`seedbank`](skills/seedbank) | Promotes repeatedly-rediscovered repo facts into a small, always-loaded `AGENTS.md`. |
 | ✂️ [`pruner`](skills/pruner) | Returns exact `file:start-end` ranges worth reading (Python + C/C++) instead of grep-exploring. |
 | ♻️ [`compost`](skills/compost) | Compacts huge compiler/test/CI/HPC output into clustered summaries. |
-| 🌿 [`trellis`](skills/trellis) | Correctness gate for numerical code (convergence order, residuals, conditioning). |
+| 🍄 [`mycelium`](skills/mycelium) | Delegation gate for subagents (bounded brief, no duplicate investigations) plus shared finding notes so agents don't rediscover the same code. |
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
 <!-- benchmark-figure:begin -->
@@ -15,12 +15,59 @@ No valid published benchmark yet: the v0.2.0 run is invalid (headless Bash was
 auto-denied, so no skill CLI ever ran); see [`docs/benchmarks/`](docs/benchmarks).
 <!-- benchmark-figure:end -->
 
-## How to use
+## Install
+
+As a plugin (all five skills, plus the seedbank and mycelium hooks):
+```text
+/plugin marketplace add oliverweissl/context-garden
+/plugin install context-garden@context-garden
+```
+Or copy single skills (the hooks then need the settings snippet in the skill's `references/`):
 ```bash
-cp -r skills/{skill} ~/.claude/skills/{skill}   # or project's .claude/skills/
+cp -r skills/{skill} ~/.claude/skills/{skill}   # or the project's .claude/skills/
 ```
 
-CLI help and offline smoke tests:
+## Turn skills on, manual or off
+
+Each skill has one of three modes (default `on`):
+
+| Mode | Claude uses it on its own | You can call it | Its hooks run |
+|---|---|---|---|
+| `on` | yes, when relevant | yes | yes |
+| `manual` | no | yes, with an instruction | no |
+| `off` | no | no | no |
+
+Set or show a mode (or ask Claude to, e.g. "turn compost off"):
+```bash
+skills/compost/bin/compost mode manual     # this repo, only you: .claude/settings.local.json
+skills/compost/bin/compost mode off --scope user     # every repo (or --scope project to share)
+skills/compost/bin/compost mode            # show the mode and where it comes from
+```
+With the plugin, `bin/` sits in the plugin's install directory, so either ask Claude or edit the
+setting directly. The mode is stored as Claude Code's own `skillOverrides` setting, in
+`.claude/settings.local.json` (this repo, only you), `.claude/settings.json` (shared) or
+`~/.claude/settings.json` (all repos), most specific first:
+```json
+{"skillOverrides": {"compost": "user-invocable-only", "pruner": "off"}}
+```
+`"on"`, `"user-invocable-only"` (= `manual`) and `"off"` are the values; for copied skills the
+`/skills` menu edits the same entries (Space cycles; "user-only" is `manual`).
+`CONTEXT_GARDEN_MODE_<SKILL>=on|manual|off` overrides everything for one shell.
+
+Call a skill directly with an instruction after its name; this works in `on` and `manual`:
+```text
+/compost summarize the failing pytest run                 # copied skill
+/context-garden:compost summarize the failing pytest run  # plugin
+```
+
+With the plugin, Claude Code ignores `skillOverrides` for plugin skills, so each skill checks
+its mode itself when it loads: in `manual` it proceeds only if you asked for it, in `off` it
+stops. Its one-line description is still listed to Claude (about 60-100 tokens per skill). To
+drop that too, copy the skill instead of using the plugin, or disable the whole plugin with
+`/plugin disable context-garden`.
+
+## CLI help and smoke tests
+
 ```bash
 skills/{skill}/bin/{skill} --help
 bash skills/{skill}/tests/smoke_test.sh   # offline, bundled fixtures

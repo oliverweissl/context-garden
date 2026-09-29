@@ -1,5 +1,5 @@
 {
-  "description": "seedbank: record Read/Grep/Glob tool calls as repository observations (async: runs in the background, never blocks the tool call)",
+  "description": "seedbank: record Read/Grep/Glob calls as observations (async). mycelium: gate Agent calls (brief fields, duplicates, known notes) and remind to record findings.",
   "hooks": {
     "PostToolUse": [
       {
@@ -9,6 +9,28 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/seedbank/bin/seedbank\" hook",
             "async": true,
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/mycelium/bin/mycelium\" hook post-agent",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/mycelium/bin/mycelium\" hook pre-agent",
             "timeout": 5
           }
         ]

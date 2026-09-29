@@ -46,6 +46,8 @@ Every arm uses `--setting-sources project` and `--strict-mcp-config`, without `-
 
 Every arm passes `--allowedTools Bash`. With `--permission-mode acceptEdits` alone, a headless run has no approval surface and auto-denies every Bash call (pytest and skill CLIs included), which silently invalidated v0.2.0. Trials where the model produced no tokens are recorded with `infra_error` and excluded from analysis; check that count before trusting a run.
 
+The runner sets `CONTEXT_GARDEN_MODE_<SKILL>=on` for every skill, so a skill mode set on the benchmark machine (`~/.claude/settings.json` `skillOverrides`) can't switch a treatment off.
+
 `ClaudeCodeRunner` adds a unique nonce to each call's system prompt, so no run benefits from another run's warm prompt cache; caching within a run still works.
 
 ## Reading the results
@@ -58,11 +60,17 @@ Every arm passes `--allowedTools Bash`. With `--permission-mode acceptEdits` alo
 
 ### Tasks with a single correct answer
 
-Some tasks require exactly one `KEY: value` line: `ROOT_CAUSE: <function_name>` for compost, or `VERDICT: OK` / `VERDICT: REGRESSION` for trellis. The `answer_key` verifier fails if the key is missing, repeated, or paired with a value that does not equal `expected` or fully match `pattern`.
+Some tasks require exactly one `KEY: value` line per key, e.g. `ROOT_CAUSE: <function_name>` for compost or the `ANSWERS.txt` keys of the mycelium tasks. The `answer_key` verifier fails if the key is missing, repeated, or paired with a value that does not equal `expected` or fully match `pattern`.
 
-## Why trellis and weeder are opt-in
+## Why weeder is opt-in
 
-Both set `run_by_default: false` (select with `--component` or `--task`) because a single-task comparison shows their cost but not their benefit: trellis spends tokens to catch numerical regressions, and weeder's savings arrive in future uses of the optimized Skill. A positive token delta for them is expected.
+It sets `run_by_default: false` (select with `--component` or `--task`) because a single-task comparison shows its cost but not its benefit: weeder's savings arrive in future uses of the optimized Skill. A positive token delta is expected.
+
+## Hook-based skills and multi-session tasks
+
+A `skill_available` task may also set `treatment_overlay`; it is copied after the Skill is installed, e.g. a `.claude/settings.json` that enables the Skill's hooks (loaded because runs use `--setting-sources project`). The mycelium tasks use this for the Agent gate and the `scout` agent.
+
+`followup_prompt` runs a second headless session in the same working copy after `prompt`. Usage is summed (`sessions: 2`) and verification runs after both, so a Skill that records notes in session 1 pays for them against what session 2 saves.
 
 ## Record fields
 
@@ -70,6 +78,7 @@ Fields are defined in `harness/types.py::BenchmarkRecord`. Non-obvious ones:
 
 - `repository_tokens` uses `cache_creation_input_tokens` (new content counted once), **not** `cache_read_input_tokens`, which recounts the same content on each tool turn. `cache_read_tokens` and `cost_usd` are diagnostics and are not added to `total_tokens`.
 - `skill_invoked` records Skills used through the Skill tool or by reading `SKILL.md`.
+- `subagent_count` / `subagent_tokens` come from the session's `subagents/agent-*.jsonl` transcripts (input + cache creation + output, each message once). `subagent_tokens` **is** added to `total_tokens`, so delegation isn't free in the comparison. On a first pilot, check that `cost_usd` moves with it (i.e. the headless `usage` block excludes subagents and nothing is double-counted).
 - A non-empty `infra_error` means the model never ran. Older records without the field are detected by zero input and output tokens.
 
 ## Publishing results for a version

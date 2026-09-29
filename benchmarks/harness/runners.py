@@ -8,6 +8,7 @@ to which runner produced it.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import time
@@ -17,6 +18,14 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .types import AgentRunResult
+
+# Skill modes (skills/*/scripts/cg_mode.py) also read ~/.claude/settings.json,
+# so a mode set on the benchmark machine would silently change the treatment.
+SKILLS_ON_ENV = {
+    f"CONTEXT_GARDEN_MODE_{d.name.upper()}": "on"
+    for d in (Path(__file__).resolve().parents[2] / "skills").iterdir()
+    if (d / "SKILL.md").is_file()
+}
 
 
 class AgentRunner(Protocol):
@@ -66,6 +75,38 @@ def _is_under(path_str: str, root: Path) -> bool:
         return Path(path_str).resolve().is_relative_to(root)
     except (OSError, ValueError):
         return False
+
+
+def _subagent_usage(transcript: Path) -> tuple[int, int]:
+    """(count, tokens) over <session>/subagents/agent-*.jsonl next to the main
+    transcript. Each assistant message.id is counted once (a turn's lines
+    repeat its usage block)."""
+    count = tokens = 0
+    for path in sorted((transcript.parent / transcript.stem / "subagents").glob("agent-*.jsonl")):
+        count += 1
+        seen: set[str] = set()
+        try:
+            lines = path.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                msg = json.loads(line).get("message")
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(msg, dict) or not isinstance(msg.get("usage"), dict):
+                continue
+            mid = msg.get("id")
+            if mid in seen:
+                continue
+            if mid:
+                seen.add(mid)
+            u = msg["usage"]
+            tokens += sum(
+                int(u.get(k) or 0)
+                for k in ("input_tokens", "cache_creation_input_tokens", "output_tokens")
+            )
+    return count, tokens
 
 
 def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> tuple[int, list[str]]:
@@ -209,6 +250,7 @@ class ClaudeCodeRunner:
             capture_output=True,
             text=True,
             timeout=self.timeout_seconds,
+            env={**os.environ, **SKILLS_ON_ENV},
         )
         runtime = time.monotonic() - start
 
@@ -232,7 +274,7 @@ class ClaudeCodeRunner:
         # material purely as a function of how many turns it took.
         # Real re-read volume is still reported, just as a diagnostic.
         repo_tokens = usage.get("cache_creation_input_tokens", 0)
-        skill_tokens = 0
+        skill_tokens = subagent_count = subagent_tokens = 0
         skill_invoked: list[str] = []
         session_id = payload.get("session_id")
         if session_id:
@@ -240,6 +282,7 @@ class ClaudeCodeRunner:
             if transcript is not None:
                 skill_tokens, skill_invoked = _skill_tokens_from_transcript(transcript, workdir)
                 repo_tokens = max(0, repo_tokens - skill_tokens)
+                subagent_count, subagent_tokens = _subagent_usage(transcript)
 
         infra_error = ""
         if not usage.get("output_tokens") and not usage.get("input_tokens"):
@@ -264,5 +307,7 @@ class ClaudeCodeRunner:
             cost_usd=payload.get("total_cost_usd", 0.0),
             skill_invoked=skill_invoked,
             infra_error=infra_error,
+            subagent_count=subagent_count,
+            subagent_tokens=subagent_tokens,
             raw=payload,
         )

@@ -42,7 +42,7 @@ htmlcov/
 .compost/
 .pruner/
 .seedbank/
-.trellis/
+.mycelium/
 
 # Local Claude Code settings.
 .claude/settings.local.json

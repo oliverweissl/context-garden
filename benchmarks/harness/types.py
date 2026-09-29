@@ -48,6 +48,10 @@ class TaskSpec:
     # Optional override of the treatment-forced prompt prefix (default: an
     # instruction to use the skill(s) named in skill_relevance).
     forced_prompt_prefix: str | None = None
+    # A second headless session run in the same working copy after `prompt`
+    # (e.g. to measure reuse of what the first session recorded); its usage
+    # is added to the first's and verification runs after both.
+    followup_prompt: str | None = None
 
     def __post_init__(self) -> None:
         if self.level not in VALID_LEVELS:
@@ -93,6 +97,10 @@ class AgentRunResult:
     # limit, unparseable output): the trial measures the infrastructure,
     # not the agent, so analysis excludes it instead of scoring a FAIL.
     infra_error: str = ""
+    # Subagents spawned via the Agent tool and their summed tokens (input +
+    # cache creation + output, read from the session's subagents/*.jsonl).
+    subagent_count: int = 0
+    subagent_tokens: int = 0
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -122,6 +130,10 @@ class BenchmarkRecord:
     cost_usd: float = 0.0
     skill_invoked: list[str] = field(default_factory=list)
     infra_error: str = ""
+    subagent_count: int = 0
+    subagent_tokens: int = 0
+    # >1 for fixtures with a followup_prompt (sessions share one working copy).
+    sessions: int = 1
     # Scheduling metadata: repetition index within (task, arm), the
     # schedule seed, and this trial's position in the randomised order.
     rep: int = 0
@@ -136,6 +148,7 @@ class BenchmarkRecord:
             + self.tool_result_tokens
             + self.skill_tokens
             + self.output_tokens
+            + self.subagent_tokens
         )
 
     def to_dict(self) -> dict[str, Any]:
