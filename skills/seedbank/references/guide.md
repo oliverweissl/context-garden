@@ -1,5 +1,17 @@
 # seedbank: operational details
 
+## Automatic observation (Claude Code hook)
+
+The context-garden plugin's `hooks/hooks.json` runs `bin/seedbank hook`
+asynchronously after every `Read`, `Grep` and `Glob` (silent, always exits
+0, only inside a git repo). If you copied just this skill, add to
+`.claude/settings.json` (or `~/.claude/settings.json`):
+```json
+{"hooks": {"PostToolUse": [{"matcher": "Read|Grep|Glob",
+  "hooks": [{"type": "command", "command": "<this-skill-dir>/bin/seedbank hook",
+  "async": true, "timeout": 5}]}]}}
+```
+
 ## Observing reads and searches by hand
 
 Without the hook:
@@ -14,47 +26,29 @@ Example mistake/fact logs:
 <this-skill-dir>/bin/seedbank observe fact "Never weaken convergence tolerances to make tests pass; tolerance is part of the numerical accuracy contract." \
   --scope invariants
 ```
-`mistake` costs more (it represents wasted work) and ranks higher for
-promotion than a plain discovery. `bin/seedbank status` shows the store.
-
-## Import
-
-`import` seeds each bullet as a review-before-trusting candidate (lower
-confidence) rather than promoting it outright.
-
-## Automatic observation (Claude Code hook)
-
-The context-garden plugin ships `hooks/hooks.json`, which runs
-`bin/seedbank hook` asynchronously after every `Read`, `Grep` and `Glob`
-(background, silent, always exits 0, only inside a git repo). If you copied
-just this skill, add to `.claude/settings.json` (or `~/.claude/settings.json`):
-```json
-{"hooks": {"PostToolUse": [{"matcher": "Read|Grep|Glob",
-  "hooks": [{"type": "command", "command": "<this-skill-dir>/bin/seedbank hook",
-  "async": true, "timeout": 5}]}]}}
-```
 
 ## Tiers
 
-- **Hot** = always-loaded (`AGENTS.md`). Kept small on purpose (default
-  budget 500 tokens); promoting past budget auto-demotes the
-  lowest-value non-`--critical` hot fact to warm.
-- **Warm** = topic-scoped files under `.seedbank/warm/<scope>.md`,
-  pointed to from `AGENTS.md` but not inlined -- open one only when the
-  current task is actually about that topic.
-- **Cold** = everything else; just the repository itself.
+- **Hot**: inlined in `AGENTS.md`, budget 500 tokens by default.
+- **Warm**: `.seedbank/warm/<scope>.md`, only pointed to from `AGENTS.md`;
+  open one only when the task is about that topic.
+- **Cold**: not stored; the repository itself.
+
+## Import
+
+`import` seeds bullets as lower-confidence candidates; nothing is promoted
+until you review them.
 
 ## In the target repository
 
-Commit `AGENTS.md` (and any `.seedbank/warm/*.md`). A new store is created
-with `.seedbank/.gitignore` ignoring the local profiler state
-(`observations.jsonl`, `keystats.json`, `facts.json`, `config.json`,
-`.lock`, `hook.log`, `*.tmp`) but not `warm/`; commit that `.gitignore`
-too, and edit it only if the team decides to share observation history.
-An existing `.seedbank/.gitignore` is never overwritten.
+Commit `AGENTS.md` and `.seedbank/warm/*.md`. A new store writes
+`.seedbank/.gitignore` ignoring local profiler state (everything except
+`warm/`); commit it too, and edit it only if the team decides to share
+observation history. An existing `.seedbank/.gitignore` is never
+overwritten.
 
 If Claude Code works in this repository, also commit a one-line
 `CLAUDE.md` containing `@AGENTS.md`. Claude Code reads `CLAUDE.md`, never
-`AGENTS.md` (no automatic fallback); the import line loads the same facts
-without a second copy, so `seedbank compile` only ever touches `AGENTS.md`.
-A symlink works too but fails on Windows without admin/Developer Mode.
+`AGENTS.md`; the import avoids a second copy, so `compile` only touches
+`AGENTS.md`. A symlink also works but fails on Windows without
+admin/Developer Mode.
