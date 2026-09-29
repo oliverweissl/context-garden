@@ -14,6 +14,7 @@ trap 'rm -rf "$SCRATCH"' EXIT
 cd "$REPO"
 # deterministic session ids: don't inherit the calling Claude Code session
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+export CONTEXT_GARDEN_MODE_SEEDBANK=on  # modes default to off; this tests the skill itself
 CC() { python3 "$DIR/scripts/seedbank.py" "$@"; }
 dkey() { python3 -c "import sys; sys.path.insert(0, sys.argv[1]); from seedbank import declared_key; print(declared_key(sys.argv[2], sys.argv[3]))" "$DIR/scripts" "$1" "$2"; }
 

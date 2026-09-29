@@ -47,8 +47,16 @@ def test_skill_md_injects_its_own_banner(skill):
 
 
 @pytest.mark.parametrize("skill", SKILLS)
-def test_default_is_on_and_banner_is_silent(skill, repo):
-    assert _bin(skill, "mode", repo=repo).stdout.strip() == f"{skill}: on (from default)"
+def test_default_is_off(skill, repo):
+    assert _bin(skill, "mode", repo=repo).stdout.strip() == f"{skill}: off (from default)"
+    banner = _bin(skill, "mode", "--banner", repo=repo).stdout
+    assert "turned OFF" in banner and f"/bin/{skill} mode on" in banner  # absolute, runnable
+    assert _bin(skill, "mode", "--is-on", repo=repo).returncode == 1
+
+
+@pytest.mark.parametrize("skill", SKILLS)
+def test_on_banner_is_silent(skill, repo):
+    _bin(skill, "mode", "on", repo=repo)
     assert _bin(skill, "mode", "--banner", repo=repo).stdout == ""
     assert _bin(skill, "mode", "--is-on", repo=repo).returncode == 0
 
@@ -106,6 +114,8 @@ def test_mycelium_gate_is_silent_unless_on(repo):
     root, _, _ = repo
     payload = json.dumps({"session_id": "s", "cwd": str(root), "tool_name": "Agent",
                           "tool_input": {"description": "d", "prompt": "look around"}})
+    assert _bin("mycelium", "hook", "pre-agent", repo=repo, stdin=payload).stdout == ""  # default off
+    _bin("mycelium", "mode", "on", repo=repo)
     assert "deny" in _bin("mycelium", "hook", "pre-agent", repo=repo, stdin=payload).stdout
     _bin("mycelium", "mode", "manual", repo=repo)
     assert _bin("mycelium", "hook", "pre-agent", repo=repo, stdin=payload).stdout == ""
@@ -116,8 +126,7 @@ def test_seedbank_hook_observes_only_when_on(repo):
     (root / "a.py").write_text("x = 1\n")
     payload = json.dumps({"session_id": "s", "cwd": str(root), "tool_name": "Read",
                           "tool_input": {"file_path": str(root / "a.py")}})
-    _bin("seedbank", "mode", "off", repo=repo)
-    _bin("seedbank", "hook", repo=repo, stdin=payload)
+    _bin("seedbank", "hook", repo=repo, stdin=payload)  # default off
     assert not (root / ".seedbank" / "observations.jsonl").exists()
     _bin("seedbank", "mode", "on", repo=repo)
     _bin("seedbank", "hook", repo=repo, stdin=payload)

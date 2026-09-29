@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Per-skill mode: on (Claude uses it automatically), manual (only when the
-user calls it, e.g. `/compost <instruction>`), off (not used).
+user calls it, e.g. `/compost <instruction>`), off (not used; the default).
 
 Identical copy in every context-garden skill (skills never import each other).
 The mode is stored where Claude Code's own `skillOverrides` setting lives, so
 the `/skills` menu and this tool agree:
   on -> "on", manual -> "user-invocable-only", off -> "off" ("name-only" reads as on).
 Resolution: $CONTEXT_GARDEN_MODE_<NAME> > <git root>/.claude/settings.local.json
-> <git root>/.claude/settings.json > ~/.claude/settings.json > on.
+> <git root>/.claude/settings.json > ~/.claude/settings.json > off.
 Claude Code applies skillOverrides natively only to standalone skills (not
 plugin skills), so SKILL.md also injects `mode --banner` and hooks check
 `--is-on`; that makes the mode hold for plugin installs too.
@@ -26,6 +26,8 @@ import tempfile
 from pathlib import Path
 
 MODES = ("on", "manual", "off")
+DEFAULT_MODE = "off"
+BIN_DIR = Path(__file__).resolve().parent.parent / "bin"
 TO_OVERRIDE = {"on": "on", "manual": "user-invocable-only", "off": "off"}
 FROM_OVERRIDE = {"on": "on", "name-only": "on", "user-invocable-only": "manual", "off": "off"}
 
@@ -72,7 +74,7 @@ def resolve(skill: str) -> tuple:
             continue  # unparseable settings file: Claude Code will complain itself
         if value in FROM_OVERRIDE:
             return FROM_OVERRIDE[value], str(path)
-    return "on", "default"
+    return DEFAULT_MODE, "default"
 
 
 def set_mode(skill: str, mode: str, scope: str = "local") -> Path:
@@ -109,8 +111,9 @@ def banner(skill: str) -> str:
         )
     if mode == "off":
         return (
-            f"**{skill} is turned OFF here.** Do not use it; continue the task without it. "
-            f"If the user wants it, they can run `{skill} mode on` (or `manual`) via this skill's bin/."
+            f"**{skill} is turned OFF here** (off is the default). Do not use it; continue the "
+            f"task without it. Only if the user asks to turn it on: `{BIN_DIR / skill} mode on` "
+            "(automatic) or `mode manual` (only when called)."
         )
     return ""
 

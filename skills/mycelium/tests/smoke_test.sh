@@ -12,6 +12,7 @@ trap 'rm -rf "$SCRATCH"' EXIT
 cd "$REPO"
 git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm init
 unset MYCELIUM_GATE
+export CONTEXT_GARDEN_MODE_MYCELIUM=on  # modes default to off; this tests the skill itself
 M() { "$DIR/bin/mycelium" "$@"; }
 
 fail=0

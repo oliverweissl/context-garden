@@ -244,7 +244,8 @@ class TestMycelium:
                    "tool_input": {"description": "look", "prompt": "explore the stores"}}
         proc = subprocess.run(
             ["bash", "-c", command], input=json.dumps(payload), capture_output=True, text=True,
-            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CLAUDE_PROJECT_DIR": str(treat)},
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CLAUDE_PROJECT_DIR": str(treat),
+                 "CONTEXT_GARDEN_MODE_MYCELIUM": "on"},  # what the runner sets
         )
         out = json.loads(proc.stdout)["hookSpecificOutput"]
         assert out["permissionDecision"] == "deny"
