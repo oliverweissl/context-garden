@@ -16,11 +16,12 @@ produces before/after evidence. Run all commands as
    movable background/examples. Read all of it; `optimize` acts on only part.
 2. **Mechanical pass:** `optimize <skill_dir> --out <skill_dir>-optimized`.
    Moves background/examples sections into `references/` with a pointer.
-   Lossless and reversible; does not touch the description or duplicates.
+   Lossless and reversible, so it's safe to always apply; it does not touch
+   the description or duplicates.
 3. **Judgment pass, in the `-optimized` copy:** shorten the description
    (keep concrete trigger nouns/verbs), state each duplicated rule once
    where the workflow needs it, cut only instructions that are genuinely
-   obvious. Optional structured help: `suggest <skill_dir> --assist slight --json`,
+   obvious to a capable agent; don't cut something just because it's short. Optional structured help: `suggest <skill_dir> --assist slight --json`,
    then `apply-suggestion <skill_dir> --answer <answer.json> --out <skill_dir>-optimized`
    (see `references/llm-assist.md`; an assisted answer gets no free pass).
 4. **Routing:** `test-routing <skill_dir> --examples <examples.json> [--competing <other_skill_dir> ...]`
@@ -39,4 +40,4 @@ produces before/after evidence. Run all commands as
    don't lower the bar to make a bad result pass.
 
 Classification rules and why step 3 isn't automated:
-`references/classification.md`. Modes: `references/modes.md`. More: `references/guide.md`.
+`references/classification.md`.

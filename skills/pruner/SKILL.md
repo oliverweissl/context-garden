@@ -16,7 +16,8 @@ no LLM). How scores work: `references/scoring.md`.
    <this-skill-dir>/bin/pruner select --task "<what you're doing>" --budget <N> \
      [--error "<traceback>" | --error-file <path>] [--changed <files...> | --auto-changed]
    ```
-   Always pass `--error` when you have one; it is the strongest signal.
+   If you have an error, always pass `--error`; error-stack membership is
+   the strongest relevance signal.
    First run builds a SQLite index under `.pruner/`; later runs re-parse
    only changed files. Output lists `required_context`,
    `supporting_context`, `relevant_tests`, `relevant_config` as exact
@@ -25,11 +26,13 @@ no LLM). How scores work: `references/scoring.md`.
 2. The slice is a starting point, not a fence. If confidence is
    `low`/`medium` (a `hint:` line is printed) or the slice doesn't explain
    the behavior, fall back to targeted grep and reads.
-3. Missing a dependency? Check `omitted_candidates` first, then
+3. Missing a dependency? Don't re-run `select` from scratch or fall back to
+   open-ended exploration: check `omitted_candidates`, then
    `bin/pruner expand <slice_id> --add <id or file:start-end>` (or
-   `--file <path> --lines A:B`) instead of re-running `select`. The budget
-   stays enforced unless you pass `--budget-extra N`.
+   `--file <path> --lines A:B`). The token budget is hard-enforced: `select`
+   never returns more than `--budget` tokens and `expand` refuses to exceed
+   it unless you pass `--budget-extra N`.
 4. `bin/pruner show <slice_id>` / `list` re-print saved slices without re-scoring.
 
-Details (guarantees, `--graph`, tree-sitter backend, language scope):
-`references/guide.md`; full CLI: `references/schema.md`.
+Full CLI (`--graph`, `--parser`, tree-sitter backend, language scope):
+`references/schema.md`.

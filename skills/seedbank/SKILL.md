@@ -7,9 +7,9 @@ description: Maintain a small, generated AGENTS.md of repository facts (build co
 
 Offline fact store + profiler. It counts rediscoveries and mistake cost;
 you supply the fact text and decide what to promote. Nothing is promoted
-from a single sighting. Formulas: `references/scoring.md`.
+just because it was seen once; promotion is always a deliberate `promote` call. Formulas: `references/scoring.md`.
 
-`seedbank` is not on PATH: run `<this-skill-dir>/bin/seedbank`. State
+`seedbank` is not on `PATH`: always run it as `<this-skill-dir>/bin/seedbank`. State
 lives in `<git repo root>/.seedbank/`.
 
 1. **Start:** read `AGENTS.md`. If it answers your question, skip
@@ -28,12 +28,14 @@ lives in `<git repo root>/.seedbank/`.
    bin/seedbank promote <key> --tier warm --scope <topic>
    bin/seedbank compile
    ```
-   Use `--critical` for correctness/safety invariants (never evicted).
+   A correctness/safety invariant is always worth promoting: use
+   `--critical` so it's protected from budget-based eviction.
    Promote refuses a fact contradicting one in the same scope; re-run with
    `--replace <id>` or `--force`. `compile` rewrites only the region
-   between `<!-- seedbank:begin -->`/`<!-- seedbank:end -->` and drops
-   facts whose source changed (critical ones stay, marked "verify").
+   between `<!-- seedbank:begin -->`/`<!-- seedbank:end -->` and excludes
+   stale facts (source changed since promotion) instead of serving them as
+   still true; `--critical` facts stay, marked "(source changed — verify)".
 4. Existing hand-written `AGENTS.md`/`CLAUDE.md`: `bin/seedbank import <path>`.
 
-Hook setup, tiers, what to commit, guarantees: `references/guide.md`.
+Hook setup, tiers, what to commit: `references/guide.md`.
 Full CLI: `references/schema.md`.

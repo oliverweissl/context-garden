@@ -9,8 +9,9 @@ Offline, deterministic: output is parsed and clustered by script (no LLM);
 the full raw output is always kept on disk. Skip it for short output --
 just read that directly.
 
-`compost` is not on PATH: run `<this-skill-dir>/bin/compost` (or
-`python3 <this-skill-dir>/scripts/compost.py`).
+`compost` is not on PATH: always use the full `<this-skill-dir>/bin/compost`
+path (or `python3 <this-skill-dir>/scripts/compost.py` if executables are
+not permitted).
 
 1. Run: `<this-skill-dir>/bin/compost run -- <command...>`
    (pipes/redirects need `bash -c '...'`). Prints the root error (first
@@ -22,11 +23,11 @@ just read that directly.
 4. Only if the summary is insufficient, use the printed
    `retrieval_handles` (`get <id> --lines A:B`, `event <id> --event N`,
    `grep <id> '<pattern>'`, `show <id> --json`). They never re-run the
-   command.
+   command; they read the already-stored raw output.
 5. Existing log file: `bin/compost ingest --file <path>` (or `--stdin`).
 
 Profiles (auto-detected, `--profile` to override): pytest, ctest, gcc/clang,
 cmake, python_traceback, slurm, numerical_solver, generic.
 
-Details: `references/guide.md` (storage, retention, signals),
-`references/schema.md`, `references/profiles.md`.
+Output fields, statuses, storage and retention: `references/schema.md`.
+Per-profile detection: `references/profiles.md`.

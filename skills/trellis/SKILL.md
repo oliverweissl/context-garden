@@ -27,24 +27,30 @@ PASS/WARN/FAIL with evidence. Needs numpy (scipy optional).
    python3 <this-skill-dir>/scripts/trellis.py lock verify.py   # once; commit .trellis/spec.lock
    python3 <this-skill-dir>/scripts/trellis.py run  verify.py   # exit 1 FAIL, 3 WARN
    ```
-3. Read `remaining_risks` and `unsupported_claims`, not just the status.
-4. **A FAIL overrides a green test suite.** Fix the numerics. Never relax
-   a check, edit `.trellis/spec.lock`, or pass `--update-lock` to make it
-   pass; loosening the spec is a human decision. WARN means not verified,
-   never report it as correct.
+3. Read `remaining_risks` and `unsupported_claims`, not just the status:
+   if no `model_validation` or `empirical` check ran, the report says so
+   even if every check passed; a clean PASS on residuals alone does not
+   mean the model is right.
+4. **A FAIL overrides a passing test suite**: if pytest/ctest are green but
+   trellis FAILs, the numerical work is not done; don't report success,
+   don't relax the check, fix the numerics.
+   **Never run `--update-lock` or edit `.trellis/spec.lock` to make a failing
+   gate pass**; accepting a looser spec is a human decision made by
+   reviewing the lock's `git diff`.
+   WARN means indeterminate / not verified; never report a WARN as correct.
 
 | What changed | Check |
 |---|---|
-| Any numerical output | `universal.nan_inf_check` |
+| Any numerical output | `universal.nan_inf_check` (always cheap, always worth it) |
 | Scheme, stencil, timestep, mesh | `ode.timestep_convergence` / `pde.mesh_convergence` (highest value) |
 | Linear solve / matrix op | `linalg.residual_norm` (pass `cond=` from `.conditioning`), `.symmetry_check`, `.positive_definite_check` |
-| A tolerance was changed | re-check with the *original* tolerance |
+| A tolerance was changed | run the *original* tolerance through `linalg.residual_norm`; don't trust the changed one |
 | ODE integrator | `ode.invariant_preservation`, `ode.reference_solution_comparison` |
 | PDE solver | `pde.conservation_check`, `pde.manufactured_solution_check` |
 | Optimizer / gradient | `optimization.gradient_check`, `.termination_check`, `.constraint_violation_check` |
-| Monte Carlo / single-run result | `stochastic.seed_replication_check(..., expected=)`, >=3 seeds |
+| Monte Carlo / single-run result | `stochastic.seed_replication_check(..., expected=)`; always use >=3 seeds (without `expected` it can only WARN) |
 | Before/after metric | `stochastic.compare_before_after` or `run --baseline latest` |
 | Sampler / RNG | `stochastic.distribution_sanity_check` |
 
-Result files from C++/Fortran/MPI runs, baselines, lock semantics,
-guarantees: `references/guide.md`. Per-module docs: `references/modules.md`.
+Result files from C++/Fortran/MPI runs and per-check options:
+`references/modules.md`. CLI, spec lock, baselines, report: `references/schema.md`.

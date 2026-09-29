@@ -116,6 +116,12 @@ resolution points as you do.
 
 ### Results from files (`trellis.io`)
 
+Checks don't need a Python callable; pass result files produced by
+C++/Fortran/MPI/SLURM jobs:
+`mesh_convergence("out/n{N}.npy", [16, 32, 64], reference="out/exact{N}.npy", expected_order=2)`,
+`mesh_convergence(None, errors="out/errors.json", error_key="error", expected_order=2)`,
+`universal.threshold_check("out/run.json", 1e-8, key="stats.residual")`.
+
 Convergence checks accept `solve_fn` / `reference` as a file template
 (`"out/n{N}.npy"`, formatted with `N`/`n`/`h`/`dt`/`p`) or, for the
 reference, one fixed file; `file_key` / `reference_key` pick the npz array,
