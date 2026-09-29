@@ -1,12 +1,6 @@
-"""Shapes we_audit's audit_skill() output into structured, assist-level-
-gated judgment requests for SKILL.md workflow step 3. This never contacts
-an LLM or the network -- a "request" is just structured framing of exactly
-the information an agent doing step 3 freehand already reads from `weeder
-audit`. The `--assist` level controls how many of these requests exist,
-not their content: `none` produces zero (do step 3 freehand, as before),
-`slight` structures only the description rewrite, `lot` also structures
-duplicate-rule consolidation and obvious-content removal. See
-references/llm-assist.md for the full request/answer schema."""
+"""Shapes audit_skill() output into judgment requests for the invoking agent;
+`--assist` controls how many are emitted, not their content. Schema:
+references/llm-assist.md."""
 
 from __future__ import annotations
 

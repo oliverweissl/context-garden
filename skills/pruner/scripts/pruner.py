@@ -2,10 +2,7 @@
 """pruner: the smallest sufficient repository context for one task.
 
 See ../SKILL.md for the agent-facing workflow and ../references/ for the
-scoring/schema details. Stdlib-only, no network access, no LLM calls --
-relevance is lexical/structural (keyword overlap + call/import graph
-distance), not semantic embedding similarity. See references/scoring.md
-for why that tradeoff was made.
+scoring/schema details.
 """
 
 from __future__ import annotations

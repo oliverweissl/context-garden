@@ -1,4 +1,4 @@
-"""Local, offline storage for compost runs.
+"""Storage for compost runs.
 
 Layout under the store root (default <git root, else cwd>/.compost):
 
@@ -7,10 +7,7 @@ Layout under the store root (default <git root, else cwd>/.compost):
     runs/<run_id>/raw.txt   verbatim captured output (streamed to disk, never mutated)
     runs/<run_id>/meta.json parsed summary + internal event index for this run
 
-Retention (`Store.gc`, run after every run/ingest and by `compost gc`) keeps
-the last `keep_per_command` runs per command and evicts oldest-first while the
-runs exceed `max_store_mb`, never touching the run just created, the latest
-run of any command, or a run still in progress.
+Retention rules (`Store.gc`): see references/schema.md "Retention".
 """
 
 from __future__ import annotations
@@ -248,7 +245,7 @@ class Store:
         max_store_mb: float | None = None,
         protect=(),
     ) -> dict:
-        """Apply retention under the store lock (see module docstring)."""
+        """Apply retention under the store lock (see references/schema.md)."""
         cfg = self.config()
         keep = int(keep_per_command if keep_per_command is not None else cfg["keep_per_command"])
         keep = max(1, keep)

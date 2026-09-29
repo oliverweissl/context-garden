@@ -63,8 +63,7 @@ def load_records(path: Path) -> list[dict[str, Any]]:
 
 
 def t_crit(df: float) -> float:
-    """Two-sided 95% Student-t critical value (table up to 30 df, then a
-    Cornish-Fisher expansion around the normal quantile)."""
+    """Two-sided 95% t critical value: table (interpolated) to df 30, Cornish-Fisher above."""
     if df <= 0 or math.isnan(df):
         return float("nan")
     if df <= 30 and float(df).is_integer():

@@ -1,14 +1,6 @@
-"""Routing test harness: a deterministic, offline PROXY for "would a real
-model pick this skill for this prompt" -- not a replacement for it. See
-references/routing-heuristic.md for exactly what this does and doesn't
-predict, and why (same "documented lexical approximation" pattern as
-pruner's relevance scoring, for the same reason: no embeddings/LLM
-calls anywhere in this suite's deterministic tooling).
-
-Use this to catch REGRESSIONS between a before/after description (did the
-shortened description clearly lose a positive-trigger keyword?) and for a
-fast first pass across many labeled examples. Confirm genuinely
-borderline/ambiguous cases with a real agent before trusting a rewrite.
+"""Lexical PROXY for "would a model pick this skill for this prompt": good for
+catching before/after regressions, not for borderline cases (confirm those
+with a real agent). See references/routing-heuristic.md.
 """
 
 from __future__ import annotations
@@ -88,10 +80,8 @@ def extract_keywords(text: str) -> set[str]:
 
 
 def relevance_score(description: str, prompt: str) -> float:
-    """Coverage-style keyword overlap: the fraction of the prompt's
-    (lightly stemmed) keywords the description contains. Unlike Jaccard,
-    this doesn't penalise a longer, more thorough description for words
-    the prompt doesn't use -- see routing-heuristic.md."""
+    """Fraction of the prompt's keywords the description contains (not Jaccard,
+    so a longer description isn't penalised)."""
     desc_kw = extract_keywords(description)
     prompt_kw = extract_keywords(prompt)
     if not desc_kw or not prompt_kw:

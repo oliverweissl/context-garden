@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate the structure of every Skill under skills/.
 
-Checks (once Skills exist):
+Checks:
   - each skills/<name>/SKILL.md has required frontmatter (name, description)
   - frontmatter is valid YAML (when PyYAML is installed; otherwise a
     substring check) with non-empty name and description
@@ -10,9 +10,6 @@ Checks (once Skills exist):
   - no Skill references paths outside its own directory (e.g. ../../src)
     in prose or markdown links (fenced code blocks and inline code spans
     are exempt: example commands may legitimately use `../`)
-
-With no SKILL.md files present yet, this succeeds trivially -- there is
-nothing to validate until the first Skill is added.
 """
 
 from __future__ import annotations

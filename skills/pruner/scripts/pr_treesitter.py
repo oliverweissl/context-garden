@@ -1,19 +1,11 @@
 """Optional tree-sitter parsing backend.
 
-Used only when `tree_sitter` plus the grammar packages (`tree_sitter_python`,
-`tree_sitter_cpp`) are importable -- they are never required. Produces the
-same record shape as pr_python / pr_cpp (`imports`, `symbols`,
-`parse_error`) so the rest of the indexer is backend-agnostic. Compared to
-the builtin parsers it is error tolerant (a file with a syntax error still
-yields the symbols tree-sitter could recover) and, for C/C++, understands
-real syntax instead of brace-counting heuristics; inline C++ methods get a
-`Class::method` qualname.
-
-Targets the py-tree-sitter 0.22-0.25 API (`Language(pkg.language())`,
-`Parser(language)`), with a fallback to the older `Parser().set_language`;
-0.26.0 is excluded (segfaults on node access, see _version_supported).
-Any failure (missing package, incompatible version, parser crash) returns
-None and the caller falls back to the builtin parser for that file.
+Used only when `tree_sitter` + `tree_sitter_python`/`tree_sitter_cpp` import.
+Same record shape as pr_python / pr_cpp (`imports`, `symbols`, `parse_error`);
+error tolerant, and inline C++ methods get a `Class::method` qualname.
+Targets py-tree-sitter 0.22-0.25 (older `Parser().set_language` as fallback;
+0.26.0 excluded, see _version_supported). Any failure returns None and the
+caller falls back to the builtin parser for that file.
 """
 
 from __future__ import annotations

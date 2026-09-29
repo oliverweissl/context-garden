@@ -12,9 +12,7 @@ from .schema import CheckResult, Status
 
 @record_config
 def nan_inf_check(data, name: str = "output", key=None) -> CheckResult:
-    """FAIL if any NaN or Inf is present -- there is no WARN tier here: a
-    NaN/Inf is an unambiguous numerical breakdown (overflow, division by
-    zero, an out-of-domain evaluation), not a matter of degree. `data`
+    """FAIL if any NaN or Inf is present (no WARN tier). `data`
     may be a result-file path (see trellis.io.load; `key` selects)."""
     if isinstance(data, (str, os.PathLike)):
         from . import io as _io

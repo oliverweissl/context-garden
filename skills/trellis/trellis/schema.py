@@ -19,9 +19,8 @@ class Status(str, Enum):
 
 _SEVERITY = {Status.PASS: 0, Status.WARN: 1, Status.FAIL: 2}
 
-# The four tiers the "Important Rule" requires distinguishing: passing
-# tests is *implementation* evidence, not automatically *numerical*,
-# *model_validation*, or *empirical* evidence. See references/modules.md.
+# Passing tests is *implementation* evidence only, not automatically
+# *numerical*, *model_validation*, or *empirical* evidence.
 CATEGORIES = ("implementation", "numerical", "model_validation", "empirical")
 
 
@@ -124,10 +123,8 @@ def build_report(
     of any individual check (any FAIL -> FAIL; else any WARN -> WARN; else
     PASS). With auto_gaps=True (default), automatically appends
     remaining_risks/unsupported_claims for verification *tiers that were
-    never exercised* -- this is what stops "unit tests passed" from being
-    silently read as "numerically correct": if nothing in `results` has
-    category='model_validation', the report says so explicitly, rather
-    than relying on whoever wrote the check suite to remember to disclose it."""
+    never exercised*, so "unit tests passed" is never silently read as
+    "numerically correct"."""
     unsupported_claims = list(unsupported_claims or [])
     remaining_risks = list(remaining_risks or [])
     categories_seen = {c.category for c in results}

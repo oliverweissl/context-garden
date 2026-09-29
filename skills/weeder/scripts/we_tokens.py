@@ -1,6 +1,4 @@
-"""Token estimation. Offline, always: no tokenizer download, no API call.
-
-Default is the suite-wide chars/4 heuristic (see compost/seedbank/pruner).
+"""Token estimation, offline. Default is the suite-wide chars/4 heuristic.
 If references/token-calibration.json exists (written by the repo's
 `scripts/calibrate-tokens`, which the user runs manually against their own
 `claude` CLI), its measured chars-per-token ratio is used per content
@@ -10,9 +8,8 @@ category instead:
 - ``code``     -- fenced code blocks inside markdown, or whole code files
 - ``markdown`` -- everything else (prose + markdown structure)
 
-Every number this module produces is still an ESTIMATE; `estimate_label()`
-says which kind, and `error_range_pct()` gives the calibration's observed
-per-sample error so reports never present an estimate as a measurement.
+Reports must never present an estimate as a measurement: `estimate_label()`
+and `error_range_pct()` say which kind and how far off.
 `$WEEDER_TOKEN_CALIBRATION` overrides the calibration file path (used by
 the smoke test; point it at a nonexistent path to force chars/4).
 """

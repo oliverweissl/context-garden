@@ -30,11 +30,8 @@ def mesh_convergence(
     "resolution" (p = cell count N, larger = finer; order fitted against
     h = 1/N), "h" (p = mesh size, smaller = finer), or "auto" (default:
     integer values >= 2 are read as cell counts, otherwise as h; the
-    interpretation used is recorded in evidence["param_kind"]). This is
-    the check for UC1: a stencil bug that regresses observed order from
-    ~2 to ~1 shows up here even when ordinary tests at one fixed
-    resolution keep passing. The default error is the grid-scaled RMS
-    norm; see convergence.convergence_check.
+    interpretation used is recorded in evidence["param_kind"]). The default
+    error is the grid-scaled RMS norm; see convergence.convergence_check.
 
     Real-solver outputs: `solve_fn="out/n{N}.npy"` (a file template, one
     file per resolution; `file_key` picks the npz array / CSV column / JSON
@@ -107,9 +104,8 @@ def manufactured_solution_check(
 ) -> CheckResult:
     """Method of Manufactured Solutions: `exact_fn(h)` returns the known
     exact solution sampled on the same grid solve_fn(h) would produce.
-    Tagged model_validation (not plain 'numerical') because it validates
-    against a known-correct answer, the same reasoning as
-    ode.reference_solution_comparison."""
+    Tagged model_validation (not 'numerical'): it validates against a
+    known-correct answer."""
     result = convergence_check(
         solve_fn,
         resolutions,

@@ -1,13 +1,8 @@
-"""Resolves the LLM-assist level (none/slight/lot) that gates how much of
-SKILL.md workflow step 3 (shortening the description, consolidating
-duplicate rules, removing obvious filler -- see we_suggest.py) is exposed
-as a structured suggest/apply-suggestion request instead of done freehand.
+"""Resolves the LLM-assist level (none/slight/lot).
 
 Precedence: --assist flag > CONTEXT_GARDEN_LLM_ASSIST env var >
-`llm_assist.level` in the nearest .context-garden/config.yaml found
-walking up from the given start directory > "none". No level here ever
-triggers a network call or needs an API key -- see
-references/llm-assist.md for what actually changes at each level.
+`llm_assist.level` in the nearest .context-garden/config.yaml walking up >
+"none". See references/llm-assist.md.
 """
 
 from __future__ import annotations
@@ -22,13 +17,8 @@ CONFIG_RELPATH = Path(".context-garden") / "config.yaml"
 
 
 def _parse_minimal_yaml(text: str) -> dict:
-    """Parses only the small subset of YAML this project's config actually
-    uses: flat `key: value` lines, and one level of indented nesting
-    (`key:` on its own line, followed by more-indented `subkey: value`
-    lines). Not a general YAML parser -- deliberately, to avoid adding a
-    PyYAML dependency to a skill that's otherwise pure stdlib (the same
-    tradeoff we_parse.parse_frontmatter makes for SKILL.md's own
-    frontmatter)."""
+    """Only flat `key: value` lines plus one level of indented nesting; not a
+    general YAML parser, to avoid a PyYAML dependency."""
     root: dict = {}
     stack: list[tuple[int, dict]] = [(-1, root)]
     for raw_line in text.splitlines():

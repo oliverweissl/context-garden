@@ -1,12 +1,7 @@
 """Structural parsing/classification of a skill directory: frontmatter,
 SKILL.md sections (by H1/H2 heading), and reference files.
 
-Classification is heading-keyword based, not semantic -- a section titled
-"Examples" is classified `examples` regardless of what's actually in it.
-This is a deliberate, documented approximation (see
-references/classification.md): it's cheap, deterministic, and good enough
-to drive progressive-disclosure refactoring, but a well-named heading with
-off-topic content, or vice versa, will be misclassified.
+Classification is by heading keyword, not content; see references/classification.md.
 """
 
 from __future__ import annotations

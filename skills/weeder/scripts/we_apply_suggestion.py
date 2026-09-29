@@ -1,10 +1,6 @@
-"""Applies an agent-authored answer to weeder's suggest requests (see
-we_suggest.py) mechanically -- no judgment happens in this module, only in
-the answer file's content, which the calling agent supplies. Reuses the
-copy-then-overwrite pattern from we_optimize.optimize_skill so
-`apply-suggestion`'s output can be fed straight into the same
-test-routing/test-function/diff gate as `optimize`'s output; SKILL.md
-workflow steps 4-7 (validate before accepting) are unchanged either way.
+"""Mechanically applies an agent-authored answer to `suggest` requests (all
+judgment lives in the answer file). Writes a copy like `optimize`, so the
+output goes through the same test-routing/test-function/diff gate.
 """
 
 from __future__ import annotations
@@ -19,11 +15,8 @@ from we_parse import FRONTMATTER_KEY_RE, FRONTMATTER_RE
 
 
 def _whitespace_pattern(text: str) -> re.Pattern:
-    """Matches `text` against file content ignoring exact whitespace: a
-    duplicate-group member's text may have had internal newlines flattened
-    to single spaces during sentence-splitting (we_text.split_into_sentences),
-    so a literal substring match against the raw file can miss it even
-    though the words are identical and contiguous in the source."""
+    """Whitespace-insensitive match: sentence-splitting flattens newlines in a
+    member's text, so a literal substring search can miss it."""
     parts = [re.escape(w) for w in text.split()]
     return re.compile(r"\s+".join(parts))
 
@@ -67,14 +60,9 @@ def _apply_description(out_dir: Path, new_description: str) -> None:
 def _apply_duplicate_consolidation(
     out_dir: Path, report: dict, consolidations: list[dict]
 ) -> list[str]:
-    """ "State it once, delete the rest" (SKILL.md step 3) -- the member at
-    `keep_member_index` gets rewritten to `canonical_text` in place; every
-    other member in the group is deleted entirely from its own location,
-    rather than every occurrence being replaced with identical repeated
-    text (which would turn a near-duplicate into an exact one, the
-    opposite of consolidating it). Indexed by position, not `source`,
-    since two members can share the same source label (e.g. two sentences
-    in the same section)."""
+    """Rewrite the kept member to `canonical_text`, delete the others (replacing
+    all would just make exact duplicates). Indexed by position, not `source`:
+    two members can share a source label."""
     warnings = []
     groups = report["duplicate_groups"]
     for c in consolidations:

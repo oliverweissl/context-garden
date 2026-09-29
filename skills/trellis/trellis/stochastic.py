@@ -1,13 +1,7 @@
 """Monte Carlo / statistics checks: seed replication, confidence
-intervals, before/after comparison, distribution sanity.
-
-None of this uses scipy -- confidence intervals are Student-t intervals
-(t quantiles from a table for df <= 30 and a Cornish-Fisher expansion
-above), before/after comparison is a Welch two-sample t-test using
-the same quantiles, and distribution_sanity_check uses an exact t-test
-(incomplete beta), a Wilson-Hilferty chi-square test and an asymptotic KS
-test, all implemented here. Supported confidence levels: 0.90, 0.95, 0.99. See
-references/modules.md for what these do and don't guarantee.
+intervals, before/after comparison, distribution sanity. No scipy: all
+distribution functions are implemented here. Supported confidence levels:
+0.90, 0.95, 0.99.
 """
 
 from __future__ import annotations
@@ -80,9 +74,7 @@ def seed_replication_check(
     name: str = "seed_replication",
 ) -> CheckResult:
     """Runs fn(seed) for every seed and reports mean/std/t-CI of
-    metric_fn(result) across them. This is the direct answer to "the
-    agent reported an improvement based on one random seed": run this
-    with >= 3 (ideally >= 5-10) seeds before trusting a single-run number.
+    metric_fn(result) across them. Use >= 3 (ideally 5-10) seeds.
 
     `expected`: the true/reference value the estimator should hit. FAIL if
     it lies outside the t-CI (default 99%, so a correct estimator fails
@@ -396,9 +388,7 @@ def distribution_sanity_check(
     """Hypothesis tests that `values` come from the claimed distribution,
     e.g. validating a sampler. All numpy/stdlib-only:
 
-    - mean (`expected_mean`): one-sample t-test, t = (mean - mu) / (s/sqrt(n))
-      -- the standard error scales with n, so a bias that is small relative
-      to the spread is still detected with enough samples.
+    - mean (`expected_mean`): one-sample t-test, t = (mean - mu) / (s/sqrt(n)).
     - variance (`expected_std`): chi-square test on (n-1) s^2 / sigma^2 with
       Wilson-Hilferty p-values. By default the degrees of freedom are
       kurtosis-adjusted (Var(s^2/sigma^2) ~ 2/(n-1) + excess_kurtosis/n,

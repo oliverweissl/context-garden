@@ -1,10 +1,5 @@
-"""Offline, deterministic tests of the benchmark harness wiring.
-
-These never invoke a real agent (see FakeRunner) -- they prove that
-fixture materialization, the .claude/skills/ vs preseeded-AGENTS.md
-distinction between baseline/treatment, and each verify type actually
-work against the real fixtures under benchmarks/fixtures/, using a
-scripted stand-in for "what the agent did" instead of an API call.
+"""Offline tests of fixture materialization and each verify type against
+the real benchmarks/fixtures/, with FakeRunner scripting the agent's edits.
 """
 
 from __future__ import annotations
@@ -263,6 +258,6 @@ def test_working_copy_excludes_answers_and_skill_under_test(condition, tmp_path)
     # plugin manifest/hooks never reach any arm (seedbank's PostToolUse hooks)
     assert not (dest / "hooks").exists()
     assert not (dest / ".claude-plugin").exists()
-    # other skills stay as ordinary repo content (question 3's source)
+    # other skills stay as ordinary repo content (some fixtures' answers live there)
     assert (dest / "skills" / "weeder" / "SKILL.md").exists()
     assert (dest / "benchmarks" / "harness" / "types.py").exists()

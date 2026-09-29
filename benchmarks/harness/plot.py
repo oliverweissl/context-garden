@@ -1,6 +1,6 @@
 """Render the benchmark figure from a results dir's records.jsonl.
 
-Grouped bar chart (the design from the original analysis notebook): one bar
+Grouped bar chart: one bar
 group per metric, one bar per component, height = treatment vs baseline
 delta in % of the baseline mean, whiskers = 95% bootstrap CI of that delta
 (10k resamples, fixed seed). With several treatment arms (treatment-natural,

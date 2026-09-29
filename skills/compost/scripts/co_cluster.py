@@ -1,11 +1,7 @@
-"""Deterministic event normalization, clustering and root-error selection.
+"""Event normalization, clustering and root-error selection.
 
-No LLM involved. Events merge only when their messages are identical after
-normalizing *volatile* tokens (hex addresses, long numbers, timestamps, temp
-paths, PIDs); small integers are kept, so `assert 3 == 2` and `assert 1 == 0`
-stay separate. Compiler diagnostics also keep their file as part of the key
-(the line:col is dropped, so the same error repeated across one header
-collapses); test-runner events keep every failing test id in the group.
+Only volatile tokens are normalized (small integers kept); see
+references/schema.md "Clustering".
 """
 
 from __future__ import annotations

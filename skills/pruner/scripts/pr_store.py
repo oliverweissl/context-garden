@@ -1,24 +1,12 @@
-"""SQLite-backed index store (stdlib `sqlite3`) + the read-side query API
-that scoring/selection use.
+"""SQLite index store + the read-side query API used by scoring/selection.
 
-Tables (see references/schema.md):
-  meta(key, value)             version, parser, repo_root, indexed_at
-  files(id, path, hash, mtime, size, kind, language, size_tokens,
-        line_count, parse_error, imports, resolved_imports)
-  symbols(id, file_id, name, qualname, type, start_line, end_line, doc,
-          tokens, parent, dup)
-  edges(src, name)             symbol row `src` references `name`
+Tables (columns in SCHEMA): meta (version, parser, repo_root, indexed_at),
+files, symbols (integer ids; string ids "<path>:<qualname>[@<line> if dup]"
+are derived on load), edges(src symbol row, target *name*).
 
-Integer row ids keep the store small; the string symbol ids used
-everywhere else ("<path>:<qualname>", "@<line>" appended when `dup`) are
-derived on load.
-
-Edges are stored by *target name* and resolved to symbol ids lazily at
-query time (`Index.neighbors`), using the same priority rules as before:
-same file -> unique among imported files -> unique repo-wide. This keeps
-incremental updates strictly per-file (no global re-resolution when one
-file changes) and avoids the quadratic "resolve every call against every
-same-named symbol" pass over common names like `get`/`run`.
+Edges are resolved lazily in `Index.neighbors` (same file -> unique among
+imported files -> unique repo-wide), so incremental updates stay per-file
+and common names like `get`/`run` never trigger a quadratic resolve pass.
 """
 
 from __future__ import annotations

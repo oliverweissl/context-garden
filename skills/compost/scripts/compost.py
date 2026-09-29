@@ -2,7 +2,7 @@
 """compost: capture, cluster and compact-summarize large tool output.
 
 See ../SKILL.md for the agent-facing workflow and ../references/schema.md
-for the full output schema. Stdlib-only, no network access, no LLM calls.
+for the full output schema.
 """
 
 from __future__ import annotations

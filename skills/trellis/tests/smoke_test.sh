@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the three UC fixture spec scripts through the CLI and asserts on
+# Runs the three fixtures/uc*.py spec scripts through the CLI and asserts on
 # their PASS/WARN/FAIL outcomes and evidence, plus direct library-level
 # checks against hand-computable ground truth (known finite-difference
 # convergence orders, known matrix properties, a known normal
@@ -49,7 +49,7 @@ sys.path.insert(0, '$DIR')
 import numpy as np
 import trellis as S
 
-# forward difference is 1st order, central difference is 2nd order -- textbook facts
+# forward difference is 1st order, central difference is 2nd order
 x0 = 0.7
 true_deriv = np.cos(x0)
 def fwd(h): return np.array([(np.sin(x0+h) - np.sin(x0)) / h])
@@ -169,7 +169,7 @@ print('LIB2_OK')
 assert_contains "library: false-pass/false-fail regressions (N vs h, 2D RMS, self-ref, MC bias, Welch, relative residual, NaN reproducibility)" "$lib_check2" "LIB2_OK"
 [ "${VERBOSE:-0}" = 1 ] && echo "$lib_check2"
 
-# --- issue 8.1: strict thresholds (no 10x WARN slack) -----------------------
+# --- strict thresholds (no WARN slack band) ---------------------------------
 strict=$("$PY" -c "
 import sys
 sys.path.insert(0, '$DIR')
@@ -188,7 +188,7 @@ assert S.pde.conservation_check([1.0, 1.0 + 5e-7], lambda s: s, tol=1e-6).status
 assert S.optimization.constraint_violation_check([0.0], [lambda x: 2e-6], tol=1e-6).status == 'FAIL'
 assert S.linalg.reconstruction_error(np.eye(2), np.eye(2) * (1 + 2e-6), tol=1e-6).status == 'FAIL'
 assert S.universal.magnitude_check(10.5, (1.0, 10.0)).status == 'FAIL'
-# stabilised order 1.5 vs expected 2 with tol_order 0.3 (was the WARN band (tol, 2*tol]) -> FAIL
+# stabilised order 1.5 vs expected 2 with tol_order 0.3 -> FAIL
 p15 = lambda h: np.array([1.0 + h**1.5])
 r = S.pde.mesh_convergence(p15, [0.1, 0.05, 0.025, 0.0125], reference=np.array([1.0]), expected_order=2.0)
 assert r.status == 'FAIL', r
@@ -199,7 +199,7 @@ print('STRICT_OK')
 " 2>&1)
 assert_contains "8.1 strict: value > tol is FAIL for residual/reference/drift/constraint/order; WARN only if indeterminate" "$strict" "STRICT_OK"
 
-# --- issue 8.2: distribution_sanity_check statistics -------------------------
+# --- distribution_sanity_check statistics -----------------------------------
 dist=$("$PY" -c "
 import sys
 sys.path.insert(0, '$DIR')
@@ -235,7 +235,7 @@ print(f'DIST_OK normal_false_fail={ff}/200 exponential_false_fail={ffe}/200')
 assert_contains "8.2 distribution: t-test/chi2/KS + Bonferroni; bias FAILs; false-fail rate <= 3%" "$dist" "DIST_OK"
 echo "      ($(grep -o 'normal_false_fail.*' <<<"$dist"))"
 
-# --- issue 8.3: gradient_check near stationary points ------------------------
+# --- gradient_check near stationary points ----------------------------------
 grad=$("$PY" -c "
 import sys
 sys.path.insert(0, '$DIR')
@@ -262,7 +262,7 @@ print('GRAD_OK')
 " 2>&1)
 assert_contains "8.3 gradient_check: no false FAIL near stationary points; 0.5% wrong gradient FAILs" "$grad" "GRAD_OK"
 
-# --- issue 9: spec lock --------------------------------------------------------
+# --- spec lock ----------------------------------------------------------------
 LK="$TDIR/lockspec"; mkdir -p "$LK"
 cat >"$LK/spec.py" <<EOF
 import os, sys; sys.path.insert(0, "$DIR")
@@ -317,7 +317,7 @@ assert_eq "9 lock: --update-lock with loosening is WARN (exit 3), never silently
 out=$(TOL=1e-6 LCLI run 2>&1); ec=$?
 assert_eq "9 lock: after human-accepted update the looser spec passes" "$ec" "0"
 
-# --- issue 10.6: results from files --------------------------------------------
+# --- results from files ---------------------------------------------------------
 IO="$TDIR/io"; mkdir -p "$IO/out"
 iochk=$(cd "$TDIR" && "$PY" -c "
 import sys, json, os
@@ -371,7 +371,7 @@ EOF
 out=$(cd / && "$PY" "$DIR/scripts/trellis.py" run "$IO/spec.py" --trellis-dir "$IO/.trellis" --allow-warn 2>&1)
 assert_contains "10.6 io: spec-relative result paths resolve from any cwd" "$out" "[PASS] from_json"
 
-# --- issue 10.7: sparse / LinearOperator ----------------------------------------
+# --- sparse / LinearOperator ----------------------------------------------------
 nosp=$("$PY" -c "
 import sys
 sys.path.insert(0, '$DIR')
@@ -437,7 +437,7 @@ else
   echo "SKIPPED: 10.7 scipy paths (scipy not available to $SPY; set SCIPY_PYTHON_BIN)"
 fi
 
-# --- issue 10.8: per-commit baselines --------------------------------------------
+# --- per-commit baselines --------------------------------------------------------
 BG="$TDIR/bgrepo"; mkdir -p "$BG/verify"
 cat >"$BG/verify/spec.py" <<EOF
 import os, sys; sys.path.insert(0, "$DIR")

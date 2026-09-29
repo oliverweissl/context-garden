@@ -1,10 +1,7 @@
-"""Lightweight C/C++ indexing: brace-depth state machine + regex, no libclang
-dependency. This is a heuristic, not a real parser -- it does not expand
-macros, understand templates deeply, or resolve overloads. String/char
-literals and comments are blanked out (same length, newlines kept) before
-brace counting, so a `{` inside them is ignored. It is good enough to
-recover function name + line range + a naive call list, which is what
-selection scoring needs. See references/scoring.md for the tradeoff.
+"""Heuristic C/C++ indexing (brace-depth state machine + regex, no libclang):
+no macro expansion, shallow templates, no overload resolution. Literals and
+comments are blanked (same length, newlines kept) before brace counting.
+Recovers name + line range + a naive call list. See references/scoring.md.
 """
 
 from __future__ import annotations
@@ -121,13 +118,9 @@ def _blank_literals_and_comments(text: str) -> str:
 
 
 def _signature_type_refs(sig_text: str, own_name: str) -> list[str]:
-    """Identifier-shaped tokens in a function's return type + parameter
-    list, e.g. the `Matrix` in `double residual(const Matrix& m)`. This is
-    intentionally over-inclusive (it also picks up parameter names like
-    `m`, `tolerance`) -- those simply fail to resolve to any indexed
-    symbol later and are silently dropped, so being sloppy here is safe
-    and cheap, and it's what lets a referenced type's definition surface
-    via graph distance for C/C++ (see references/scoring.md)."""
+    """Identifier tokens in a function's return type + parameter list (the
+    `Matrix` in `double residual(const Matrix& m)`); over-inclusive on purpose:
+    parameter names like `m` just fail to resolve and are dropped."""
     before_parens = sig_text.split("(", 1)[0]
     after_first_paren = sig_text[len(before_parens) :]
     tokens = IDENTIFIER_RE.findall(before_parens) + IDENTIFIER_RE.findall(after_first_paren)
@@ -135,12 +128,8 @@ def _signature_type_refs(sig_text: str, own_name: str) -> list[str]:
 
 
 def _extract_type_symbols(lines: list[str]) -> list[dict]:
-    """Independent pass for struct/class/enum declarations (kind='type').
-    Deliberately separate from the function-detection state machine below:
-    a type can contain inline member functions, which the function pass
-    already captures as their own nested symbols -- some line overlap
-    between a type symbol and its member-function symbols is expected and
-    harmless for selection purposes (see references/scoring.md)."""
+    """struct/class/enum declarations (kind='type'), in a pass separate from
+    function detection; overlap with nested member-function symbols is expected."""
     symbols = []
     i, n = 0, len(lines)
     while i < n:

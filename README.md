@@ -1,8 +1,6 @@
 # 🌱 Context Garden
-*[WIP] - Still working on testing benefits and general skill engineering, happy to get feedback :)*
 
-Self-contained Agent Skills that cut an agent's context usage —
-deterministic, offline, no LLM calls inside the tooling itself. This management tool is most useful for extended coding sessions with a lot of context and bigger repositories. For small repositories or toy examples savings might not be worth the overhead.
+Self-contained Agent Skills that cut an agent's context usage — deterministic, offline, no LLM calls inside the tooling.
 
 | Skill | Does |
 |---|---|
@@ -17,10 +15,7 @@ No valid published benchmark yet: the v0.2.0 run is invalid (headless Bash was
 auto-denied, so no skill CLI ever ran); see [`docs/benchmarks/`](docs/benchmarks).
 <!-- benchmark-figure:end -->
 
-See [`docs/benchmarking.md`](docs/benchmarking.md) for how to run the benchmarks and plot their results.
-
 ## How to use
-Replace `{skill}` with the skills name to install the skill for your agent.
 ```bash
 cp -r skills/{skill} ~/.claude/skills/{skill}   # or project's .claude/skills/
 ```
@@ -31,22 +26,10 @@ skills/{skill}/bin/{skill} --help
 bash skills/{skill}/tests/smoke_test.sh   # offline, bundled fixtures
 ```
 
-## Repository
-The repository is structured as follows:
-```text
-skills/      the Skills
-tests/       repo-level tests
-benchmarks/  evaluation harness + fixtures
-docs/        architecture, skill development, benchmarking
-```
-For more details check the documentation in: [`docs/architecture.md`](docs/architecture.md),
-[`docs/skill-development.md`](docs/skill-development.md),
-[`docs/benchmarking.md`](docs/benchmarking.md).
+## Docs
 
-## Contributing
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## License
-
-See [`LICENSE`](LICENSE).
+[`docs/architecture.md`](docs/architecture.md) (layout, self-containment rule, design principles) ·
+[`docs/skill-development.md`](docs/skill-development.md) (adding a Skill) ·
+[`docs/benchmarking.md`](docs/benchmarking.md) (running and plotting benchmarks) ·
+[`examples/`](examples) (measured before/after).
+Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md). License: [`LICENSE`](LICENSE).

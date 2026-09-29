@@ -1,8 +1,5 @@
-"""Deterministic, lexical/structural relevance scoring -- no embeddings, no
-LLM calls. "Semantic relevance" from the spec is approximated by keyword
-overlap against symbol names/qualnames/docstrings/paths, weighted by how
-rare each word is in the index (IDF); true semantic understanding is out of
-scope for an offline, dependency-free tool (see references/scoring.md).
+"""Lexical/structural relevance scoring: IDF-weighted keyword overlap against
+symbol names, qualnames, docstrings and paths. See references/scoring.md.
 """
 
 from __future__ import annotations

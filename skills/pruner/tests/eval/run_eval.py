@@ -15,7 +15,6 @@ good slice must contain. For every case this runs the real CLI
 
 Exits nonzero if mean recall (either budget), or any single case's recall,
 drops below the committed baseline (baseline.json). `--update-baseline` rewrites it.
-Stdlib only, no network.
 """
 
 from __future__ import annotations

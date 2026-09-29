@@ -1,13 +1,7 @@
-"""Symbol-level call/reference graph BFS over the lazily resolved reference
-edges in the store (pr_store.Index.neighbors). There is deliberately no
-flat "same file / import-linked file" fallback score any more: it gave
-every symbol in a neighbouring file credit regardless of relevance, and a
-reference-count-based replacement did not improve the eval
-(tests/eval), so it was dropped.
-
-Optionally merges in externally supplied graph edges (e.g. from Graphify or
-an equivalent tool) -- see `merge_external_graph`. This is additive only;
-pruner never requires an external graph to function.
+"""Symbol-level BFS over the lazily resolved reference edges
+(pr_store.Index.neighbors), plus optional additive external graph edges.
+No flat same-file/import-linked fallback score: it credited every neighbouring
+symbol regardless of relevance and did not help the eval.
 """
 
 from __future__ import annotations

@@ -85,11 +85,9 @@ def invariant_preservation(
 def reference_solution_comparison(
     numerical, analytic, tol: float, name: str = "reference_solution"
 ) -> CheckResult:
-    """Direct comparison against a known analytic solution. This is
-    model_validation, not plain numerical verification: it validates that
-    the solver reproduces a *known-correct answer*, not just that it's
-    internally consistent (e.g. convergent at the expected order).
-    Either argument may be a result-file path (see trellis.io.load)."""
+    """Direct comparison against a known analytic solution; tagged
+    model_validation (not 'numerical') since it checks a known-correct
+    answer, not just internal consistency. Either argument may be a result-file path (see trellis.io.load)."""
     from . import io as _io
 
     if isinstance(numerical, (str, os.PathLike)):

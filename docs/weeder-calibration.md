@@ -10,17 +10,13 @@ check those approximations against the real `claude` CLI:
 | `scripts/calibrate-tokens` | chars-per-token ratios | `skills/weeder/references/token-calibration.json` | 2 short headless sessions per sample (~20 samples, so ~40 sessions) |
 | `scripts/validate-routing` | the lexical routing proxy vs real Skill routing | stdout, plus optional `--json-out` | about 1 short turn per prompt |
 
-Both scripts call your logged-in `claude` CLI, so the runs count against
-your own Claude Code usage (subscription or whatever `claude` is
-authenticated with). Neither script reads or needs an Anthropic API key.
-Neither uses `--bare`, because that flag forces API-key auth. They are
-**manual only**: CI and the test suite never run them. Weeder never calls
-them, and at runtime it only reads the calibration JSON.
-
-Both scripts read `claude --help` and pass an optional flag only when
-your CLI version lists it. Pass `--dry-run` to either script to see the
-exact command, the samples or prompts, and (for routing) the proxy's
-predictions, without making any calls.
+Both use your logged-in `claude` CLI (your own Claude Code usage) and
+never need an Anthropic API key. Neither uses `--bare`, because that flag
+forces API-key auth. They are **manual only**: CI, the test suite, and
+weeder itself never run them; at runtime weeder only reads the
+calibration JSON. Optional flags are passed only if `claude --help` lists
+them, so `--dry-run` shows the exact command for your CLI version without
+making any calls.
 
 ## Token calibration
 
@@ -30,48 +26,15 @@ scripts/calibrate-tokens             # measure, write token-calibration.json
 scripts/calibrate-tokens --model sonnet --limit 6   # cheaper partial run
 ```
 
-**What it does.** The samples are:
+Each sample (SKILL.md files, some docs, Python, and `task.yaml` files,
+truncated to 6000 characters) is sent twice with an identical prefix and
+a per-pair nonce: once with an empty `<sample></sample>` wrapper, once
+with the sample inside. Its token count is the difference in prompt
+tokens (`input_tokens + cache_creation_input_tokens +
+cache_read_input_tokens`, a sum independent of cache state).
 
-- the frontmatter and body of every `skills/*/SKILL.md`
-- a few docs pages
-- a few Python files
-- two benchmark `task.yaml` files
-
-Each sample is truncated to 6000 characters. Fenced code is removed from
-markdown samples because weeder estimates fenced code at the `code` ratio.
-
-The script runs each sample twice, in an empty temp directory:
-
-1. a minimal prompt with an empty `<sample></sample>` wrapper
-2. the same prompt with the sample inside the wrapper
-
-Both calls use `claude -p --output-format json`, and each prompt is
-passed on stdin. The sample's token count is the difference in prompt
-tokens between the two calls. Prompt tokens are
-`usage.input_tokens + cache_creation_input_tokens + cache_read_input_tokens`.
-These three fields are disjoint parts of the same prompt, so their sum
-doesn't depend on cache state. Each pair gets its own random nonce. The
-prefix is identical inside a pair, so the difference is exactly the
-sample, and no cache entry is shared across pairs.
-
-These flags keep the fixed overhead small and avoid side effects:
-
-- `--tools ""`: no tools, and a guaranteed single turn
-- `--setting-sources project`: no user plugins or hooks
-- `--strict-mcp-config`: no MCP servers
-- `--disable-slash-commands`: no skills are listed
-- `--no-session-persistence`: no saved session
-- `--permission-prompts none`
-
-The script then computes these values per category (`markdown`, `code`,
-`yaml`):
-
-- aggregate chars/token
-- the signed per-sample error of that ratio against the measured count
-- the same error for plain chars/4, for comparison
-
-The JSON also records the date, the `claude --version` output, the model
-and every sample's measurement.
+Fenced code is stripped from markdown samples, since weeder estimates it
+with the separate `code` ratio.
 
 **Effect on weeder.** When `token-calibration.json` exists, `we_tokens.py`
 applies its ratios per category:
@@ -105,47 +68,18 @@ scripts/validate-routing --skill skills/pruner \
   --json-out /tmp/pruner-routing.json
 ```
 
-**What it does.** The examples file uses weeder's format
-(`{"positive": [...], "negative": [...], "ambiguous": [{"prompt":,
-"expected":}]}`). The default is
-`skills/weeder/tests/fixtures/routing_examples.json`. For each prompt, the
-script:
-
-1. Creates a temp project and copies the skill under test and every
-   `--competing` skill into `.claude/skills/<name>/`.
-2. Runs `claude -p --output-format stream-json --verbose` with these
-   flags:
-   - `--tools Skill`: the model can route but can't act
-   - `--setting-sources project`, so user plugins' skills don't compete
-   - `--strict-mcp-config`
-   - `--no-session-persistence`
-   - `--permission-prompts none`
-   - `--max-budget-usd 0.25`
-   - a nonce in `--append-system-prompt`
-3. Reads the event stream and records the first `Skill` tool_use. It
-   stops the session as soon as a `Skill` call appears, or when the model
-   answers without one.
-4. Computes weeder's proxy prediction (`we_routing.predict_trigger`)
-   against the same installed descriptions.
-
-**Report.** The script prints:
-
-- real-routing accuracy and proxy accuracy, scored with the same rules
-  as `weeder test-routing`: negatives are correct unless the skill under
-  test fires, and `either` is always correct
-- real/proxy agreement, the fraction of prompts where both picked the
-  same skill or both picked none
-- a confusion table, with rows for the real Skill call and columns for
-  the proxy prediction
-- every prompt where the two disagree
-
-The script exits nonzero if any prompt errored.
+The examples file uses weeder's `test-routing` format (default
+`skills/weeder/tests/fixtures/routing_examples.json`). Each prompt runs
+in a temp project with the skill under test and every `--competing` skill
+installed, restricted to `--tools Skill` so the model can route but not
+act. The first `Skill` call is compared with weeder's proxy prediction
+(`we_routing.predict_trigger`), scored with the same rules as `weeder
+test-routing`. The script exits nonzero if any prompt errored.
 
 **Caveats.**
 
-- Skills placed directly in `~/.claude/skills` aren't governed by
-  `--setting-sources`. Keep that directory empty, or expect those skills
-  to show up as extra columns.
+- Skills in `~/.claude/skills` still load and show up as extra columns;
+  see [benchmarking isolation](benchmarking.md#isolation-between-arms).
 - Real routing is stochastic. Re-run borderline prompts before drawing
   conclusions from a single flip.
 - If your CLI names the tool differently, override it with

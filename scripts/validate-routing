@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """Check weeder's lexical routing proxy against real Claude Code routing.
 
-    scripts/validate-routing [--skill DIR] [--examples FILE] [--competing DIR ...]
-                             [--model M] [--limit N] [--json-out PATH] [--dry-run]
-
 MANUAL ONLY -- never run from CI. For every prompt in a weeder routing
 examples file ({"positive": [...], "negative": [...], "ambiguous":
 [{"prompt":, "expected":}]}) it creates a temp project with the skill
 under test plus any --competing skills installed under .claude/skills/,
 runs `claude -p --output-format stream-json --verbose` with the prompt,
 and records which Skill tool invocation (if any) the model makes. The
-session is stopped as soon as a Skill call appears (or the model answers
-without one), so each prompt costs roughly one short turn of the caller's
-own Claude Code usage. No API key is read or needed by this script.
+session is stopped as soon as routing is decided, so each prompt costs
+about one short turn of the caller's Claude Code usage; no API key needed.
 
 Reports real-routing accuracy, weeder's proxy accuracy on the same
 prompts, and a real-vs-proxy confusion table. Defaults to weeder's own

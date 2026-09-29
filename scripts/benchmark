@@ -11,8 +11,7 @@ See docs/benchmarking.md for the methodology (arms, randomised interleaved
 schedule, metrics/CIs) and benchmarks/README.md for the fixture format.
 `run` spends real API usage/cost: every trial invokes the real `claude`
 CLI headlessly (sessions = tasks x arms x runs). `run --dry-run` only
-prints the randomised schedule. The FakeRunner used by tests/benchmarks/
-is not reachable from this CLI, only from Python.
+prints the randomised schedule.
 """
 
 from __future__ import annotations

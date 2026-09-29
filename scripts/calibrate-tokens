@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """Measure real chars-per-token ratios for weeder's token estimates.
 
-    scripts/calibrate-tokens [--dry-run] [--model M] [--limit N] [--out PATH]
-
 MANUAL ONLY -- never run from CI. For every sample text it runs the
 `claude` CLI headlessly twice (a minimal prompt with an empty
 <sample></sample> wrapper, then the same prompt with the sample inside)
 and takes the difference in reported prompt tokens. That spends two short
-sessions of the caller's own Claude Code usage per sample (subscription or
-whatever `claude` is logged in with); no API key is read or needed by this
-script. See docs/weeder-calibration.md.
+sessions of the caller's own Claude Code usage per sample; no API key is
+read or needed. See docs/weeder-calibration.md.
 
 Output: skills/weeder/references/token-calibration.json, which weeder's
 we_tokens.py picks up automatically (weeder itself stays offline -- it only
@@ -131,9 +128,8 @@ def build_prompt(nonce: str, text: str) -> str:
 
 
 def prompt_tokens(payload: dict) -> int:
-    """Total prompt-side tokens regardless of cache state: uncached input +
-    tokens written to the cache + tokens read from it are disjoint parts of
-    the same prompt, so their sum is the prompt size."""
+    """Prompt size regardless of cache state: input + cache_creation +
+    cache_read tokens (disjoint parts of the same prompt)."""
     usage = payload.get("usage") or {}
     parts = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
     if not any(k in usage for k in parts):

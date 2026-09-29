@@ -1,13 +1,8 @@
-"""Compile promoted, non-stale facts into agent-facing context files.
+"""Compile promoted, non-stale facts: hot facts inline in AGENTS.md, warm facts
+in .seedbank/warm/<scope>.md with a one-line pointer each.
 
-Hot facts go into the always-loaded file(s) (AGENTS.md by default). Warm
-facts are NOT inlined there -- they are written to per-scope files under
-.seedbank/warm/ and AGENTS.md only carries a one-line pointer to each,
-so the always-loaded budget stays small and warm material is loaded only
-when an agent decides a task is relevant to that scope.
-
-Generated content only ever replaces the region between BEGIN/END markers;
-anything a human wrote outside them is preserved.
+Only the region between BEGIN/END markers is ever replaced; user content
+outside them must be preserved.
 """
 
 from __future__ import annotations
@@ -145,11 +140,8 @@ def compile_outputs(
         atomic_write_text(warm_dir / f"{scope}.md", render_warm_scope_md(scope, flist))
         written.append(str(warm_dir / f"{scope}.md"))
 
-    # A scope that had warm facts on a prior compile but has none now (all
-    # demoted/gone stale) must not leave its old .md file behind -- it's
-    # unlinked from AGENTS.md at that point, but still readable directly,
-    # which is exactly the silently-stale-but-still-served failure mode
-    # seedbank's stale-invalidation exists to prevent everywhere else.
+    # A scope with no warm facts left must not keep its old .md: unlinked but
+    # still readable, it would serve stale facts silently.
     if warm_dir.is_dir():
         for stale_file in warm_dir.glob("*.md"):
             if stale_file.stem not in by_scope:

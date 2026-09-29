@@ -1,14 +1,8 @@
 """Shared markdown-aware text cleaning for duplicate/filler detection.
 
-Both we_dupes.py and we_audit.py need to turn a section's markdown into
-plain prose before splitting into sentences -- left un-stripped, fenced
-code blocks and heading/list markers glue onto adjacent text (they have
-no terminal punctuation) and produce spurious matches: e.g. five CLI
-usage examples that each start with `python3 .../weeder.py <subcommand>`
-inside a fenced block will share that boilerplate and look like "the same
-rule repeated five times" to a naive sentence splitter, which is exactly
-the class of false positive this module exists to prevent. Caught by
-running this tool on its own SKILL.md during development.
+Code fences and heading/list markers have no terminal punctuation, so left in
+they glue onto adjacent sentences and repeated usage examples look like
+"the same rule repeated five times".
 """
 
 from __future__ import annotations

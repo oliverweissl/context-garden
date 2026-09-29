@@ -1,11 +1,6 @@
-"""Mechanical, safe refactoring: move `background`/`examples` SKILL.md
-sections into references/<slug>.md, replacing them in SKILL.md with a
-one-line pointer under the same heading. This is the "progressive
-disclosure" refactor from the spec, applied automatically because it is
-lossless and reversible (every word survives, just relocated) -- unlike
-shortening the routing description or rewriting/merging duplicate rules,
-which need judgment and are deliberately left to the agent (see
-SKILL.md's workflow and references/routing-heuristic.md).
+"""Move `background`/`examples` SKILL.md sections into references/<slug>.md,
+leaving a one-line pointer. Automated only because it is lossless; description
+and duplicate rewrites need judgment and are left to the agent.
 """
 
 from __future__ import annotations
@@ -115,11 +110,8 @@ def optimize_skill(
     for filename, content in new_reference_files.items():
         (out_dir / "references" / filename).write_text(content)
 
-    # single source of truth for SKILL.md's per-trigger cost (see
-    # we_audit.MOVABLE_CATEGORIES): re-audit both the original dir and the
-    # freshly written output dir, rather than re-deriving the same figure
-    # here with separate logic. Moving body sections never changes the
-    # always-loaded description, only what loads on trigger.
+    # Re-audit both dirs rather than re-deriving per-trigger cost here, so
+    # we_audit stays the single source of truth for that figure.
     from we_audit import audit_skill
 
     before_skill_md = audit_skill(skill_dir)["skill_md_tokens"]

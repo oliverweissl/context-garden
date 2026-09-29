@@ -1,10 +1,6 @@
-"""Python indexing via the stdlib `ast` module. No third-party dependency.
-
-Extracts, per file: imports (module names, best-effort resolved to
-in-repo files later by pr_index), and top-level/nested function & class
-symbols with their line ranges, first docstring line, and the names they
-call (name-based, not type-resolved -- see references/scoring.md for why
-that's an accepted approximation).
+"""Python indexing via stdlib `ast`: imports, function/class symbols with line
+ranges, first docstring line, and called names (name-based, not type-resolved;
+see references/scoring.md).
 """
 
 from __future__ import annotations
@@ -91,11 +87,8 @@ def _name_of(expr) -> str | None:
 
 
 def _collect_annotation_names(node) -> list[str]:
-    """Parameter/return type annotations reference a type by name without
-    ever "calling" it (e.g. `def f(bounds: Range) -> Range:`), so the plain
-    Call-based _collect_calls above would miss the connection between a
-    function and a type it operates on. Treating annotations as references
-    too lets that type's definition surface via graph distance."""
+    """Names in parameter/return annotations (`def f(b: Range) -> Range`), so a
+    type a function uses but never calls still links to it in the graph."""
     if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return []
     names = []

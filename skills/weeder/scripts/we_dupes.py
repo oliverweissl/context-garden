@@ -1,8 +1,5 @@
-"""Near-duplicate paragraph detection: normalized-word Jaccard similarity,
-deterministic, no LLM. Same clustering spirit as compost's error
-grouping -- group things that say the same thing, regardless of exact
-wording, so a rule repeated in five places (spec's UC2) collapses to one
-finding instead of five separate paragraphs to eyeball."""
+"""Near-duplicate detection (normalized-word Jaccard, plus shared word runs at
+sentence level): a rule repeated in five places collapses to one finding."""
 
 from __future__ import annotations
 
@@ -29,15 +26,8 @@ def _word_seq(text: str) -> list[str]:
 
 
 def longest_common_run(a: list[str], b: list[str]) -> int:
-    """Longest common *contiguous* word run (classic longest-common-
-    substring DP, at word granularity). This is what actually catches "the
-    same rule restated with different surrounding elaboration": whole-
-    sentence Jaccard penalizes the differing elaboration so heavily (it
-    inflates the union) that two sentences sharing a clear 8-10 word
-    imperative core can still fall below any reasonable Jaccard threshold
-    once each has a different justifying clause tacked on. A shared
-    contiguous run is a much more direct signal of "this is the same
-    rule", independent of how much unrelated text surrounds it."""
+    """Longest common contiguous word run. Jaccard is diluted by differing
+    elaboration; a long shared run catches an embedded restated rule."""
     if not a or not b:
         return 0
     prev = [0] * (len(b) + 1)
@@ -53,15 +43,10 @@ def longest_common_run(a: list[str], b: list[str]) -> int:
 
 
 def split_paragraphs(text: str, source: str) -> list[dict]:
-    """Fenced code blocks are stripped before splitting: a CLI usage
-    example's command syntax legitimately repeats across sections (e.g.
-    every subcommand's usage block starts with the same `python3 .../x.py`
-    prefix) and is not the kind of duplicated *rule* this is looking for
-    -- left in, it's a reliable source of false positives (caught by
-    running this tool on its own SKILL.md). Fences become paragraph breaks
-    and inline code is kept in `text` (only excluded from the similarity
-    words), so each member's `text` is a verbatim span apply-suggestion can
-    find in the original file."""
+    """Fenced code is dropped: usage examples legitimately repeat the same
+    command prefix and would be false positives. Inline code stays in `text`
+    (excluded only from similarity words) so `text` is a verbatim span
+    apply-suggestion can find in the original file."""
     cleaned = _CODE_FENCE_RE.sub("\n\n", text)
     paras = [p.strip() for p in re.split(r"\n\s*\n", cleaned) if p.strip()]
     out = []
@@ -74,16 +59,9 @@ def split_paragraphs(text: str, source: str) -> list[dict]:
 
 
 def split_sentences(text: str, source: str) -> list[dict]:
-    """Complements split_paragraphs: a rule restated inside otherwise-
-    different surrounding prose (spec's UC2 -- "the same command
-    restriction appears in five sections", each phrased a bit differently
-    and surrounded by different context) dilutes below the paragraph-level
-    threshold even when the core sentence is a near-exact repeat. Sentence
-    granularity catches that; paragraph granularity catches large repeated
-    blocks. Both run, results in we_dupes.find_duplicates_in_skill are
-    reported separately. See we_text.split_into_sentences for why code
-    blocks/headings/list markers are stripped first; `text` keeps inline
-    code verbatim (see split_into_original_sentences), similarity doesn't."""
+    """Catches a rule restated inside different surrounding prose, which
+    dilutes below the paragraph threshold. `text` keeps inline code verbatim;
+    similarity words don't."""
     out = []
     for s in split_into_original_sentences(text):
         prose = strip_code(s)
@@ -107,13 +85,9 @@ def find_duplicate_groups(
     threshold: float = DEFAULT_THRESHOLD,
     phrase_min_words: int | None = None,
 ) -> list[dict]:
-    """`phrase_min_words`: if given, a pair is ALSO considered a duplicate
-    when they share a contiguous word run of at least this length, even if
-    their overall Jaccard similarity is below `threshold` (see
-    longest_common_run's docstring for why -- use this for sentence-level
-    matching, where "same rule, different surrounding elaboration" is
-    common; leave None for paragraph-level, where a whole-block match is
-    the actual thing being looked for)."""
+    """`phrase_min_words`: also count a pair as duplicate when it shares a word
+    run this long despite low Jaccard. Use for sentences; leave None for
+    paragraphs, where a whole-block match is the target."""
     n = len(paragraphs)
     parent = list(range(n))
 
@@ -172,11 +146,8 @@ def find_duplicates_in_skill(
     threshold: float = DEFAULT_THRESHOLD,
     sentence_threshold: float = DEFAULT_SENTENCE_THRESHOLD,
 ) -> dict:
-    """Pulls content from every SKILL.md section plus every reference file,
-    so duplication is caught both within SKILL.md and between SKILL.md and
-    references (or between two references). Returns both granularities:
-    `paragraphs` (large repeated blocks) and `sentences` (a rule restated
-    inside otherwise-different surrounding prose -- spec's UC2 shape)."""
+    """Scans SKILL.md sections and reference files together, so cross-file
+    repeats are caught. Returns `paragraphs` and `sentences` groups."""
     paragraphs, sentences = [], []
     for s in parsed["sections"]:
         label = f"SKILL.md#{s['heading'] or 'intro'}"

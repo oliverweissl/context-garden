@@ -1,9 +1,8 @@
 """Shared convergence-order machinery for ode.py and pde.py: both are
 "error shrinks as a discretization parameter (dt, h) shrinks, at some
-expected polynomial order" checks, differing only in vocabulary. This is
-the module most directly responsible for catching UC1-style regressions
-(a stencil bug that quietly drops a scheme from 2nd-order to 1st-order
-while individual test tolerances still happen to pass).
+expected polynomial order" checks, differing only in vocabulary. Catches
+e.g. a stencil bug that drops a scheme from 2nd to 1st order while
+per-test tolerances still pass.
 
 Conventions (all internal math is done in terms of a step size h, where
 smaller h = finer):

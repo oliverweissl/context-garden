@@ -1,6 +1,6 @@
 # Examples
 
-Real before-and-after measurements using the same `chars/4` token estimator as each Skill’s CLI.
+Before/after token counts (`chars/4` estimate, as in each Skill's CLI). Skill cost = description + `SKILL.md` body from `skills/weeder/scripts/weeder.py audit`.
 
 ## ♻️ compost example
 **Before — 4,327 tokens**
@@ -41,7 +41,7 @@ Numerical summary:
 > Exact raw output remains available through `compost get`, `compost event`, and `compost grep`.
 
 > [!WARNING]
-> Loading the Skill costs 751 tokens. Use it for repetitive output above roughly 1,000 tokens or commands you expect to run again.
+> Loading the Skill costs ~395 tokens: worth it for repetitive output or commands you will re-run.
 
 ## ✂️ pruner example
 
@@ -57,7 +57,7 @@ python3 skills/pruner/scripts/pruner.py select \
 
 **Before — 8,814 tokens**
 
-Reading all four files in `skills/seedbank/scripts/*.py`.
+All four `skills/seedbank/scripts/*.py` files.
 
 **After — 2,992 tokens**
 
@@ -72,29 +72,14 @@ used: 2992 tokens
 
 **Saving: 66.0%**
 
-Including the 998-token Skill cost, the first use is 3,990 tokens—a 55% saving.
+Including the ~470-token Skill cost, first use is 3,462 tokens (61% saving).
 
 > [!WARNING]
-> `pruner` is intended for multi-file exploration. If the correct file is already obvious, reading it directly is cheaper.
+> If the right file is already obvious, reading it directly is cheaper.
 
 ## 🌰 seedbank example
 
-```bash
-python3 -c "
-p = [
-    'docs/skill-development.md',
-    'docs/architecture.md',
-    'skills/weeder/SKILL.md'
-]
-print(
-    sum(max(1, round(len(open(f).read()) / 4)) for f in p),
-    'tokens to read all three'
-)"
-```
-
-**Before — 3,032 tokens**
-
-The source documents must be read again whenever the same repository facts are needed.
+**Before — 1,641 tokens**: re-reading `docs/skill-development.md`, `docs/architecture.md`, `skills/weeder/SKILL.md` each session.
 
 **After — 136 tokens**
 
@@ -109,7 +94,7 @@ The source documents must be read again whenever the same repository facts are n
   (source: skills/weeder/SKILL.md, workflow step 7)
 ```
 
-**Saving: 95.5% per later session**
+**Saving: 91.7% per later session**
 
 > [!NOTE]
-> The 1,172-token Skill is loaded only while curating facts with `observe`, `promote`, or `compile`. Sessions that consume the generated `AGENTS.md` pay only for its 136-token hot section.
+> The ~507-token Skill loads only while curating facts (`observe`/`promote`/`compile`); consumers of the generated `AGENTS.md` pay only for its hot section.

@@ -2,14 +2,9 @@
 """weeder CLI: measure, mechanically refactor, and validate Skills
 for token efficiency without regressing routing or functional behavior.
 
-See ../SKILL.md for the full agent-facing workflow. Stdlib-only, no
-network access, no LLM calls -- routing/function checks here are
-deterministic proxies (documented in references/routing-heuristic.md),
-not a replacement for spot-checking a rewrite with a real agent.
-`suggest`/`apply-suggestion` don't change that: they structure workflow
-step 3's judgment call as a request/answer file pair for the invoking
-agent rather than calling out to any model themselves -- see
-references/llm-assist.md.
+Routing/function checks are lexical proxies (references/routing-heuristic.md);
+`suggest`/`apply-suggestion` hand judgment to the invoking agent via
+request/answer files (references/llm-assist.md). See ../SKILL.md.
 """
 
 from __future__ import annotations

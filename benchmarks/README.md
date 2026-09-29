@@ -2,7 +2,7 @@
 
 Compares an agent with vs. without a Skill, on tasks built from this
 repository (real injected bug, real oversized Skill, niche correctness
-scenario). Metric and schema: `docs/benchmarking.md`.
+scenario).
 
 ## Layout
 
@@ -23,20 +23,7 @@ results/      generated output (gitignored)
 | `weeder-bloated-skill-audit`* | weeder | file | shrinks an oversized `SKILL.md` without losing a constraint |
 
 \* `run_by_default: false` — skipped by a plain `scripts/benchmark run`
-(needs `--task`/`--component` to run); see `docs/benchmarking.md`.
+(needs `--task`/`--component` to run); see
+[why](../docs/benchmarking.md#why-trellis-and-weeder-are-opt-in).
 
-## Running
-
-```bash
-scripts/benchmark list                          # discovered fixtures
-scripts/benchmark run --dry-run                 # randomised schedule + cost bound, runs nothing
-scripts/benchmark run [--task ID ...] [--component NAME ...] [--arms ...] [--runs 10] [--seed 0]
-scripts/benchmark run --resume <results-dir>    # continue an interrupted run
-scripts/benchmark analyze <results-dir>         # regenerate summary.md / summary.json
-scripts/benchmark plot <results-dir>            # benchmark.png (needs the `bench` extra)
-```
-
-`run` spends real API usage (headless `claude -p`): sessions = tasks ×
-arms × runs, each capped by `--max-budget-usd` (default $1.00). Results:
-`benchmarks/results/<UTC timestamp>/{schedule.json,records.jsonl,summary.md,summary.json}`.
-Methodology (arms, randomisation, metrics, CIs): `docs/benchmarking.md`.
+Commands, cost, methodology, and record fields: `docs/benchmarking.md`.

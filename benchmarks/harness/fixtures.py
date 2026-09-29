@@ -6,13 +6,9 @@ snapshot of the repository's current working tree) and/or an overlay/
 directory (files copied in verbatim, e.g. to add fixture-owned files that
 don't exist in the repository at all).
 
-Materializing "baseline" vs "treatment" copies is the whole experiment:
-they differ only in whether the relevant Skill(s) are installed under
-.claude/skills/ (or, for seedbank's amortized-artifact case, whether a
-pre-populated AGENTS.md is present) -- everything else about the two
-working copies is identical. Both treatment arms (treatment-natural,
-treatment-forced) materialize the same working copy; they differ only in
-the prompt (see run.prompt_for).
+Baseline and treatment copies differ only in .claude/skills/ (or a
+preseeded AGENTS.md); both treatment arms share one copy and differ only
+in the prompt (see run.prompt_for).
 """
 
 from __future__ import annotations
@@ -27,16 +23,12 @@ from .types import ARMS, REPO_ROOT, TREATMENT_ARMS, TaskSpec
 
 FIXTURES_DIR = REPO_ROOT / "benchmarks" / "fixtures"
 
-# Never copied into either condition's working copy: fixture ground truth
-# (task.yaml, bug.patch, treatment overlays), prior results, the harness
-# tests (which script each task's correct answer), benchmark docs, demo
-# examples (fixtures bring their own via overlay/), any local .claude/
-# config, and the repo's own agent context files (AGENTS.md/CLAUDE.md and
-# seedbank's warm files, which would pre-seed the baseline). The skill(s)
-# under test are excluded too (see materialize) -- treatment gets them only
-# via .claude/skills/. The plugin manifest and plugin hooks (hooks/, e.g.
-# seedbank's PostToolUse hooks) are excluded as well, so no arm -- least of
-# all baseline -- can pick up a plugin hook from the working copy.
+# Never copied into either arm: anything that leaks the answer (fixture
+# ground truth, prior results, harness tests that script the correct
+# answer, benchmark docs, demo examples), the repo's own agent context
+# (AGENTS.md/CLAUDE.md, seedbank warm files -- would pre-seed baseline),
+# local .claude/ config, and plugin manifest/hooks (no arm may pick up a
+# plugin hook from the working copy).
 EXCLUDED_PATHS = (
     ".claude/",
     ".claude-plugin/",

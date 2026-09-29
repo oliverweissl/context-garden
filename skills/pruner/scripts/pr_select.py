@@ -1,14 +1,7 @@
-"""Budgeted chunk selection ("the knapsack step") + slice persistence for
-progressive expansion.
+"""Budgeted chunk selection + slice persistence for progressive expansion.
 
-Selection is a simple greedy fill in descending score order, not an exact
-knapsack solve -- the spec asks to "solve approximately", and a plain
-score-ordered greedy is far easier to explain ("this was included because
-it scored higher than the budget cutoff") than a density-optimized packing
-would be, which matters since every chunk's inclusion has to be justified
-in `reasons`. Tokens are accounted without overlap: a chunk nested in (or
-overlapping) already-selected lines only costs its new lines, and one
-fully covered already is not selected twice. See references/scoring.md.
+Greedy fill in descending score order (not an exact knapsack) so every inclusion
+is explainable in `reasons`; tokens are counted without overlap. See references/scoring.md.
 """
 
 from __future__ import annotations
@@ -47,14 +40,9 @@ SLICES_DIRNAME = "slices"
 
 
 def _all_chunks(index) -> list[dict]:
-    """One chunk per symbol, plus one whole-file chunk for files with no
-    symbols at all (config/doc/unparsed files, or empty source files).
-    A class/struct that contains methods and is longer than
-    LARGE_CLASS_LINES becomes a `class_header` chunk -- class line,
-    docstring/fields, up to and including the first method's signature
-    line (the `__init__` signature in the common case), at most
-    HEADER_MAX_LINES. Its methods are separate chunks, so selecting the
-    whole class would double-count them."""
+    """One chunk per symbol, plus a whole-file chunk for symbol-less files.
+    Large classes become `class_header` chunks (see references/scoring.md);
+    their methods stay separate chunks, so never select the whole class."""
     chunks = []
     for rel, entry in index.files.items():
         syms = entry["symbols"]
@@ -465,10 +453,8 @@ def load_slice(store_dir: Path, slice_id: str) -> dict:
 def expand_slice(
     store_dir: Path, slice_id: str, add_chunk_ids: list[str], extra_budget: int | None = None
 ) -> dict:
-    """Promote specific omitted candidates (by chunk id) into the slice's
-    supporting_context, without rerunning the whole scoring pass -- this is
-    the "identify the missing dependency, expand just that" step, not a
-    full reselect."""
+    """Promote omitted candidates (by chunk id, or file:start-end) into the
+    slice's supporting_context without rescoring; still budget-enforced."""
     record = load_slice(store_dir, slice_id)
     budget = record["budget"] + (extra_budget or 0)
     omitted_by_id = {c["id"]: c for c in record["omitted_candidates"]}
@@ -516,10 +502,8 @@ def add_ad_hoc_chunk(
     reason: str,
     extra_budget: int | None = None,
 ) -> dict:
-    """Inject a specific file:line range the scorer never surfaced at all
-    (e.g. a doc file, or a range inside a huge unparsed file). Still
-    budget-enforced, like expand_slice -- pass extra_budget to raise the
-    ceiling deliberately rather than silently exceeding it."""
+    """Inject a file:line range the scorer never surfaced (e.g. a doc file).
+    Budget-enforced: callers raise the ceiling via extra_budget, never silently."""
     record = load_slice(store_dir, slice_id)
     budget = record["budget"] + (extra_budget or 0)
     chunk = {

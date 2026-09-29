@@ -24,14 +24,9 @@ class AgentRunner(Protocol):
 
 
 class FakeRunner:
-    """Deterministic, offline stand-in for a real agent.
-
-    Used by tests/benchmarks/ to validate fixture materialization and
-    verification wiring without spending API budget or requiring network
-    access -- it is never the subject of an actual benchmark comparison.
-    `behavior` receives (prompt, workdir) and must perform whatever file
-    edits it wants to simulate the agent having made, then return an
-    AgentRunResult (success is just "the agent claims it finished").
+    """Deterministic, offline stand-in for a real agent (tests only).
+    `behavior(prompt, workdir)` makes the simulated edits and returns an
+    AgentRunResult.
     """
 
     def __init__(self, behavior: Callable[[str, Path], AgentRunResult]) -> None:
@@ -42,12 +37,9 @@ class FakeRunner:
 
 
 def _local_transcript_path(workdir: Path, session_id: str) -> Path | None:
-    """Locate the JSONL session transcript Claude Code writes locally for
-    this run, regardless of --output-format -- headless json/stream-json
-    only report aggregate usage, but the local transcript still has each
-    tool call, so it's the only way to see which cache-creation tokens
-    came from reading a Skill's own files vs. everything else. Claude Code
-    names the project dir after the cwd with every non-alphanumeric
+    """Locate this run's local JSONL session transcript -- the only source of
+    per-tool-call usage (headless json output is aggregate only). Claude
+    Code names the project dir after the cwd with every non-alphanumeric
     character replaced by "-" (not just "/": "_" and "." too)."""
     projects = Path.home() / ".claude" / "projects"
     for cwd in dict.fromkeys((str(workdir.resolve()), str(workdir))):
@@ -86,9 +78,7 @@ def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> tuple[int,
     each assistant `message.id` is counted once; a turn's entire
     cache-creation delta is attributed to skill_tokens if ANY tool result
     feeding it came from a Skill (a turn that reads one Skill file and one
-    repo file in parallel over-attributes). Good enough to tell "the
-    skill's own files cost roughly N tokens" apart from "exploring the
-    repo cost the rest" -- not precise to the token. Returns (0, []) if
+    repo file in parallel over-attributes). Returns (0, []) if
     the transcript is missing (older CLI, logging disabled) or no Skill
     was ever used.
     """
@@ -160,29 +150,14 @@ def _invoked_skill_name(block: dict[str, Any], skills_root: Path) -> str | None:
 
 class ClaudeCodeRunner:
     """Invokes the `claude` CLI in headless (--print) mode as the agent.
+    Spends real API budget, so the test suite never runs it. The json
+    payload shape shifts across CLI versions, hence .get() with defaults.
 
-    This is the actual benchmark subject: baseline and treatment working
-    directories are identical except for .claude/skills/ (or a preseeded
-    AGENTS.md), so the delta between two ClaudeCodeRunner runs isolates
-    the skill's contribution. Running this spends real API usage/cost --
-    it is deliberately not exercised by this repository's own test suite
-    (see FakeRunner for that). --output-format json's exact payload shape
-    can shift across CLI versions; every field read here is via .get()
-    with a safe default for that reason.
-
-    Each call appends a unique nonce to the system prompt, so every run's
-    prompt-cache key is unique -- no run gets a cheaper/faster ride off a
-    prior run's (or a different condition's) already-warmed cache. Turn-
-    to-turn caching *within* one run's own agentic tool-call loop is
-    untouched (that's real, desired reuse, not cross-run leakage).
-
-    Both conditions run with `--setting-sources project` and
-    `--strict-mcp-config`, so user-level settings (enabled plugins and
-    their skills, hooks) and user MCP servers don't leak into either run;
-    the only skills available are whatever the working copy's own
-    .claude/skills/ holds (nothing, for baseline). Skills placed directly
-    in ~/.claude/skills are not governed by these flags -- keep that
-    directory empty on a benchmark machine.
+    A per-call nonce in the system prompt makes every run's prompt-cache key
+    unique (no cross-run cache warming; in-run turn caching is unaffected).
+    `--setting-sources project --strict-mcp-config` keeps user plugins,
+    hooks and MCP servers out of both arms -- but not ~/.claude/skills,
+    which must be empty on a benchmark machine.
     """
 
     def __init__(
@@ -195,10 +170,8 @@ class ClaudeCodeRunner:
         allowed_tools: tuple[str, ...] = ("Bash",),
     ) -> None:
         self.model = model
-        # acceptEdits alone auto-denies every Bash call in a headless run
-        # (no approval surface), so neither arm could run pytest and no
-        # skill CLI ever executed -- the treatment arms only paid for
-        # reading SKILL.md. Each run is in a throwaway temp worktree.
+        # acceptEdits alone auto-denies Bash in headless runs, so allow it
+        # explicitly (safe: each run is in a throwaway temp worktree).
         self.allowed_tools = allowed_tools
         self.permission_mode = permission_mode
         self.max_budget_usd = max_budget_usd
@@ -271,7 +244,7 @@ class ClaudeCodeRunner:
         infra_error = ""
         if not usage.get("output_tokens") and not usage.get("input_tokens"):
             # The model never produced a turn (usage/rate limit, auth, CLI
-            # error): v0.2.0 scored 22/72 of these as agent failures.
+            # error): an infra failure, not an agent failure.
             infra_error = f"no model usage: {str(payload.get('result', ''))[:300]}"
 
         return AgentRunResult(

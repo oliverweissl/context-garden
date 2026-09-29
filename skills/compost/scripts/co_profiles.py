@@ -1,19 +1,9 @@
-"""Profile detection and per-tool deterministic parsers.
+"""Profile detection and per-tool streaming parsers.
 
-Parsers are streaming state machines: construct one, `feed(lineno, line)`
-every (ANSI-stripped) output line in order, then call `finish()`, which
-returns:
-    {
-        "events": [{"line": int, "message": str, "severity": "error"|"warning",
-                    "test": str?, "file": str?, "text": str?, "context": [...]?}, ...],
-        "numerical_summary": dict | None,
-    }
-Nothing holds the whole output in memory: state is proportional to the number
-of extracted events, never to the number of output lines. `analyse()` drives
-one pass over a line iterator; `parse_<name>(lines, exit_code)` wrappers keep
-the old list-based call shape.
-
-No LLM calls anywhere in this module -- everything is regex/state-machine based.
+A parser subclasses `_Parser(exit_code)`: `feed(lineno, line)` per ANSI-stripped
+line, then `finish()` returns `{"events": [...], "numerical_summary": dict|None}`.
+Keep state proportional to events, never to lines. Adding a profile: a detection
+flag in `ProfileDetector._FLAGS` (+ precedence in `result()`) and an entry in `PARSERS`.
 """
 
 from __future__ import annotations
@@ -49,13 +39,8 @@ _EXPLICIT_MARKER_RE = re.compile(r"^\s*(WARNING|ERROR|FATAL)\b[:\s]", re.IGNOREC
 
 
 def _explicit_marker(i: int, line: str) -> dict | None:
-    """Explicit WARNING:/ERROR:/FATAL: prefixed lines, regardless of profile.
-
-    Profile parsers target each tool's specific structure (tracebacks, diagnostic
-    format, summary tables); this is a cheap supplement so a plain log line like
-    'WARNING: slow convergence detected' is never silently dropped just because
-    the active profile parser wasn't looking for it.
-    """
+    """Explicit WARNING:/ERROR:/FATAL: prefixed lines, regardless of profile,
+    so plain log markers survive a profile parser that ignores them."""
     m = _EXPLICIT_MARKER_RE.match(line)
     if not m:
         return None
@@ -541,7 +526,7 @@ _ITER_RE = re.compile(
 )
 # standalone numeric nan/inf tokens only: not "inf-norm", "info", "x-inf"
 _NANINF_RE = re.compile(r"(?<![\w.-])[-+]?(?:nan|inf(?:inity)?)(?![\w-])", re.IGNORECASE)
-# residual history kept for trend analysis: first few + a bounded tail
+# trend is computed over the last _RESID_TAIL residuals only (_RESID_HEAD is unused)
 _RESID_HEAD = 16
 _RESID_TAIL = 4096
 

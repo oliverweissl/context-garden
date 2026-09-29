@@ -10,13 +10,9 @@ from we_filler import find_filler_sentences
 from we_parse import parse_skill
 from we_tokens import estimate_info, estimate_note, estimate_tokens
 
-# Categories that are candidates to MOVE to references/ -- NOT already
-# on-demand. Only name + description are always loaded (every session);
-# the whole SKILL.md body loads in full whenever the skill triggers, and a
-# section only actually becomes on-demand once it's relocated to a
-# separate references/*.md file (see we_optimize.py). Do not exclude these
-# from `on_trigger_body_tokens` below just because they're classified this
-# way -- that would report a reduction that hasn't happened yet.
+# Candidates to MOVE to references/, NOT already on-demand: the whole body
+# loads on trigger until relocated. Don't exclude them from
+# `on_trigger_body_tokens`, or it reports a reduction that hasn't happened.
 MOVABLE_CATEGORIES = {"examples", "background", "external_reference"}
 
 

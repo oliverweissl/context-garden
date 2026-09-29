@@ -1,22 +1,12 @@
-"""Local, offline storage for seedbank.
+"""Local storage for seedbank. Layout under the store root (.seedbank/ at the git root):
 
-Layout under the store root (default ./.seedbank):
-
-    observations.jsonl   append-only raw event log (audit trail; safe to
-                          prune with `gc` since keystats.json already holds
-                          the running aggregates observe updates incrementally)
-    keystats.json         {key: aggregate stats} -- one entry per distinct
-                          repeated-access "key" (a file path, search pattern,
-                          command, or an agent-declared fact/mistake digest)
-    facts.json             {seq, facts: {fact_id: {...}}} -- promoted,
-                          persistent facts (hot/warm tier)
-    config.json            {hot_budget, promote_threshold, half_life_days,
-                          fact_failure_cost} overrides (missing keys fall
-                          back to the defaults below)
-    hook.log               errors swallowed by the Claude Code hook
-    .lock                  flock target serializing concurrent commands
-    .gitignore             written once when the store dir is created: ignores
-                          the local profiler state above, not warm/*.md
+    observations.jsonl  append-only raw event log; `gc` may prune it (keystats holds the aggregates)
+    keystats.json       {key: aggregate stats}, key = file path, search, command, or fact/mistake digest
+    facts.json          {seq, facts: {fact_id: {...}}}: promoted hot/warm facts
+    config.json         overrides of CONFIG_DEFAULTS (missing keys fall back)
+    hook.log            errors swallowed by the Claude Code hook
+    .lock               flock target serializing concurrent commands
+    .gitignore          written once at creation; ignores the above, not warm/*.md
 """
 
 from __future__ import annotations

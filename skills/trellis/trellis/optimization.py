@@ -42,9 +42,7 @@ def gradient_check(
     name: str = "gradient",
 ) -> CheckResult:
     """Central-difference finite-difference gradient vs. the analytic
-    gradient your optimizer actually uses. A wrong analytic gradient is
-    one of the most common silent optimization bugs -- it can still
-    "converge" to a wrong point without any exception or test failure.
+    gradient your optimizer actually uses.
 
     Per coordinate i with step h_i = eps * max(1, |x_i|) (default eps =
     eps_mach**(1/3), the step minimising truncation + round-off for a
@@ -57,12 +55,10 @@ def gradient_check(
 
         rel_i = |g_an - g_fd| / max(|g_an|, |g_fd|, fd_safety * fd_err_i / rtol)
 
-    i.e. PASS iff |g_an - g_fd| <= max(rtol * |g|, fd_safety * fd_err_i).
-    Away from stationary points this is the plain relative test (a 0.5%
-    gradient error FAILs at rtol=1e-3); near a stationary point (g ~ 0,
-    or |f| >> |g| h so FD cancellation dominates) the comparison falls
-    back to the FD method's own accuracy instead of dividing by ~0 -- no
-    false FAIL. Coordinates judged on that floor are listed in evidence.
+    i.e. PASS iff |g_an - g_fd| <= max(rtol * |g|, fd_safety * fd_err_i):
+    the plain relative test away from stationary points, the FD method's
+    own accuracy near them (g ~ 0 or |f| >> |g| h), so no false FAIL.
+    Coordinates judged on that floor are listed in evidence.
     Raise `f_rtol` for noisy objectives (e.g. an iterative inner solve)."""
     x0 = np.asarray(x0, dtype=float)
     u = float(np.finfo(float).eps)
@@ -177,9 +173,8 @@ def initialization_sensitivity_check(
     """Runs solve_fn(x0) from each starting point in x0_list and reports
     the spread in a scalar metric of the result (default: the objective
     value itself, if solve_fn returns one; pass metric_fn otherwise).
-    Large spread across starts on a problem assumed convex/well-behaved
-    is a strong hint of a non-convex landscape, a local-minima trap, or a
-    bug that only manifests from certain initializations."""
+    Large spread on a supposedly convex problem suggests local minima or an
+    initialization-dependent bug."""
     metric_fn = metric_fn or (lambda r: float(r))
     results = [solve_fn(x0) for x0 in x0_list]
     metrics = np.array([metric_fn(r) for r in results], dtype=float)

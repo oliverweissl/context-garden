@@ -5,9 +5,7 @@ value = ((distinct_sessions - 1) * avg_retrieval_cost + total_failure_cost)
 
 decay = 0.5 ** (days_since_last_access / half_life_days)   (1.0 if critical)
 
-All quantities are heuristic estimates (see references/scoring.md for the
-reasoning behind each term) -- there is no ground truth "correct" value,
-only a consistent, explainable ranking.
+Heuristic ranking, not ground truth; see references/scoring.md for each term.
 """
 
 from __future__ import annotations

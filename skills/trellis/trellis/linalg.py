@@ -1,14 +1,9 @@
 """Linear algebra checks: residuals, conditioning, reconstruction error,
 symmetry/positive-definiteness.
 
-Dense numpy arrays need nothing beyond numpy. scipy.sparse matrices and
-scipy.sparse.linalg.LinearOperator (or any object with `.matvec`, and
-optionally `.rmatvec`) are also accepted and never densified: products
-use A @ x / A.matvec, matrix norms come from scipy.sparse.linalg.norm
-(sparse, ord 1/inf/fro) or estimates (onenormest; power iteration for the
-2-norm), and condition numbers from a 1-norm estimate of A and of A^-1
-(via a sparse LU). scipy is imported lazily -- only when such input is
-passed -- and a clear ImportError is raised if it is unavailable.
+scipy.sparse matrices and LinearOperators (anything with `.matvec`,
+optionally `.rmatvec`) are accepted and never densified. scipy is imported
+lazily, only for such input, so dense numpy input needs only numpy.
 """
 
 from __future__ import annotations
@@ -146,19 +141,13 @@ def residual_norm(
     (`relative=False` judges the absolute ||Ax - b|| instead); both are
     reported. Strict: judged value > tol is FAIL (no slack band).
 
-    An absolute residual is scale-dependent: x = 0 for a tiny b passes an
-    absolute check while being 100% wrong. If `cond` (e.g. from
-    `conditioning`) is given, the forward-error bound cond * backward_error
-    is reported and a PASS is downgraded to WARN when it exceeds tol --
-    a small residual does not imply an accurate x for an ill-conditioned A.
-    Without `cond` a PASS only certifies the backward error, not the
-    forward error in x.
+    If `cond` (e.g. from `conditioning`) is given, the forward-error bound
+    cond * backward_error is reported and a PASS is downgraded to WARN when
+    it exceeds tol; without `cond` a PASS certifies only the backward error.
 
-    `A` may be a dense array, a scipy.sparse matrix or a LinearOperator
-    (anything with .matvec); ||A|| is then exact (sparse ord 1/inf/fro) or
-    an estimate recorded in metric['matrix_norm_method']. Estimates of
-    ||A||_2 are lower bounds, which only makes the relative residual
-    larger (conservative)."""
+    For sparse / LinearOperator `A`, ||A|| may be an estimate (recorded in
+    metric['matrix_norm_method']); ||A||_2 estimates are lower bounds, which
+    only makes the relative residual larger (conservative)."""
     kind = _kind(A)
     if kind == "dense":
         A = np.asarray(A)
@@ -209,9 +198,7 @@ def residual_norm(
 
 
 def _cond_estimate(A, kind, inverse=None):
-    """(cond, method, note). Sparse: onenormest(A) * onenormest(A^-1) with
-    A^-1 applied through scipy.sparse.linalg.splu. LinearOperator: only if
-    `inverse` (operator or callable solve(y)) is given."""
+    """(cond, method, note) for sparse / LinearOperator input; see conditioning()."""
     sc = _require_scipy("conditioning")
     spla = sc.sparse.linalg
     n = A.shape[0]
@@ -376,11 +363,9 @@ def symmetry_check(A, tol: float = 1e-10, name: str = "matrix") -> CheckResult:
 
 @record_config
 def positive_definite_check(A, name: str = "matrix") -> CheckResult:
-    """Symmetrizes A (real matrices are expected to be symmetric here;
-    pass A already symmetrized if that's not a safe assumption) and checks
-    min eigenvalue > n * eps * max|eigenvalue| (numerically positive
-    definite -- an eigenvalue below that is indistinguishable from 0 in
-    floating point). Sparse / LinearOperator (assumed symmetric): extreme
+    """Symmetrizes A (pass A already symmetrized if A is not expected to be
+    symmetric) and checks min eigenvalue > n * eps * max|eigenvalue|.
+    Sparse / LinearOperator (assumed symmetric): extreme
     eigenvalues via scipy.sparse.linalg.eigsh, no densification; ARPACK
     non-convergence is WARN."""
     kind = _kind(A)

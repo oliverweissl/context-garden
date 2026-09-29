@@ -1,27 +1,9 @@
 """Filler-sentence detector for `audit`'s "likely unnecessary content".
 
-Asymmetric by design: flagging a real instruction as filler invites an
-agent to delete it (a silent functional regression that `test-function`
-may or may not catch), while missing a bit of filler only costs a few
-tokens. So a sentence is flagged only if BOTH hold:
-
-1. it is NOT an instruction -- no constraint/imperative keyword (must,
-   never, always, do not, don't, only, should, required, ensure, run, use,
-   call, pass, set, avoid, prefer) and it does not open with a base-form
-   verb (an imperative like "Check the log first."); and
-2. it matches a hedge / pleasantry / rationale-only pattern ("This is
-   useful because...", "Note that it's important to...", "Feel free
-   to...", "Hope this helps").
-
-Base-form-verb detection is a stdlib heuristic, not a POS tagger: the
-first word counts as an imperative verb unless it is a known non-verb
-opener (pronoun, determiner, preposition, conjunction, hedge adverb) or
-has an inflection suffix (-s, -ed, -ing, -ly). Unknown first words are
-treated as verbs, i.e. the heuristic errs toward NOT flagging. A few
-pleasantry openers that are technically imperatives ("Feel free to",
-"Note that", "Keep in mind") are exempt from rule 1's verb check -- they
-still can't contain a constraint keyword. Labelled fixture:
-tests/fixtures/filler_sentences.json (checked by the smoke test).
+Asymmetric by design: an imperative/constraint sentence is NEVER flagged
+(deleting a real instruction is a silent regression; missed filler only costs
+tokens), so unknown first words count as verbs. Rules: references/classification.md;
+labelled fixture: tests/fixtures/filler_sentences.json.
 """
 
 from __future__ import annotations

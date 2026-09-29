@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """seedbank: learn which repository knowledge is worth persisting.
 
-See ../SKILL.md for the agent-facing workflow and ../references/ for the
-scoring/schema details. Stdlib-only, no network access, no LLM calls --
-the agent supplies the semantic "representation" text when it logs a
-mistake/fact or promotes a candidate; this tool does the deterministic
-bookkeeping (frequency, cost, hashing, scoring, tiering, invalidation,
-compilation) around that.
+The agent supplies the fact text; this tool only does the bookkeeping
+around it. See ../SKILL.md and ../references/.
 """
 
 from __future__ import annotations
@@ -232,9 +228,8 @@ def normalize_rep(text: str) -> str:
 
 
 def declared_key(kind: str, representation: str, keystats: dict | None = None) -> str:
-    """Key for a declared fact/mistake. Keys used to hash the raw text; a
-    store that already tracks that legacy key keeps using it so existing
-    keystats/facts aren't orphaned."""
+    """Key for a declared fact/mistake. A store that already tracks the legacy
+    raw-text-hash key keeps using it so existing keystats/facts aren't orphaned."""
     if keystats is not None:
         legacy = f"{kind}:{hashlib.sha1(representation.strip().encode()).hexdigest()[:12]}"
         if legacy in keystats:

@@ -33,12 +33,10 @@ def to_jsonable(x):
 
 def threshold_status(observed: float, tol: float, higher_is_worse: bool = True) -> Status:
     """Shared strict PASS/FAIL boundary: `observed > tol` (or `< tol` with
-    higher_is_worse=False) is FAIL, otherwise PASS. There is deliberately
-    no WARN band here: exceeding a tolerance is a failure, not a matter of
-    degree. WARN is reserved for *indeterminate* outcomes (pre-asymptotic
-    orders, round-off floors, too few samples, missing cond, spread-only
-    replication) and is decided by the individual checks, never by a
-    slack factor on the tolerance. NaN is FAIL."""
+    higher_is_worse=False) is FAIL, otherwise PASS; NaN is FAIL. No WARN
+    band: WARN is reserved for *indeterminate* outcomes (pre-asymptotic
+    orders, round-off floors, too few samples) and decided by individual
+    checks, never by a slack factor on the tolerance."""
     observed = float(observed)
     if math.isnan(observed):
         return Status.FAIL

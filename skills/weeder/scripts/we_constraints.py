@@ -6,12 +6,7 @@ the same negation/modal words and polarity (SKILL.md + all references
 combined -- moving a constraint into a reference file is not a loss, since
 progressive disclosure keeps it reachable, just not always-loaded).
 
-This is a coverage heuristic, not comprehension: it can prove a
-constraint's wording was deleted outright (the single most damaging and
-most common failure mode of manual/LLM-driven compression), but it cannot
-confirm subtler meaning was preserved. See references/routing-heuristic.md
-for what a full functional check still requires (running a representative
-task through a real agent before/after).
+Catches deleted wording, not lost meaning; see references/routing-heuristic.md.
 """
 
 from __future__ import annotations
