@@ -68,7 +68,9 @@ def evaluate(store: Store, session_id: str, tool_input: dict, bin_path: str) -> 
                 )
 
     if not _KNOWN_RE.search(prompt):
-        notes = store.search(desc + "\n" + prompt)
+        # Match on what the task is about, not the boilerplate Why/Return/Budget lines.
+        m = _TASK_LINE_RE.search(prompt)
+        notes = store.search(desc + "\n" + (m.group(1) if m else prompt))
         if notes:
             return "deny", (
                 "mycelium delegation gate: shared notes already cover part of this task:\n"
