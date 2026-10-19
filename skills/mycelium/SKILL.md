@@ -38,8 +38,10 @@ path. Notes live in `<git root>/.mycelium/notes.json`.
 
 **After an agent returns**
 
-Only you (the parent) write notes, so parallel agents never overwrite each
-other. Record each durable finding once, with the files it describes:
+A reply's `Notes:` block (`- <topic> | <finding> | <file>...`, part of
+`scout`'s format; add it to your `Return:` for other agents) is recorded
+by the plugin's SubagentStop hook. Record any other durable finding once,
+with the files it describes:
 ```
 <this-skill-dir>/bin/mycelium note "<subsystem>" "<finding>" <file>...
 ```

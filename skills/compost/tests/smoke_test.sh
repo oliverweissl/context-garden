@@ -346,6 +346,31 @@ else
   fail=1
 fi
 
+# --- PreToolUse hook on Bash (routes long-output commands; never approves by default)
+HOOKREPO="$(mktemp -d)"; (cd "$HOOKREPO" && git init -q .)
+hk() {  # $1 command; extra env via the caller
+  "$PY" -c 'import json,sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[2],
+    "tool_input": {"command": sys.argv[1], "description": "d"}}))' "$1" "$HOOKREPO" \
+    | CLAUDE_PROJECT_DIR="$HOOKREPO" "$DIR/bin/compost" hook
+}
+out=$(CONTEXT_GARDEN_MODE_COMPOST=off hk "pytest -q")
+[ -z "$out" ] && echo "PASS: hook: silent while off" || { echo "FAIL: hook acted while off"; fail=1; }
+export CONTEXT_GARDEN_MODE_COMPOST=on
+out=$(hk "cd sub && python -m pytest -x")
+assert_contains "hook: test run is redirected (deny, no approval)" "$out" '"permissionDecision": "deny"'
+assert_contains "hook: reason holds the compost command" "$out" "/bin/compost run -- bash -c"
+for c in "pytest | tail -5" "ls -la" "pytest --collect-only" "make # raw" "make > build.log"; do
+  out=$(hk "$c")
+  [ -z "$out" ] && echo "PASS: hook: leaves '$c' alone" || { echo "FAIL: hook routed '$c'"; fail=1; }
+done
+out=$(COMPOST_HOOK=ask hk "cargo test")
+assert_contains "hook: ask mode rewrites and keeps the prompt" "$out" '"permissionDecision": "ask"'
+assert_contains "hook: ask mode rewrites the command" "$out" "\"updatedInput\""
+mkdir -p "$HOOKREPO/.compost" && echo '{"hook": "off"}' > "$HOOKREPO/.compost/config.json"
+out=$(hk "make")
+[ -z "$out" ] && echo "PASS: hook: config off disables it" || { echo "FAIL: config off ignored"; fail=1; }
+rm -rf "$HOOKREPO"; unset CONTEXT_GARDEN_MODE_COMPOST
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "ALL CHECKS PASSED"

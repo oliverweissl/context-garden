@@ -146,3 +146,60 @@ def main() -> int:
         with contextlib.suppress(BaseException):
             _log(repo_root, traceback.format_exc(limit=-2))
     return 0
+
+
+NUDGED_NAME = "nudged.json"
+NUDGE_TOP = 3
+
+
+def stop_main() -> int:
+    """Claude Code Stop hook: once per session, if this session produced
+    promotion candidates above the threshold, block the stop with a reason
+    asking for curation (or an explicit decision not to). Prints the hook's
+    JSON answer or nothing; never fails."""
+    try:
+        data = json.loads(sys.stdin.read() or "null")
+        if not isinstance(data, dict) or data.get("stop_hook_active"):
+            return 0  # already continuing because of a stop hook: never loop
+        session = data.get("session_id")
+        repo_root = git_root(Path(data.get("cwd") or os.getcwd()))
+        if not isinstance(session, str) or repo_root is None:
+            return 0
+        store_dir = repo_root / DEFAULT_STORE_DIRNAME
+        if not (store_dir / "keystats.json").is_file():
+            return 0
+        import seedbank  # deferred: only paid inside a repo with a store
+
+        store = Store(store_dir, repo_root)
+        with store.lock():
+            nudged_path = store_dir / NUDGED_NAME
+            try:
+                nudged = json.loads(nudged_path.read_text())
+            except (OSError, ValueError):
+                nudged = {}
+            if session in nudged:
+                return 0
+            keystats = store.load_keystats()
+            threshold = store.load_config()["promote_threshold"]
+            mine = [c for c in seedbank.build_candidates(store, threshold, False)
+                    if session in (keystats.get(c["key"], {}).get("sessions") or [])]
+            if not mine:
+                return 0
+            nudged[session] = time.time()
+            keep = sorted(nudged.items(), key=lambda kv: kv[1])[-50:]
+            tmp = nudged_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(dict(keep)))
+            os.replace(tmp, nudged_path)
+        bin_path = Path(__file__).resolve().parent.parent / "bin" / "seedbank"
+        top = ", ".join(f"`{c['key']}`" for c in mine[:NUDGE_TOP])
+        print(json.dumps({"decision": "block", "reason": (
+            f"seedbank: this session rediscovered {len(mine)} thing(s) worth caching "
+            f"(top: {top}). Before finishing, hand them to the `gardener` agent "
+            f"(Task: curate seedbank candidates from this session), or run `{bin_path} "
+            "candidates` and promote what is worth it yourself. If none is worth keeping, "
+            "just finish: this reminder appears once per session."
+        )}))
+    except BaseException:  # noqa: BLE001 -- the hook must never break stopping
+        return 0
+    return 0
+

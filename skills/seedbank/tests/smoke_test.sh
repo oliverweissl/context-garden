@@ -409,6 +409,28 @@ mkdir -p "$SCRATCH/own/.seedbank" && git -C "$SCRATCH/own" init -q && echo "# mi
 assert_eq "store .gitignore: an existing one is never overwritten" "$(cat "$SCRATCH/own/.seedbank/.gitignore")" "# mine"
 
 echo
+
+# --- Stop hook: once per session, only for this session's candidates
+stophook() {
+  printf '{"session_id": "%s", "cwd": "%s", "stop_hook_active": %s}' "$1" "$REPO" "${2:-false}" \
+    | CLAUDE_PROJECT_DIR="$REPO" "$DIR/bin/seedbank" hook stop
+}
+out=$(stophook quiet-session)
+assert_eq "stop hook: silent for a session without candidates" "" "$out"
+CC --session stop-s1 observe mistake "Never run the solver without --deterministic in CI." --scope invariants >/dev/null
+CC --session stop-s1 observe mistake "Never run the solver without --deterministic in CI." --scope invariants >/dev/null
+out=$(stophook stop-s1)
+assert_contains "stop hook: blocks once with a curation reason" "$out" '"decision": "block"'
+assert_contains "stop hook: names the gardener agent" "$out" "gardener"
+out=$(stophook stop-s1)
+assert_eq "stop hook: only once per session" "" "$out"
+CC --session stop-s2 observe mistake "Never commit generated protobuf stubs." --scope invariants >/dev/null
+CC --session stop-s2 observe mistake "Never commit generated protobuf stubs." --scope invariants >/dev/null
+out=$(stophook stop-s2 true)
+assert_eq "stop hook: never blocks while already continuing" "" "$out"
+out=$(CONTEXT_GARDEN_MODE_SEEDBANK=off stophook stop-s2)
+assert_eq "stop hook: silent while off" "" "$out"
+
 if [ "$fail" -eq 0 ]; then
   echo "ALL CHECKS PASSED"
 else

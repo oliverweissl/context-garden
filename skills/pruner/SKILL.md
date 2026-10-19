@@ -36,6 +36,9 @@ no LLM). How scores work: `references/scoring.md`.
    never returns more than `--budget` tokens and `expand` refuses to exceed
    it unless you pass `--budget-extra N`.
 4. `bin/pruner show <slice_id>` / `list` re-print saved slices without re-scoring.
+5. With the plugin, an error pasted into the prompt is sliced automatically
+   (context starting "pruner (ran automatically ..."): start from that
+   slice, `expand` it rather than re-running `select`.
 
 Full CLI (`--graph`, `--parser`, tree-sitter backend, language scope):
 `references/schema.md`.

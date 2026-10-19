@@ -5,6 +5,7 @@
     facts.json          {seq, facts: {fact_id: {...}}}: promoted hot/warm facts
     config.json         overrides of CONFIG_DEFAULTS (missing keys fall back)
     hook.log            errors swallowed by the Claude Code hook
+    nudged.json         sessions the Stop hook already reminded (once per session)
     .lock               flock target serializing concurrent commands
     .gitignore          written once at creation; ignores the above, not warm/*.md
 """
@@ -40,6 +41,7 @@ config.json
 .lock
 hook.log
 hook.log.1
+nudged.json
 *.tmp
 """
 DEFAULT_HOT_BUDGET = 500

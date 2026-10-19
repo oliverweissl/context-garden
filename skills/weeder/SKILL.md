@@ -42,5 +42,9 @@ produces before/after evidence. Run all commands as
    constraint preservation is 100%. Otherwise do another pass in step 3;
    don't lower the bar to make a bad result pass.
 
+With the plugin, prefer delegating the whole workflow to the `weeder`
+agent (it preloads this skill and returns only the report) so the audit
+output stays out of your context.
+
 Classification rules and why step 3 isn't automated:
 `references/classification.md`.

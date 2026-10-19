@@ -4,4 +4,11 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ "${1:-}" = "mode" ]; then
   shift; exec python3 "$DIR/scripts/cg_mode.py" compost "$@"
 fi
+if [ "${1:-}" = "hook" ]; then
+  # Claude Code PreToolUse hook on Bash: stdout is the hook's JSON answer; never
+  # fail the tool call. Routes only while compost is on (manual/off: untouched).
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" compost --is-on) 2>/dev/null || exit 0
+  python3 "$DIR/scripts/co_hook.py" 2>/dev/null
+  exit 0
+fi
 exec python3 "$DIR/scripts/compost.py" "$@"

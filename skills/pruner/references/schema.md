@@ -75,3 +75,18 @@ An add that would exceed `budget` is refused (reported) unless
 
 `show` re-prints a saved slice (including `expand` adds) without
 re-scoring; `list` enumerates saved slices.
+
+## Prompt hook
+
+With the plugin, `bin/pruner hook` runs on every submitted prompt while
+pruner is on. Only if the prompt contains a Python traceback, a C/C++
+`file:line: error:` line or pytest failure output, it runs `select --error
+<prompt> --budget 1500` and adds the slice as context (nothing else is
+printed). A select that fails or takes over 20 s (e.g. the first index
+build of a huge repo) adds nothing; run `bin/pruner index` once by hand in
+such repos. Copied skill: add to `.claude/settings.json`
+```json
+{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+  "command": "<this-skill-dir>/bin/pruner hook", "timeout": 25}]}]}}
+```
+

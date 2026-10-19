@@ -18,9 +18,24 @@ reads, so it contains the fix (a template, the earlier agent's
 description, or the matching notes). Allowed calls are logged to
 `spawns.jsonl`. The hook fails open: any error allows the call.
 
+`bin/mycelium hook subagent-stop` (SubagentStop) reads the finished
+agent's final reply (`last_assistant_message`, so background agents are
+covered too) and records each line of its `Notes:` block:
+```
+Notes:
+- <topic> | <finding> | <file> [<file>...]
+```
+`path:line` is reduced to the path; a line whose files don't exist is
+skipped (it could never go stale). Same topic replaces the old note, as
+with `note`.
+
 `bin/mycelium hook post-agent` (PostToolUse on `Agent`) adds a one-line
-reminder to record durable findings. A background agent's tool result is
-only launch metadata, so notes are never captured automatically.
+reminder to record findings that were not in a `Notes:` block.
+
+## Agents
+
+`scout` (read-only search; preloads pruner when it is installed) ships with
+the plugin. A copied skill installs it with `bin/mycelium install-agents`.
 
 ## Modes
 
@@ -40,7 +55,9 @@ Add to `.claude/settings.json`:
   "PreToolUse":  [{"matcher": "Agent", "hooks": [{"type": "command",
     "command": "<this-skill-dir>/bin/mycelium hook pre-agent", "timeout": 5}]}],
   "PostToolUse": [{"matcher": "Agent", "hooks": [{"type": "command",
-    "command": "<this-skill-dir>/bin/mycelium hook post-agent", "timeout": 5}]}]
+    "command": "<this-skill-dir>/bin/mycelium hook post-agent", "timeout": 5}]}],
+  "SubagentStop": [{"hooks": [{"type": "command",
+    "command": "<this-skill-dir>/bin/mycelium hook subagent-stop", "timeout": 5}]}]
 }}
 ```
 

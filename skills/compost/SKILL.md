@@ -28,6 +28,9 @@ not permitted).
    `grep <id> '<pattern>'`, `show <id> --json`). They never re-run the
    command; they read the already-stored raw output.
 5. Existing log file: `bin/compost ingest --file <path>` (or `--stdin`).
+6. The plugin's Bash hook may deny a raw build/test command and name the
+   compost command to run instead: run that. Need raw output (e.g. to show
+   the user)? Append `# raw` to the command.
 
 Profiles (auto-detected, `--profile` to override): pytest, ctest, gcc/clang,
 cmake, python_traceback, slurm, numerical_solver, generic.

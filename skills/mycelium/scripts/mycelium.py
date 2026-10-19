@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """mycelium: delegation gate + shared finding notes for subagents.
 
-Commands: brief, note, list, verify, drop, install-agents, hook pre-agent|post-agent.
+Commands: brief, note, list, verify, drop, install-agents,
+hook pre-agent|post-agent|subagent-stop.
 See references/protocol.md.
 """
 
@@ -10,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -94,10 +96,54 @@ def _hook_output(event: str, *, deny: str = "", context: str = "") -> str:
     return json.dumps(out)
 
 
+_NOTES_HEADER = re.compile(r"^\s*(?:\*\*)?notes:(?:\*\*)?\s*$", re.I)
+_NOTE_LINE = re.compile(r"^\s*[-*]\s+(.+?)\s+\|\s+(.+?)\s+\|\s+(.+?)\s*$")
+
+
+def parse_notes(text: str) -> list:
+    """(topic, finding, [paths]) from a `Notes:` block of an agent's reply:
+    lines `- <topic> | <finding> | <file> [<file>...]` up to the first blank
+    or non-bullet line. `path:line` is reduced to the path."""
+    out, inside = [], False
+    for line in (text or "").splitlines():
+        if _NOTES_HEADER.match(line):
+            inside = True
+            continue
+        if not inside:
+            continue
+        m = _NOTE_LINE.match(line)
+        if not m:
+            if out or line.strip():
+                break
+            continue
+        paths = [re.sub(r":\d+(?:-\d+)?$", "", p.strip("`,")) for p in m.group(3).split()]
+        out.append((m.group(1).strip("`*"), m.group(2), paths))
+    return out
+
+
+def record_agent_notes(store: Store, text: str) -> list:
+    """Record each well-formed note whose files exist; the rest are skipped
+    (a finding without a file to hash could never be marked stale)."""
+    recorded = []
+    for topic, finding, paths in parse_notes(text):
+        real = [p for p in paths if (store.repo_root / p).is_file()]
+        if real:
+            recorded.append(store.add_note(topic, finding, real)["id"])
+    return recorded
+
+
 def cmd_hook(store: Store, args) -> int:
     """Claude Code hook entry. Fails open: any error allows the tool call."""
     try:
         payload = json.loads(sys.stdin.read() or "{}")
+        if args.event == "subagent-stop":
+            # Runs in the parent's harness, under the store lock: still "only
+            # the parent writes notes", without the parent spending a turn on it.
+            if payload.get("cwd"):
+                os.chdir(payload["cwd"])
+                store = Store()
+            record_agent_notes(store, payload.get("last_assistant_message") or "")
+            return 0
         if payload.get("tool_name") not in ("Agent", "Task"):
             return 0
         if payload.get("cwd"):  # resolve the store from the session's dir, not the hook's
@@ -110,8 +156,9 @@ def cmd_hook(store: Store, args) -> int:
         tool_input = payload.get("tool_input") or {}
         if args.event == "post-agent":
             print(_hook_output("PostToolUse", context=(
-                "mycelium: if that agent found durable facts (where something lives, how it "
-                f"works), record each once: `{BIN} note \"<topic>\" \"<finding>\" <file>...`."
+                "mycelium: the agent's `Notes:` lines were recorded automatically. Record any "
+                "other durable fact it found (where something lives, how it works) once: "
+                f"`{BIN} note \"<topic>\" \"<finding>\" <file>...`."
             )))
             return 0
         with store.lock():
@@ -153,7 +200,7 @@ def main(argv=None) -> int:
     sub.add_parser("install-agents", help="copy agent templates to <repo>/.claude/agents/ (never overwrites)")
 
     h = sub.add_parser("hook", help="Claude Code hook entry (reads the hook JSON on stdin)")
-    h.add_argument("event", choices=["pre-agent", "post-agent"])
+    h.add_argument("event", choices=["pre-agent", "post-agent", "subagent-stop"])
 
     args = p.parse_args(argv)
     handlers = {

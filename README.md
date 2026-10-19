@@ -8,6 +8,7 @@ Self-contained Agent Skills that cut an agent's context usage — deterministic,
 | ✂️ [`pruner`](skills/pruner) | Returns exact `file:start-end` ranges worth reading (Python + C/C++) instead of grep-exploring. |
 | ♻️ [`compost`](skills/compost) | Compacts huge compiler/test/CI/HPC output into clustered summaries. |
 | 🍄 [`mycelium`](skills/mycelium) | Delegation gate for subagents (bounded brief, no duplicate investigations) plus shared finding notes so agents don't rediscover the same code. |
+| 🏡 [`greenhouse`](skills/greenhouse) | Shared memory across the repos of one platform: per-repo cards (provides, depends on, key facts) in a base folder beside the repos, so an agent knows its neighbours without reading them. |
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
 <!-- benchmark-figure:begin -->
@@ -18,7 +19,7 @@ Benchmark results for **v0.2.0** on the small fixtures in this repo, run with Cl
 
 ## Install
 
-As a plugin (all five skills, plus the seedbank and mycelium hooks):
+As a plugin (all six skills, their hooks and agents, see [below](#hooks-and-agents)):
 ```text
 /plugin marketplace add oliverweissl/context-garden
 /plugin install context-garden@context-garden
@@ -70,6 +71,20 @@ its mode itself when it loads: in `manual` it proceeds only if you asked for it,
 stops. Its one-line description is still listed to Claude (about 60-100 tokens per skill). To
 drop that too, copy the skill instead of using the plugin, or disable the whole plugin with
 `/plugin disable context-garden`.
+
+## Hooks and agents
+
+Skills teach Claude *how* to do a job; the deterministic parts run as hooks, and jobs worth
+delegating ship as agents. Every hook is a no-op unless its skill is `on`.
+
+| Skill | Hook | Agent |
+|---|---|---|
+| compost | before Bash: a raw build/test command is denied with the compost command to run instead (`hook` in `.compost/config.json`: `redirect`, `ask`, `rewrite`, `off`) | |
+| pruner | on prompt submit: a pasted traceback/compiler error gets a slice as context | preloaded into `scout` |
+| seedbank | after Read/Grep/Glob: record observations; at stop: once per session, ask to curate this session's candidates | `gardener` curates and promotes |
+| mycelium | before Agent: brief gate; when an agent stops: record its `Notes:` block | `scout` read-only search |
+| greenhouse | session start: platform overview, or ask where the base is; session end: card sync if the base opted in | `envoy` reads another repo's checkout |
+| weeder | | `weeder` runs the whole slimming workflow |
 
 ## CLI help and smoke tests
 

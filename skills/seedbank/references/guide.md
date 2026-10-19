@@ -12,6 +12,24 @@ asynchronously after every `Read`, `Grep` and `Glob` (silent, always exits
   "async": true, "timeout": 5}]}]}}
 ```
 
+## End-of-task reminder (Stop hook) and the gardener agent
+
+`bin/seedbank hook stop` runs when Claude is about to stop. Once per
+session, and only if this session's observations produced candidates above
+`promote_threshold`, it blocks the stop with a reason naming the top
+candidates, so Claude either curates them or decides not to and finishes.
+It never fires while Claude is already continuing because of a stop hook.
+Sessions already reminded are kept in `.seedbank/nudged.json` (local).
+
+The `gardener` agent (`agents/gardener.md`, shipped with the plugin)
+preloads this skill and does the curation in its own context: review
+candidates, promote with compact text, compile. Copied skill: put the file
+in `.claude/agents/` and add
+```json
+{"hooks": {"Stop": [{"hooks": [{"type": "command",
+  "command": "<this-skill-dir>/bin/seedbank hook stop", "timeout": 10}]}]}}
+```
+
 ## Observing reads and searches by hand
 
 Without the hook:

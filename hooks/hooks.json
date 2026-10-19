@@ -1,6 +1,28 @@
 {
-  "description": "seedbank: record Read/Grep/Glob calls as observations (async). mycelium: gate Agent calls (brief fields, duplicates, known notes) and remind to record findings.",
+  "description": "seedbank: record Read/Grep/Glob calls (async) and remind once per session to curate candidates (Stop). mycelium: gate Agent calls, record agents' Notes: blocks (SubagentStop). compost: route long build/test commands through the summarizer (PreToolUse Bash). pruner: slice errors pasted into the prompt (UserPromptSubmit). greenhouse: platform overview at session start, opt-in card sync at session end. Every hook is a no-op unless its skill is on.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/mycelium/bin/mycelium\" hook pre-agent",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/compost/bin/compost\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Read|Grep|Glob",
@@ -8,8 +30,8 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/seedbank/bin/seedbank\" hook",
-            "async": true,
-            "timeout": 5
+            "timeout": 5,
+            "async": true
           }
         ]
       },
@@ -24,13 +46,56 @@
         ]
       }
     ],
-    "PreToolUse": [
+    "SubagentStop": [
       {
-        "matcher": "Agent",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/mycelium/bin/mycelium\" hook pre-agent",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/mycelium/bin/mycelium\" hook subagent-stop",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/seedbank/bin/seedbank\" hook stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/pruner/bin/pruner\" hook",
+            "timeout": 25
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/greenhouse/bin/greenhouse\" hook session-start",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/greenhouse/bin/greenhouse\" hook session-end",
             "timeout": 5
           }
         ]

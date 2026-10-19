@@ -339,6 +339,22 @@ else
 fi
 
 echo
+
+# --- UserPromptSubmit hook: an error in the prompt gets a slice as context
+(cd "$REPO" && git init -q . 2>/dev/null)
+ph() {
+  python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "cwd": sys.argv[2]}))' "$1" "$REPO" \
+    | CLAUDE_PROJECT_DIR="$REPO" "$DIR/bin/pruner" hook
+}
+ERRP=$'the build broke, please fix\ncsrc/solver.cpp:14:5: error: use of undeclared identifier \'residual\''
+out=$(CONTEXT_GARDEN_MODE_PRUNER=on ph "$ERRP")
+assert_contains "hook: error prompt gets additionalContext" "$out" '"additionalContext"'
+assert_contains "hook: context holds the slice" "$out" "csrc/solver.cpp"
+out=$(CONTEXT_GARDEN_MODE_PRUNER=on ph "please rename the solver module")
+[ -z "$out" ] && echo "PASS: hook: no error, no context" || { echo "FAIL: hook fired without an error"; fail=1; }
+out=$(CONTEXT_GARDEN_MODE_PRUNER=off ph "$ERRP")
+[ -z "$out" ] && echo "PASS: hook: silent while off" || { echo "FAIL: hook ran while off"; fail=1; }
+
 if [ "$fail" -eq 0 ]; then
   echo "ALL CHECKS PASSED"
 else

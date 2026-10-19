@@ -59,3 +59,26 @@ latest run of any command (so the delta keeps working), or a run in
 progress. Defaults come from `.compost/config.json`
 (`{"keep_per_command": 10, "max_store_mb": 200}`). Deleting `.compost/` is
 safe; the delta just restarts.
+
+## Bash hook
+
+With the plugin, `bin/compost hook` runs before every Bash call (only while
+compost is on). A command whose program is a known long-output tool
+(pytest, ctest, make, ninja, tox, `cmake --build`, `cargo test`, `go test`,
+`npm test`/`npm run`, sbatch/srun/mpirun, ...) is routed through
+`compost run`. Pipes, redirections (except `2>&1`), backgrounded commands,
+help/version/collect-only runs and commands containing `# raw` are left
+alone.
+
+`hook` in `<git root>/.compost/config.json` (or `$COMPOST_HOOK`):
+`redirect` (default: deny the call and name the compost command to run
+instead; the re-run goes through your normal permissions), `ask` (rewrite
+and show the permission prompt), `rewrite` (rewrite and approve: this
+skips the permission prompt for the matched command, so opt in only if you
+already allow those commands), `off`.
+
+Copied skill: add to `.claude/settings.json`
+```json
+{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command",
+  "command": "<this-skill-dir>/bin/compost hook", "timeout": 5}]}]}}
+```

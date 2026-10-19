@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Thin wrapper so `greenhouse` can be invoked without spelling out the python path.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ "${1:-}" = "mode" ]; then
+  shift; python3 "$DIR/scripts/cg_mode.py" greenhouse "$@" || exit $?
+  # Turning it on: find the base now, or settle where it should live.
+  if [ "${1:-}" = "on" ]; then python3 "$DIR/scripts/greenhouse.py" check; fi
+  exit 0
+fi
+if [ "${1:-}" = "hook" ]; then
+  # Claude Code hook: stdout becomes session context; never fail the session.
+  # Prints only while greenhouse is on and a base is found.
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" greenhouse --is-on) 2>/dev/null || exit 0
+  cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/greenhouse.py" "$@" 2>/dev/null
+  exit 0
+fi
+exec python3 "$DIR/scripts/greenhouse.py" "$@"

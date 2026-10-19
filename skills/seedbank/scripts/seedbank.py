@@ -929,7 +929,7 @@ def main(argv=None) -> int:
     if argv[:1] == ["hook"]:  # fast path: no argparse, never fails the tool call
         import sb_hook
 
-        return sb_hook.main()
+        return sb_hook.stop_main() if argv[1:2] == ["stop"] else sb_hook.main()
     args = build_parser().parse_args(argv)
     repo_root = find_repo_root()
     store = Store(find_store_root(args.store, repo_root), repo_root)

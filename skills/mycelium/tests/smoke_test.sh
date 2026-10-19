@@ -100,6 +100,18 @@ assert_not_contains "status notes are never briefed" "$out" "sprint"
 M drop n002 >/dev/null; out=$(M list)
 assert_not_contains "drop removes a note" "$out" "sprint"
 
+# --- subagent-stop: Notes: block of the agent's reply becomes notes
+stop() {
+  python3 -c 'import json,sys; print(json.dumps({"session_id": "s9", "cwd": sys.argv[2],
+    "hook_event_name": "SubagentStop", "last_assistant_message": sys.argv[1]}))' "$1" "$REPO" | M hook subagent-stop
+}
+stop $'Answer: middleware checks tokens\nNotes:\n- Request middleware | auth_middleware wraps every handler | src/middleware.py:3\n- Ghost | lives nowhere | src/ghost.py\nUnresolved: none'
+out=$(M list)
+assert_contains "subagent-stop: Notes: line recorded" "$out" "Request middleware: auth_middleware wraps every handler"
+assert_not_contains "subagent-stop: note without an existing file skipped" "$out" "Ghost"
+CONTEXT_GARDEN_MODE_MYCELIUM=off stop $'Notes:\n- Off topic | should not land | README.md'
+assert_not_contains "subagent-stop: silent while off" "$(M list)" "Off topic"
+
 # --- install-agents never overwrites
 mkdir -p .claude/agents && echo "mine" > .claude/agents/scout.md
 out=$(M install-agents)
@@ -109,7 +121,7 @@ assert_contains "install-agents keeps an existing file" "$out" "kept existing"
 # --- concurrent writers (lock + atomic write)
 for i in $(seq 1 10); do M note "topic $i" "finding $i" README.md >/dev/null & done; wait
 n=$(python3 -c 'import json; print(len(json.load(open(".mycelium/notes.json"))["notes"]))')
-[ "$n" = "11" ] && echo "PASS: 10 concurrent notes all kept (11 total)" || { echo "FAIL: $n notes after concurrent writes, want 11"; fail=1; }
+[ "$n" = "12" ] && echo "PASS: 10 concurrent notes all kept (12 total)" || { echo "FAIL: $n notes after concurrent writes, want 12"; fail=1; }
 
 if [ "$fail" -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit "$fail"

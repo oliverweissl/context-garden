@@ -38,6 +38,9 @@ lives in `<git repo root>/.seedbank/`.
    between `<!-- seedbank:begin -->`/`<!-- seedbank:end -->` and excludes
    stale facts (source changed since promotion) instead of serving them as
    still true; `--critical` facts stay, marked "(source changed — verify)".
+   With the plugin, a Stop hook reminds you once per session when this
+   session produced candidates; hand the curation to the `gardener` agent
+   to keep it out of your context, or do step 3 yourself.
 4. Existing hand-written `AGENTS.md`/`CLAUDE.md`: `bin/seedbank import <path>`.
 
 Hook setup, tiers, what to commit: `references/guide.md`.

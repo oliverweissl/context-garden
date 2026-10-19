@@ -35,4 +35,4 @@ verify:
     - {type: answer_key, path: ANSWERS.txt, key: SEEDBANK_LOCK, pattern: '(?i).*flock.*'}
     - {type: answer_key, path: ANSWERS.txt, key: SEEDBANK_WINDOWS, pattern: '(?i).*(no[- ]?op|nothing|disabled|skip|not lock|no lock|none|degrad).*'}
     - {type: answer_key, path: ANSWERS.txt, key: PRUNER_WRITE, pattern: '(?i).*os\.replace.*'}
-    - {type: answer_key, path: ANSWERS.txt, key: VERSION, expected: "0.2.0"}
+    - {type: answer_key, path: ANSWERS.txt, key: VERSION, expected: "0.3.0"}

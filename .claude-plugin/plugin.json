@@ -1,11 +1,17 @@
 {
   "name": "context-garden",
   "description": "Tools for reducing redundant agent context and preserving important repository knowledge.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
-    "name": "Oliver Weißl",
+    "name": "Oliver Wei\u00dfl",
     "url": "https://github.com/oliverweissl"
   },
   "repository": "https://github.com/oliverweissl/context-garden",
-  "license": "MIT"
+  "license": "MIT",
+  "agents": [
+    "./skills/mycelium/agents/scout.md",
+    "./skills/greenhouse/agents/envoy.md",
+    "./skills/seedbank/agents/gardener.md",
+    "./skills/weeder/agents/weeder.md"
+  ]
 }
