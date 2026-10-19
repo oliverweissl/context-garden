@@ -192,13 +192,18 @@ class Store:
         return True
 
     def search(self, query: str, limit: int = 5, min_overlap: int = 2) -> list:
-        """Notes sharing >= min_overlap content words (or a path) with query, best first."""
+        """Notes sharing >= min_overlap content words (or a path) with query, best first.
+
+        Words found in over a third of the notes (repo name, common dirs) carry no
+        signal and are not counted, so they cannot drag in unrelated notes.
+        """
         q = words(query)
+        notes = [n for n in self.load_notes() if n.get("kind") != "status"]  # status is session-local
+        hays = [words(n["topic"] + " " + n["text"] + " " + " ".join(n["paths"])) for n in notes]
+        if len(hays) >= 4:
+            q = {w for w in q if sum(w in h for h in hays) * 3 <= len(hays)}
         scored = []
-        for n in self.load_notes():
-            if n.get("kind") == "status":
-                continue  # task status is session-local, never briefed as fact
-            hay = words(n["topic"] + " " + n["text"] + " " + " ".join(n["paths"]))
+        for n, hay in zip(notes, hays):
             overlap = len(q & hay) + sum(3 for p in n["paths"] if p in query)
             if overlap >= min_overlap:
                 scored.append((overlap, n))
