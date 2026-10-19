@@ -2,6 +2,8 @@
 
 Self-contained Agent Skills that cut an agent's context usage — deterministic, offline, no LLM calls inside the tooling.
 
+**[See the showcase →](https://oliverweissl.github.io/context-garden/)**
+
 | Skill | Does |
 |---|---|
 | 🌰 [`seedbank`](skills/seedbank) | Promotes repeatedly-rediscovered repo facts into a small, always-loaded `AGENTS.md`. |
