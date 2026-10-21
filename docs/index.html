@@ -8,86 +8,42 @@
 <meta property="og:title" content="Context Garden">
 <meta property="og:description" content="Keep a whole multi-repo platform in your agents' heads. Six offline Skills for Claude Code.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 30V14' stroke='%2334c759' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M16 16C16 8 10 4 3 4c0 7 5 12 13 12z' fill='%2334c759'/%3E%3Cpath d='M16 13c0-6 5-10 13-10 0 6-5 10-13 10z' fill='%2330d158' opacity='.7'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap">
+<meta name="theme-color" content="#000000">
 <style>
 :root {
-  --bg: #fbfcf9;
-  --bg-2: #f2f5ee;
-  --surface: #ffffff;
-  --glass: rgba(255, 255, 255, 0.62);
-  --glass-edge: rgba(255, 255, 255, 0.7);
-  --text: #12180f;
-  --muted: #5c6657;
-  --faint: #8b9486;
-  --line: rgba(18, 24, 15, 0.09);
-  --accent: #1f9d46;
-  --accent-2: #0fb37a;
-  --accent-soft: rgba(31, 157, 70, 0.1);
-  --amber: #c98a12;
-  --violet: #7b5cd6;
-  --rose: #d2566a;
-  --sky: #2d8ad8;
-  --earth: #8a6a48;
-  --compost: #b8652a;
-  --sun: #f7c600;
-  --weeder: #12998f;
-  --code-bg: #0f1510;
-  --code-text: #d9f2dc;
-  --shadow: 0 1px 2px rgba(18, 24, 15, 0.05), 0 12px 32px -12px rgba(18, 24, 15, 0.16);
-  --shadow-lg: 0 2px 4px rgba(18, 24, 15, 0.04), 0 30px 60px -24px rgba(18, 24, 15, 0.28);
-  --radius: 22px;
-  --spring: cubic-bezier(0.32, 0.72, 0, 1);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #070a07;
-    --bg-2: #0d120d;
-    --surface: #111711;
-    --glass: rgba(20, 28, 20, 0.6);
-    --glass-edge: rgba(255, 255, 255, 0.08);
-    --text: #eef5ea;
-    --muted: #a0ab9b;
-    --faint: #6f796b;
-    --line: rgba(238, 245, 234, 0.09);
-    --accent: #3ddc6c;
-    --accent-2: #2ee6a6;
-    --accent-soft: rgba(61, 220, 108, 0.12);
-    --amber: #f0b43c;
-    --violet: #a68cff;
-    --rose: #ff7a8f;
-    --sky: #5bb0ff;
-    --earth: #c49a6c;
-    --compost: #ee8f4f;
-    --sun: #ffd23f;
-    --weeder: #3fd6c6;
-    --code-bg: #0a0f0a;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -12px rgba(0, 0, 0, 0.6);
-    --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4), 0 30px 60px -24px rgba(0, 0, 0, 0.8);
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #070a07;
-  --bg-2: #0d120d;
-  --surface: #111711;
-  --glass: rgba(20, 28, 20, 0.6);
+  color-scheme: dark;
+  --bg: #000;
+  --bg-2: #070a07;
+  --surface: #0a0e0a;
+  --glass: rgba(0, 0, 0, 0.55);
   --glass-edge: rgba(255, 255, 255, 0.08);
-  --text: #eef5ea;
-  --muted: #a0ab9b;
-  --faint: #6f796b;
-  --line: rgba(238, 245, 234, 0.09);
-  --accent: #3ddc6c;
+  --text: #f1f4ee;
+  --muted: #9ba596;
+  --faint: #636c60;
+  --line: rgba(241, 244, 238, 0.09);
+  --accent: #46d872;
   --accent-2: #2ee6a6;
-  --accent-soft: rgba(61, 220, 108, 0.12);
+  --accent-soft: rgba(70, 216, 114, 0.12);
   --amber: #f0b43c;
   --violet: #a68cff;
   --rose: #ff7a8f;
   --sky: #5bb0ff;
   --earth: #c49a6c;
   --compost: #ee8f4f;
-  --sun: #ffd23f;
+  --sun: #e9c46a;
   --weeder: #3fd6c6;
-  --code-bg: #0a0f0a;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -12px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4), 0 30px 60px -24px rgba(0, 0, 0, 0.8);
+  --code-bg: #040604;
+  --code-text: #d9f2dc;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 30px 60px -24px rgba(0, 0, 0, 0.9);
+  --radius: 16px;
+  --spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --display: "Saira Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 :root {
@@ -103,7 +59,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 100%/1.55 system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font: 100%/1.6 var(--body);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
@@ -197,6 +154,7 @@ h1 .grad {
 .copy.done .cp { display: none; }
 .install-foot { padding: 10px 18px 14px; font-size: 0.8rem; color: #8aa38d; }
 .install-foot code { color: #cfe9d2; }
+.install-foot a { color: #4fd47a; white-space: nowrap; }
 .hero-meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 22px; font-size: 0.86rem; color: var(--muted); }
 .hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
 .hero-meta svg { color: var(--accent); }
@@ -330,6 +288,22 @@ h2 { font-size: clamp(1.9rem, 4.2vw, 3rem); line-height: 1.08; letter-spacing: -
 .mode p { margin: 0; color: var(--muted); font-size: 0.93rem; }
 .mode code { font-size: 0.82rem; background: var(--bg-2); padding: 2px 6px; border-radius: 6px; }
 
+/* use-case picker */
+.usecase-head { margin-top: 64px; }
+.usecase-head h3 { margin: 0 0 6px; font-size: 1.35rem; }
+.usecases { display: grid; gap: 16px; margin-top: 24px; }
+@media (min-width: 720px) { .usecases { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1040px) { .usecases { grid-template-columns: repeat(3, 1fr); } }
+.uc { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 22px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; }
+.uc h4 { margin: 0; font-size: 1.02rem; }
+.uc p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.uc .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.uc .chip { font-size: 0.78rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line); }
+.uc .chip.new { border-color: var(--accent); color: var(--accent); }
+.uc code { font-size: 0.82rem; background: var(--bg-2); padding: 3px 8px; border-radius: 6px; align-self: flex-start; margin-top: auto; overflow-wrap: anywhere; }
+.usecase-note { margin: 20px 0 0; color: var(--muted); font-size: 0.93rem; max-width: 52em; }
+.usecase-note code { font-size: 0.82rem; background: var(--bg-2); padding: 2px 6px; border-radius: 6px; }
+
 /* principles */
 .principles { display: grid; gap: 12px; margin-top: 40px; grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 860px) { .principles { grid-template-columns: repeat(4, 1fr); } }
@@ -366,13 +340,249 @@ footer a { color: var(--muted); }
 @media (prefers-reduced-transparency: reduce) {
   .nav { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
+
+/* =========================================================
+   Cinematic layer: black field, condensed display type,
+   pollen particles, chapters. Inspired by scroll-told
+   product films; everything below overrides the base.
+   ========================================================= */
+::selection { background: var(--accent); color: #000; }
+body::after {
+  content: ""; position: fixed; inset: -50%; z-index: 100; pointer-events: none; opacity: .07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain 1.2s steps(6) infinite;
+}
+@keyframes grain { 0% { transform: translate(0, 0); } 33% { transform: translate(-3%, 2%); } 66% { transform: translate(2%, -3%); } 100% { transform: translate(0, 0); } }
+
+h1, h2, .usecase-head h3, .tradeoffs h3, .mode h3, .menu a.big, .ring span {
+  font-family: var(--display); text-transform: uppercase; font-weight: 700; letter-spacing: 0.005em;
+}
+h2 { font-size: clamp(2.1rem, 4.6vw, 3.6rem); line-height: 0.95; margin: 14px 0 20px; letter-spacing: 0; }
+.sub { font-weight: 300; font-size: clamp(1rem, 1.6vw, 1.12rem); color: var(--muted); }
+.sub code, .lede code { font-size: .86em; }
+.eyebrow {
+  font-family: var(--body); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.22em;
+  color: var(--muted); display: flex; align-items: center; gap: 14px;
+}
+body { counter-reset: chapter; }
+.eyebrow::before {
+  counter-increment: chapter; content: counter(chapter, decimal-leading-zero);
+  font-family: var(--display); font-size: 0.95rem; letter-spacing: 0.04em; color: var(--accent);
+}
+.eyebrow::after { content: ""; width: 48px; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); order: -1; display: none; }
+.cta .eyebrow { justify-content: center; }
+
+/* word-by-word heading rise */
+.reveal h2 .wd { display: inline-block; opacity: 0; transform: translateY(0.55em); filter: blur(8px);
+  transition: opacity 700ms var(--ease-out), transform 900ms var(--ease-out), filter 700ms var(--ease-out);
+  transition-delay: calc(var(--i) * 70ms + 80ms); }
+.reveal.in h2 .wd { opacity: 1; transform: none; filter: none; }
+.reveal { opacity: 0.001; transform: translateY(28px); filter: blur(6px);
+  transition: opacity 700ms var(--ease-out), transform 1000ms var(--ease-out), filter 700ms var(--ease-out); }
+.reveal.in { opacity: 1; transform: none; filter: none; }
+
+/* sections: no bands, light from below */
+section { padding: 120px 0; position: relative; }
+.alt { background: transparent; border: 0; }
+.alt::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(60% 45% at 50% 100%, rgba(70, 216, 114, 0.07), transparent 70%);
+}
+section + section::after, .hero + section::after {
+  content: ""; position: absolute; top: 0; left: 50%; width: min(1120px, calc(100% - 32px)); height: 1px; transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--line) 20%, var(--line) 80%, transparent);
+}
+
+/* glass cards */
+.skill, .stat, .mode, .uc, .pr, .meter, .tradeoffs, .flow, .garden {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  border: 1px solid var(--line); box-shadow: none; border-radius: var(--radius);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.skill, .uc, .mode, .stat { transition: border-color 400ms, transform 500ms var(--spring), background 400ms; }
+.skill:hover, .uc:hover, .mode:hover, .stat:hover {
+  border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c, var(--accent)) 9%, transparent), rgba(255, 255, 255, 0.012));
+  box-shadow: none;
+}
+.skill::before { height: 1px; opacity: 1; background: linear-gradient(90deg, transparent, var(--c, var(--accent)), transparent); }
+.skill .art { background: rgba(255, 255, 255, 0.03); }
+.skill h3 { font-family: var(--display); font-size: 1.5rem; letter-spacing: 0.01em; font-weight: 700; }
+.skill h3 .tag { font-family: var(--body); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.14em; }
+.stat .n { font-family: var(--display); font-weight: 700; font-size: clamp(2.6rem, 6vw, 3.8rem); letter-spacing: 0; }
+.stat .bar i, .meter-row .fill { box-shadow: 0 0 18px -2px var(--accent); }
+.term, .install { border: 1px solid var(--line); box-shadow: 0 40px 80px -40px rgba(70, 216, 114, 0.18); border-radius: 14px; }
+.flow { padding: 18px; }
+.garden { background: radial-gradient(70% 60% at 50% 100%, rgba(70, 216, 114, 0.1), transparent 70%), rgba(255, 255, 255, 0.02); }
+.seg { background: rgba(255, 255, 255, 0.04); }
+.seg .knob { background: rgba(255, 255, 255, 0.1); box-shadow: none; }
+.uc .chip, .mode code, .uc code, .usecase-note code, .tradeoffs code { background: rgba(255, 255, 255, 0.06); }
+.uc .chip.new { box-shadow: 0 0 14px -4px var(--accent); }
+.mode h3 { font-size: 1.6rem; }
+.usecase-head h3 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); line-height: 1; }
+
+/* buttons: thin outlines, uppercase */
+.btn { font-family: var(--body); text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.74rem; font-weight: 600;
+  padding: 15px 26px; border-radius: 999px; transition: background 300ms, color 300ms, border-color 300ms, transform 120ms; }
+.btn.primary { background: var(--text); color: #000; box-shadow: none; }
+.btn.primary:hover { background: var(--accent); }
+.btn.ghost { background: transparent; border: 1px solid rgba(255, 255, 255, 0.24); }
+.btn.ghost:hover { border-color: var(--text); }
+
+/* ---------- nav: logo, menu, GitHub ---------- */
+.nav { background: linear-gradient(180deg, rgba(0, 0, 0, 0.7), transparent); border: 0; position: fixed; left: 0; right: 0; z-index: 40;
+  -webkit-backdrop-filter: none; backdrop-filter: none; transition: background 400ms; }
+body.menu-open .nav { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.nav.scrolled { background: rgba(0, 0, 0, 0.55); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.nav .wrap { height: 68px; max-width: none; }
+.brand { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 1.1rem; font-weight: 700; }
+.menu-btn {
+  appearance: none; background: transparent; border: 0; color: var(--text); cursor: pointer;
+  width: 40px; height: 40px; margin-left: -8px; display: grid; place-content: center; gap: 6px; position: relative; z-index: 31;
+}
+.menu-btn i { display: block; width: 22px; height: 1.5px; background: currentColor; transition: transform 500ms var(--spring); }
+.menu-btn[aria-expanded="true"] i:first-child { transform: translateY(3.75px) rotate(45deg); }
+.menu-btn[aria-expanded="true"] i:last-child { transform: translateY(-3.75px) rotate(-45deg); }
+.gh { margin-left: auto; background: transparent; color: var(--text); border: 1px solid rgba(255, 255, 255, 0.24);
+  text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.68rem; padding: 9px 16px; position: relative; z-index: 31; }
+.gh:hover { border-color: var(--text); }
+.nav-links { display: none !important; }
+.brand { position: relative; z-index: 31; white-space: nowrap; }
+@media (max-width: 480px) { .brand { font-size: 0.95rem; letter-spacing: 0.06em; } .gh { padding: 8px 12px; } }
+
+.menu {
+  position: fixed; inset: 0; z-index: 30; display: grid; align-items: center;
+  background: rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(28px) saturate(140%); backdrop-filter: blur(28px) saturate(140%);
+  opacity: 0; visibility: hidden; transition: opacity 500ms var(--ease-out), visibility 0s 500ms;
+}
+.menu.open { opacity: 1; visibility: visible; transition: opacity 500ms var(--ease-out); }
+.menu .wrap { display: grid; gap: 40px; width: 100%; }
+@media (min-width: 900px) { .menu .wrap { grid-template-columns: 1.4fr 1fr; align-items: center; } }
+.menu ol { list-style: none; margin: 0; padding: 0; counter-reset: m; }
+.menu li { overflow: hidden; }
+.menu a.big {
+  display: flex; align-items: baseline; gap: 18px; color: var(--text); font-size: clamp(2.2rem, 7vw, 4.4rem); line-height: 1.02;
+  transform: translateY(105%); transition: transform 800ms var(--ease-out), color 250ms; transition-delay: calc(var(--i) * 55ms);
+}
+.menu a.big::before { counter-increment: m; content: counter(m, decimal-leading-zero); font-size: 0.9rem; color: var(--accent); letter-spacing: 0.06em; }
+.menu a.big:hover { color: var(--accent); text-decoration: none; }
+.menu.open a.big { transform: none; }
+.menu .side { display: grid; gap: 14px; align-content: start; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.16em; }
+.menu .side a { color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 13px 20px; justify-self: start; }
+.menu .side a:hover { color: var(--text); border-color: var(--text); text-decoration: none; }
+.menu .side p { margin: 0 0 6px; color: var(--faint); letter-spacing: 0.1em; text-transform: none; font-size: 0.86rem; max-width: 26em; }
+
+/* ---------- chapter dots ---------- */
+.chapters { position: fixed; right: 26px; top: 50%; transform: translateY(-50%); z-index: 15; display: none; flex-direction: column; gap: 14px; }
+@media (min-width: 1180px) { .chapters { display: flex; } }
+.chapters a { position: relative; width: 12px; height: 12px; display: grid; place-items: center; }
+.chapters a::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--faint); transition: all 400ms var(--spring); }
+.chapters a.on::before { width: 10px; height: 10px; background: transparent; border: 1px solid var(--text); }
+.chapters a span {
+  position: absolute; right: 22px; white-space: nowrap; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.18em;
+  color: var(--muted); opacity: 0; transform: translateX(6px); transition: all 300ms var(--ease-out); pointer-events: none;
+}
+.chapters a:hover span, .chapters a.on span { opacity: 1; transform: none; }
+.chapters.over-intro { opacity: 0; pointer-events: none; }
+.chapters { transition: opacity 400ms; }
+
+/* ---------- intro: the field at night ---------- */
+.intro {
+  position: relative; min-height: 100svh; padding: 0; display: grid; place-items: center; overflow: hidden; isolation: isolate;
+  background:
+    radial-gradient(48% 38% at 50% 108%, rgba(70, 216, 114, 0.28), transparent 70%),
+    radial-gradient(30% 30% at 50% 55%, rgba(233, 196, 106, 0.08), transparent 70%),
+    radial-gradient(120% 80% at 50% 50%, transparent 55%, #000 100%),
+    #000;
+}
+.intro::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28%; z-index: 1; pointer-events: none; background: linear-gradient(transparent, #000); }
+.intro canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+.stalk { position: absolute; left: 50%; bottom: -2%; height: 104%; width: auto; transform: translateX(-50%); z-index: 0; opacity: .7; pointer-events: none; }
+.stalk .sw { transform-origin: 50% 100%; transform-box: fill-box; animation: stalkSway 9s ease-in-out infinite; }
+@keyframes stalkSway { 0%, 100% { transform: rotate(-0.8deg); } 50% { transform: rotate(0.9deg); } }
+.stalk .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 2.6s var(--ease-out) forwards; }
+.stalk .leafy { opacity: 0; animation: fadeUp 1.6s var(--ease-out) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.intro-inner { position: relative; z-index: 2; text-align: center; padding: 120px 16px 160px; max-width: 1100px; }
+.kicker {
+  margin: 0 0 22px; font-size: 0.7rem; letter-spacing: 0.32em; text-transform: uppercase; color: var(--muted);
+  opacity: 0; animation: fadeUp 1.2s 0.3s var(--ease-out) forwards;
+}
+.kicker b { color: var(--accent); font-weight: 600; }
+.title {
+  margin: 0; font-size: clamp(3.4rem, 13.5vw, 11rem); line-height: 0.86; letter-spacing: 0; font-weight: 800;
+  text-shadow: 0 10px 60px rgba(0, 0, 0, 0.6);
+}
+.title .w1, .title .w2 { display: block; }
+.title .w1 { opacity: 0; animation: fadeUp 1.4s 0.15s var(--ease-out) forwards; }
+.title .w2 { background: linear-gradient(95deg, var(--accent) 0%, #b6f27a 55%, var(--sun) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.intro.particles-on .title .w2 { opacity: 0; }
+.intro-lede {
+  margin: 30px auto 0; max-width: 36em; font-size: clamp(0.98rem, 1.8vw, 1.15rem); font-weight: 300; color: #c9d1c4;
+  opacity: 0; animation: fadeUp 1.4s 1s var(--ease-out) forwards;
+}
+.intro-lede b { color: var(--text); font-weight: 600; }
+.scroll-cue {
+  position: absolute; z-index: 2; bottom: 28px; left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 12px;
+  font-size: 0.64rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted);
+}
+.scroll-cue:hover { text-decoration: none; color: var(--text); }
+.scroll-cue i { width: 1px; height: 46px; background: linear-gradient(var(--text), transparent); transform-origin: top; animation: cue 2.2s var(--ease-out) infinite; }
+@keyframes cue { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+
+/* ring CTA */
+.ring {
+  position: absolute; z-index: 3; left: 40px; bottom: 40px; width: 128px; height: 128px; display: grid; place-items: center; color: var(--text);
+  opacity: 0; animation: fadeUp 1.4s 1.4s var(--ease-out) forwards;
+}
+.ring:hover { text-decoration: none; }
+.ring svg { position: absolute; inset: 0; width: 100%; height: 100%; animation: spinR 22s linear infinite; }
+.ring svg text { font-family: var(--body); font-size: 8.4px; letter-spacing: 3.1px; text-transform: uppercase; fill: var(--muted); }
+.ring::before, .ring::after { content: ""; position: absolute; inset: 24px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.35); transition: inset 500ms var(--spring), background 400ms, border-color 400ms; }
+.ring::after { inset: 24px; border-color: var(--accent); opacity: 0; animation: ripple 2.8s var(--ease-out) infinite; }
+.ring span { position: relative; font-size: 0.95rem; line-height: 1; text-align: center; letter-spacing: 0.06em; transition: color 300ms; }
+.ring:hover::before { inset: 18px; background: var(--text); border-color: var(--text); }
+.ring:hover span { color: #000; }
+@keyframes spinR { to { transform: rotate(360deg); } }
+@keyframes ripple { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.55); opacity: 0; } }
+@media (max-width: 719px) {
+  .ring { left: 50%; bottom: 122px; margin-left: -52px; width: 104px; height: 104px; }
+  .ring::before, .ring::after { inset: 20px; }
+  .intro-inner { padding-bottom: 250px; }
+}
+
+/* the old hero is now chapter 01 */
+.hero { padding: 120px 0 80px; }
+.hero::before { display: none; }
+.hero h2 { margin-top: 14px; }
+.hero-head { grid-column: 1 / -1; margin-bottom: -16px; }
+@media (min-width: 960px) { .hero-grid { align-items: start; } .hero .garden { margin-top: 56px; } }
+.lede { font-weight: 300; color: var(--muted); }
+.pill { display: none; }
+
+/* footer */
+footer { border-top: 1px solid var(--line); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.14em; }
+
+@media (prefers-reduced-motion: reduce) {
+  body::after { animation: none; }
+  .reveal, .reveal h2 .wd { filter: none; transform: none; }
+  .reveal h2 .wd { opacity: 1; }
+  .title .w1, .kicker, .intro-lede, .ring, .stalk .leafy { opacity: 1; animation: none; }
+  .stalk .draw { stroke-dashoffset: 0; animation: none; }
+  .menu a.big { transform: none; transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .menu { background: #000; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 </style>
 </head>
 <body>
 
 <nav class="nav">
   <div class="wrap">
-    <a class="brand" href="#">
+    <button class="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="menu"><i></i><i></i></button>
+    <a class="brand" href="#top">
       <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 30V14" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/><path d="M16 16C16 8 10 4 3 4c0 7 5 12 13 12z" fill="var(--accent)"/><path d="M16 13c0-6 5-10 13-10 0 6-5 10-13 10z" fill="var(--accent-2)" opacity=".75"/></svg>
       Context Garden
     </a>
@@ -390,11 +600,80 @@ footer a { color: var(--muted); }
   </div>
 </nav>
 
-<header class="hero">
+<div class="menu" id="menu" aria-hidden="true">
+  <div class="wrap">
+    <ol>
+      <li><a class="big" style="--i:0" href="#garden">Plant it</a></li>
+      <li><a class="big" style="--i:1" href="#why">Why</a></li>
+      <li><a class="big" style="--i:2" href="#real">Real output</a></li>
+      <li><a class="big" style="--i:3" href="#skills">Six skills</a></li>
+      <li><a class="big" style="--i:4" href="#how">How it works</a></li>
+      <li><a class="big" style="--i:5" href="#modes">Pick your skills</a></li>
+    </ol>
+    <div class="side">
+      <p>Offline Agent Skills for Claude Code. Python stdlib only, no LLM calls inside the tools.</p>
+      <a href="https://github.com/oliverweissl/context-garden">GitHub</a>
+      <a href="https://github.com/oliverweissl/context-garden/tree/main/docs/benchmarks">Benchmarks</a>
+      <a href="https://github.com/oliverweissl/context-garden/blob/main/docs/architecture.md">Architecture</a>
+    </div>
+  </div>
+</div>
+
+<nav class="chapters" aria-label="Chapters">
+  <a href="#garden"><span>Plant it</span></a>
+  <a href="#why"><span>Why</span></a>
+  <a href="#real"><span>Real output</span></a>
+  <a href="#benefits"><span>Savings</span></a>
+  <a href="#skills"><span>Skills</span></a>
+  <a href="#demo"><span>See it work</span></a>
+  <a href="#how"><span>How it works</span></a>
+  <a href="#modes"><span>Modes</span></a>
+  <a href="#install"><span>Install</span></a>
+</nav>
+
+<section class="intro" id="top" aria-label="Context Garden">
+  <svg class="stalk" viewBox="0 0 400 900" aria-hidden="true" preserveAspectRatio="xMidYMax meet">
+    <defs>
+      <linearGradient id="stalkG" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#0b3a1a"/><stop offset=".55" stop-color="#2f9d52"/><stop offset="1" stop-color="#b6f27a"/></linearGradient>
+      <linearGradient id="bladeG" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0c2e15" stop-opacity=".9"/><stop offset="1" stop-color="#46d872" stop-opacity=".55"/></linearGradient>
+      <filter id="glow" x="-50%" y="-20%" width="200%" height="140%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <g class="sw" filter="url(#glow)">
+      <path class="draw" pathLength="1" d="M200 900 C204 760 192 620 198 470 C203 340 196 230 201 120" fill="none" stroke="url(#stalkG)" stroke-width="5" stroke-linecap="round"/>
+      <g class="leafy" style="animation-delay:.6s"><path d="M199 700 C150 640 90 610 22 612 C90 596 160 618 201 668z" fill="url(#bladeG)"/></g>
+      <g class="leafy" style="animation-delay:.8s"><path d="M200 600 C250 540 318 512 388 520 C318 498 246 528 198 572z" fill="url(#bladeG)"/></g>
+      <g class="leafy" style="animation-delay:1s"><path d="M198 500 C160 430 110 392 52 380 C116 376 172 412 200 470z" fill="url(#bladeG)"/></g>
+      <g class="leafy" style="animation-delay:1.2s"><path d="M200 400 C236 340 286 304 346 292 C284 286 230 318 199 372z" fill="url(#bladeG)"/></g>
+      <g class="leafy" style="animation-delay:1.4s"><path d="M200 300 C178 252 150 222 110 206 C156 210 190 240 201 276z" fill="url(#bladeG)"/></g>
+      <g class="leafy" style="animation-delay:1.7s" fill="#e9c46a">
+        <ellipse cx="201" cy="112" rx="7" ry="13" opacity=".95"/>
+        <ellipse cx="190" cy="134" rx="6" ry="11" transform="rotate(-24 190 134)" opacity=".8"/>
+        <ellipse cx="212" cy="134" rx="6" ry="11" transform="rotate(24 212 134)" opacity=".8"/>
+        <ellipse cx="186" cy="160" rx="5" ry="10" transform="rotate(-34 186 160)" opacity=".6"/>
+        <ellipse cx="216" cy="160" rx="5" ry="10" transform="rotate(34 216 160)" opacity=".6"/>
+      </g>
+    </g>
+  </svg>
+  <canvas id="pollen" aria-hidden="true"></canvas>
+  <div class="intro-inner">
+    <p class="kicker"><b>v0.3</b> &nbsp;·&nbsp; For multi-repo platforms and agent swarms</p>
+    <h1 class="title"><span class="w1">Context.</span> <span class="w2">Cultivated.</span></h1>
+    <p class="intro-lede">Keep a <b>whole platform</b> in your agents' heads. Six offline Skills for Claude Code share what every repo and every agent already knows, and trim what each one reads.</p>
+  </div>
+  <a class="ring" href="#install" aria-label="Install: three lines">
+    <svg viewBox="0 0 128 128" aria-hidden="true"><defs><path id="ringP" d="M64 64 m-54 0 a54 54 0 1 1 108 0 a54 54 0 1 1 -108 0"/></defs><text><textPath href="#ringP">Install in three lines · Install in three lines · </textPath></text></svg>
+    <span>Plant<br>it</span>
+  </a>
+  <a class="scroll-cue" href="#garden">Scroll to discover<i></i></a>
+</section>
+
+<header class="hero" id="garden">
   <div class="wrap hero-grid">
-    <div>
-      <span class="pill"><b>v0.3</b> Built for multi-repo platforms</span>
-      <h1>Keep a <span class="grad">whole platform</span> in your agents' heads.</h1>
+    <div class="reveal hero-head">
+      <div class="eyebrow">Plant it</div>
+      <h2>Context is the bottleneck.</h2>
+    </div>
+    <div class="reveal">
       <p class="lede">When one production platform spans many repositories and a swarm of agents works on it at once, context is the bottleneck. Context Garden shares system knowledge across repos and agents, and trims what each agent reads. Everything runs offline, with no LLM calls inside the tools.</p>
 
       <div class="install" data-install>
@@ -404,7 +683,8 @@ footer a { color: var(--muted); }
         </div>
         <div class="install-body">
           <pre data-panel="plugin"><span class="p">› </span>/plugin marketplace add oliverweissl/context-garden
-<span class="p">› </span>/plugin install context-garden@context-garden</pre>
+<span class="p">› </span>/plugin install context-garden@context-garden
+<span class="p">› </span>/context-garden:setup  <span class="c"># pick skills by use case</span></pre>
           <pre data-panel="copy" hidden><span class="p">$ </span>git clone https://github.com/oliverweissl/context-garden
 <span class="p">$ </span>cp -r context-garden/skills/compost ~/.claude/skills/
 <span class="c"># its hooks need the settings snippet from the README</span></pre>
@@ -413,7 +693,7 @@ footer a { color: var(--muted); }
             <svg class="ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
           </button>
         </div>
-        <div class="install-foot">Every skill starts off. Then ask Claude, for a swarm on a platform: <code>"turn on mycelium, greenhouse and pruner"</code>. For one repo: <code>"turn on compost, pruner and seedbank"</code>.</div>
+        <div class="install-foot">Every skill starts off. <code>/context-garden:setup</code> asks how you work and turns on the right ones. <a href="#modes">Which skills for which use case</a></div>
       </div>
 
       <div class="hero-meta">
@@ -450,15 +730,12 @@ footer a { color: var(--muted); }
           <path class="dash" d="M246 400 C270 446 296 446 316 404"/>
           <path class="dash" d="M316 404 C336 440 356 440 376 406"/>
           <path class="dash" d="M376 406 C410 450 470 444 514 380"/>
-          <path d="M216 432 C230 470 330 470 346 432" opacity=".45"/>
-          <path d="M120 430 C150 480 250 488 280 452" opacity=".35"/>
-          <path d="M280 452 C320 488 420 480 446 430" opacity=".35"/>
         </g>
         <g fill="var(--mycelium)">
           <circle cx="186" cy="404" r="4"/><circle cx="246" cy="400" r="4"/><circle cx="316" cy="404" r="4"/><circle cx="376" cy="406" r="4"/>
-          <circle cx="280" cy="452" r="5" class="pulse"/><circle cx="66" cy="380" r="3"/><circle cx="514" cy="380" r="3"/>
+<circle cx="66" cy="380" r="3"/><circle cx="514" cy="380" r="3"/>
         </g>
-        <text x="280" y="494" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" font-weight="700" fill="var(--mycelium)">mycelium</text>
+        <text x="280" y="452" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" font-weight="700" fill="var(--mycelium)">mycelium</text>
 
         <!-- greenhouse holding every plant (repo) -->
         <g>
@@ -919,13 +1196,27 @@ notes (tell the agent to verify, not rediscover) ...
     <div class="reveal">
       <div class="eyebrow">You stay in control</div>
       <h2>Off until you say so.</h2>
-      <p class="sub">Every skill starts <code>off</code>: nothing runs, not even its hooks. Turn on what you want, per repo or everywhere. Ask Claude, for example "turn compost on", or set it yourself.</p>
+      <p class="sub">Every skill starts <code>off</code>: nothing runs, not even its hooks. After installing, run <code>/context-garden:setup</code>: it asks how you work and turns on the right skills, for this repo or everywhere. Until you do, each session reminds you. You can also just ask Claude, for example "turn compost on".</p>
     </div>
     <div class="modes">
       <div class="mode reveal"><div class="dot"></div><h3>off</h3><p>Nothing runs. The skill declines if called and tells you how to turn it on. The default.</p></div>
       <div class="mode manual reveal"><div class="dot"></div><h3>manual</h3><p>Runs only when you ask, for example <code>/context-garden:compost summarize the failing run</code>. Hooks stay quiet.</p></div>
       <div class="mode on reveal"><div class="dot"></div><h3>on</h3><p>Claude uses it on its own when relevant, and its hooks run. Recommended for compost, pruner and seedbank.</p></div>
     </div>
+
+    <div class="usecase-head reveal">
+      <h3>Which skills for how you work</h3>
+      <p class="sub">Pick the closest preset. Skills it does not turn on stay <code>manual</code>: they never run on their own but answer when you call them.</p>
+    </div>
+    <div class="usecases">
+      <div class="uc reveal"><h4>One repo, everyday coding</h4><p>Debugging, failing tests, compiler errors in a single repository.</p><div class="chips"><span class="chip">seedbank</span><span class="chip">pruner</span><span class="chip">compost</span></div><code>/context-garden:setup solo</code></div>
+      <div class="uc reveal"><h4>Big project, many interacting repos</h4><p>Services, shared packages and APIs spread over several repos. greenhouse lets each agent know its neighbours without opening them.</p><div class="chips"><span class="chip new">greenhouse</span><span class="chip">seedbank</span><span class="chip">pruner</span><span class="chip">compost</span></div><code>/context-garden:setup platform</code></div>
+      <div class="uc reveal"><h4>Many agents per task</h4><p>Claude spawns subagents to search, investigate or edit in parallel. mycelium gates and briefs them and shares their findings.</p><div class="chips"><span class="chip new">mycelium</span><span class="chip">seedbank</span><span class="chip">pruner</span><span class="chip">compost</span></div><code>/context-garden:setup swarm</code></div>
+      <div class="uc reveal"><h4>Agent swarm on a platform</h4><p>Both of the above: many agents working across many repos.</p><div class="chips"><span class="chip new">greenhouse</span><span class="chip new">mycelium</span><span class="chip">seedbank</span><span class="chip">pruner</span><span class="chip">compost</span></div><code>/context-garden:setup platform-swarm</code></div>
+      <div class="uc reveal"><h4>Long logs, nothing else</h4><p>Huge builds, test suites, CI or HPC/SLURM output.</p><div class="chips"><span class="chip">compost</span></div><code>/context-garden:setup logs</code></div>
+      <div class="uc reveal"><h4>You write Skills</h4><p>Slim your own SKILL.md files on demand; weeder stays manual in every preset, so just call it.</p><div class="chips"><span class="chip">weeder</span></div><code>/context-garden:weeder slim skills/my-skill</code></div>
+    </div>
+    <p class="usecase-note reveal">Rule of thumb: greenhouse pays off only when several repos interact, mycelium only when Claude delegates to many agents; compost, pruner and seedbank help in almost any repo. Add <code>--scope user</code> to apply a preset to every repo, or <code>--scope project</code> to share it with your team.</p>
   </div>
 </section>
 
@@ -933,8 +1224,8 @@ notes (tell the agent to verify, not rediscover) ...
   <div class="wrap">
     <div class="reveal">
       <div class="eyebrow">Get started</div>
-      <h2>Plant it in two lines.</h2>
-      <p class="sub" style="margin:0 auto">Paste into Claude Code, then ask it to turn on the skills you want.</p>
+      <h2>Plant it in three lines.</h2>
+      <p class="sub" style="margin:0 auto">Paste into Claude Code. The last line picks the skills for how you work.</p>
     </div>
     <div class="install reveal" data-install>
       <div class="install-tabs" role="tablist">
@@ -943,7 +1234,8 @@ notes (tell the agent to verify, not rediscover) ...
       </div>
       <div class="install-body">
         <pre data-panel="plugin"><span class="p">› </span>/plugin marketplace add oliverweissl/context-garden
-<span class="p">› </span>/plugin install context-garden@context-garden</pre>
+<span class="p">› </span>/plugin install context-garden@context-garden
+<span class="p">› </span>/context-garden:setup  <span class="c"># pick skills by use case</span></pre>
         <pre data-panel="copy" hidden><span class="p">$ </span>git clone https://github.com/oliverweissl/context-garden
 <span class="p">$ </span>cp -r context-garden/skills/compost ~/.claude/skills/
 <span class="c"># its hooks need the settings snippet from the README</span></pre>
@@ -952,7 +1244,7 @@ notes (tell the agent to verify, not rediscover) ...
           <svg class="ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
         </button>
       </div>
-      <div class="install-foot">Then: <code>"turn on mycelium, greenhouse and pruner"</code> for swarms, or <code>"compost, pruner and seedbank"</code> for one repo.</div>
+      <div class="install-foot">Skills start off: <code>/context-garden:setup</code> turns on the ones for your use case. <a href="#modes">See the recommendations</a></div>
     </div>
     <div class="btns">
       <a class="btn primary" href="https://github.com/oliverweissl/context-garden">View on GitHub</a>
@@ -972,9 +1264,144 @@ notes (tell the agent to verify, not rediscover) ...
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+
+  // split section headings into words for the staggered rise
+  document.querySelectorAll('.reveal h2').forEach(h => {
+    if (h.children.length) return;
+    const words = h.textContent.trim().split(/\s+/);
+    h.textContent = '';
+    words.forEach((w, i) => {
+      const sp = document.createElement('span');
+      sp.className = 'wd'; sp.style.setProperty('--i', i); sp.textContent = w;
+      h.append(sp, i < words.length - 1 ? ' ' : '');
+    });
+  });
+
+  // nav: solid after the intro; menu overlay
+  const nav = document.querySelector('.nav');
+  const menu = document.getElementById('menu');
+  const menuBtn = document.querySelector('.menu-btn');
+  const setMenu = open => {
+    menu.classList.toggle('open', open);
+    menu.setAttribute('aria-hidden', !open);
+    menuBtn.setAttribute('aria-expanded', open);
+    document.documentElement.style.overflow = open ? 'hidden' : '';
+    document.body.classList.toggle('menu-open', open);
+    if (open) menu.querySelector('a').focus({ preventScroll: true });
+  };
+  menuBtn.addEventListener('click', () => setMenu(!menu.classList.contains('open')));
+  menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setMenu(false)));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && menu.classList.contains('open')) { setMenu(false); menuBtn.focus(); } });
+
+  // chapter dots
+  const chapters = document.querySelector('.chapters');
+  const dots = [...chapters.querySelectorAll('a')];
+  const targets = dots.map(a => document.querySelector(a.getAttribute('href')));
+  const intro = document.querySelector('.intro');
+  function onScroll() {
+    const y = scrollY, h = innerHeight;
+    nav.classList.toggle('scrolled', y > 80);
+    chapters.classList.toggle('over-intro', y < h * 0.6);
+    let cur = 0;
+    targets.forEach((t, i) => { if (t && t.getBoundingClientRect().top < h * 0.45) cur = i; });
+    dots.forEach((d, i) => d.classList.toggle('on', i === cur));
+  }
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // pollen: the second word of the title assembles from particles, then
+  // scatters upward as you scroll; ambient pollen drifts throughout
+  const cv = document.getElementById('pollen');
+  const ctx = cv.getContext && cv.getContext('2d');
+  const word = intro.querySelector('.w2');
+  if (ctx) {
+    let W = 0, H = 0, dpr = 1, pts = [], dust = [], born = 0, mouse = { x: -1e4, y: -1e4 }, visible = true;
+    const cols = ['#46d872', '#7fe08a', '#b6f27a', '#d8dc76', '#e9c46a'];
+    function sample() {
+      const r = cv.getBoundingClientRect(), wr = word.getBoundingClientRect();
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      W = r.width; H = r.height;
+      cv.width = W * dpr; cv.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const cs = getComputedStyle(word);
+      const off = document.createElement('canvas');
+      off.width = Math.ceil(wr.width) + 4; off.height = Math.ceil(wr.height) + 4;
+      const o = off.getContext('2d');
+      o.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      o.textBaseline = 'middle'; o.textAlign = 'center';
+      o.fillStyle = '#fff';
+      o.fillText(word.textContent.toUpperCase(), off.width / 2, off.height / 2 + parseFloat(cs.fontSize) * 0.04);
+      const data = o.getImageData(0, 0, off.width, off.height).data;
+      const step = Math.max(2, Math.round(parseFloat(cs.fontSize) / 46));
+      const ox = wr.left - r.left - 2, oy = wr.top - r.top - 2;
+      const old = pts;
+      pts = [];
+      for (let y = 0; y < off.height; y += step) for (let x = 0; x < off.width; x += step) {
+        if (data[(y * off.width + x) * 4 + 3] > 140) {
+          const prev = old[pts.length];
+          const tx = ox + x, ty = oy + y;
+          pts.push({
+            tx, ty,
+            x: prev ? prev.x : tx + (Math.random() - 0.5) * W * 0.9,
+            y: prev ? prev.y : ty + (Math.random() - 0.2) * H * 0.8,
+            vx: (Math.random() - 0.5) * 2.2, vy: -0.6 - Math.random() * 2.4,
+            d: Math.random() * 0.5, s: step * (0.8 + Math.random() * 0.3),
+            c: cols[Math.min(cols.length - 1, Math.floor((x / off.width) * cols.length + Math.random() * 0.6))]
+          });
+        }
+      }
+      if (!dust.length) for (let i = 0; i < Math.round(W * H / 9000); i++) dust.push({
+        x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.6 + 0.3,
+        v: Math.random() * 0.25 + 0.05, p: Math.random() * Math.PI * 2, a: Math.random() * 0.5 + 0.15
+      });
+    }
+    function frame(t) {
+      if (!visible) { requestAnimationFrame(frame); return; }
+      if (!born) born = t;
+      const age = reduce ? 10 : (t - born) / 1000;
+      const sp = Math.min(Math.max(scrollY / (intro.offsetHeight * 0.75), 0), 1.4);
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const d of dust) {
+        if (!reduce) { d.y -= d.v; d.x += Math.sin(t / 2400 + d.p) * 0.15; if (d.y < -4) { d.y = H + 4; d.x = Math.random() * W; } }
+        ctx.globalAlpha = d.a * (0.6 + 0.4 * Math.sin(t / 900 + d.p));
+        ctx.fillStyle = '#e9c46a';
+        ctx.beginPath(); ctx.arc(d.x, d.y - sp * 120 * d.v * 4, d.r, 0, 6.283); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      for (const q of pts) {
+        const k = Math.min(Math.max((age - 0.35 - q.d) / 1.5, 0), 1), e = 1 - Math.pow(1 - k, 4);
+        let x = q.x + (q.tx - q.x) * e, y = q.y + (q.ty - q.y) * e;
+        if (k >= 1) { q.x = q.tx; q.y = q.ty; }
+        const s2 = sp * sp;
+        x += q.vx * s2 * 260 + Math.sin(t / 700 + q.ty) * s2 * 8;
+        y += q.vy * s2 * 260;
+        const dx = x - mouse.x, dy = y - mouse.y, dist2 = dx * dx + dy * dy;
+        if (dist2 < 5200 && !reduce) { const f = (1 - dist2 / 5200) * 14; x += dx / Math.sqrt(dist2 + 1) * f; y += dy / Math.sqrt(dist2 + 1) * f; }
+        const a = Math.max(0, 1 - sp * 1.1) * (0.25 + 0.75 * e);
+        if (a <= 0.01) continue;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = q.c;
+        ctx.fillRect(x, y, q.s, q.s);
+      }
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(frame);
+    }
+    const start = () => {
+      try { sample(); } catch (_) { return; }
+      intro.classList.add('particles-on');
+      requestAnimationFrame(frame);
+      let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => sample(), 150); });
+      intro.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; });
+      intro.addEventListener('pointerleave', () => { mouse.x = mouse.y = -1e4; });
+      new IntersectionObserver(([en]) => { visible = en.isIntersecting; }).observe(intro);
+    };
+    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => requestAnimationFrame(start));
+  }
+
   // install tabs + copy
   const cmds = {
-    plugin: '/plugin marketplace add oliverweissl/context-garden\n/plugin install context-garden@context-garden',
+    plugin: '/plugin marketplace add oliverweissl/context-garden\n/plugin install context-garden@context-garden\n/context-garden:setup',
     copy: 'git clone https://github.com/oliverweissl/context-garden\ncp -r context-garden/skills/compost ~/.claude/skills/\n# its hooks need the settings snippet from the README'
   };
   document.querySelectorAll('[data-install]').forEach(box => {

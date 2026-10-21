@@ -1,5 +1,5 @@
 {
-  "description": "seedbank: record Read/Grep/Glob calls (async) and remind once per session to curate candidates (Stop). mycelium: gate Agent calls, record agents' Notes: blocks (SubagentStop). compost: route long build/test commands through the summarizer (PreToolUse Bash). pruner: slice errors pasted into the prompt (UserPromptSubmit). greenhouse: platform overview at session start, opt-in card sync at session end. Every hook is a no-op unless its skill is on.",
+  "description": "setup: tell a fresh install (no skill configured) to run /context-garden:setup (SessionStart). seedbank: record Read/Grep/Glob calls (async) and remind once per session to curate candidates (Stop). mycelium: gate Agent calls, record agents' Notes: blocks (SubagentStop). compost: route long build/test commands through the summarizer (PreToolUse Bash). pruner: slice errors pasted into the prompt (UserPromptSubmit). greenhouse: platform overview at session start, opt-in card sync at session end. Every hook is a no-op unless its skill is on.",
   "hooks": {
     "PreToolUse": [
       {
@@ -80,6 +80,15 @@
       }
     ],
     "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garden.py\" hook session-start",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "hooks": [
           {

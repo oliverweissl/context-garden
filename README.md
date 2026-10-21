@@ -25,16 +25,48 @@ As a plugin (all six skills, their hooks and agents, see [below](#hooks-and-agen
 ```text
 /plugin marketplace add oliverweissl/context-garden
 /plugin install context-garden@context-garden
+/context-garden:setup    # skills start off: pick the ones for your use case
 ```
 Or copy single skills (the hooks then need the settings snippet in the skill's `references/`):
 ```bash
 cp -r skills/{skill} ~/.claude/skills/{skill}   # or the project's .claude/skills/
 ```
 
-## Turn skills on, manual or off
+## After installing: turn skills on
 
-Each skill has one of three modes. **All skills start `off`**: nothing runs, not even the
-hooks, until you turn a skill on.
+**Every skill starts `off`.** Nothing runs, not even the hooks, until you pick which skills
+you want. Until you do, each new session shows a reminder. With the plugin, run:
+```text
+/context-garden:setup                    # asks how you work and where to apply it
+/context-garden:setup platform           # or name a preset directly
+/context-garden:setup swarm --scope user # ... for every repo, not just this one
+```
+Or just ask Claude, e.g. "turn on compost and pruner". Changes apply from the next prompt.
+
+### Which skills for which use case
+
+| You work... | Preset | Turned on |
+|---|---|---|
+| in one repo, everyday coding and debugging | `solo` | seedbank, pruner, compost |
+| on a big project split over several repos that call each other (services, shared packages, APIs) | `platform` | + greenhouse |
+| with many subagents per task (parallel search, investigate, edit) | `swarm` | + mycelium |
+| with many agents across a multi-repo platform | `platform-swarm` | + greenhouse, mycelium |
+| mostly with long builds, test suites, CI or HPC/SLURM logs | `logs` | compost only |
+
+Skills a preset does not turn on are set to `manual`: they never run on their own but still
+answer when you call them (e.g. `/context-garden:weeder` when you want to slim a Skill).
+`all` turns everything on; `off` keeps everything off and hides the reminder.
+
+Rule of thumb: **greenhouse** pays off only when several repos interact, **mycelium** only when
+Claude delegates to many agents; **compost**, **pruner** and **seedbank** help in almost any repo;
+**weeder** is for people who write Skills.
+
+Scopes: `local` (default; this repo, only you, `.claude/settings.local.json`), `project` (this
+repo, shared with the team via `.claude/settings.json`), `user` (every repo, `~/.claude/settings.json`).
+
+## Modes: on, manual or off
+
+Each skill has one of three modes.
 
 | Mode | Claude uses it on its own | You can call it | Its hooks run |
 |---|---|---|---|
@@ -48,8 +80,8 @@ skills/compost/bin/compost mode on         # this repo, only you: .claude/settin
 skills/compost/bin/compost mode manual --scope user  # every repo (or --scope project to share)
 skills/compost/bin/compost mode            # show the mode and where it comes from
 ```
-With the plugin, `bin/` sits in the plugin's install directory, so either ask Claude or edit the
-setting directly. The mode is stored as Claude Code's own `skillOverrides` setting, in
+With the plugin, `bin/` sits in the plugin's install directory, so use `/context-garden:setup`,
+ask Claude, or edit the setting directly. The mode is stored as Claude Code's own `skillOverrides` setting, in
 `.claude/settings.local.json` (this repo, only you), `.claude/settings.json` (shared) or
 `~/.claude/settings.json` (all repos), most specific first:
 ```json
@@ -77,7 +109,8 @@ drop that too, copy the skill instead of using the plugin, or disable the whole 
 ## Hooks and agents
 
 Skills teach Claude *how* to do a job; the deterministic parts run as hooks, and jobs worth
-delegating ship as agents. Every hook is a no-op unless its skill is `on`.
+delegating ship as agents. Every hook is a no-op unless its skill is `on`; the one exception is
+a session-start reminder to run `/context-garden:setup`, shown only while no skill has a mode set.
 
 | Skill | Hook | Agent |
 |---|---|---|
