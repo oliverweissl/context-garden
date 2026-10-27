@@ -1,5 +1,10 @@
 # 🌱 Context Garden
 
+[![CI](https://github.com/oliverweissl/context-garden/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/ci.yml?query=branch%3Amain)
+[![App · Ubuntu](https://github.com/oliverweissl/context-garden/actions/workflows/app-ubuntu.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-ubuntu.yml?query=branch%3Amain)
+[![App · macOS](https://github.com/oliverweissl/context-garden/actions/workflows/app-macos.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-macos.yml?query=branch%3Amain)
+[![App · Windows](https://github.com/oliverweissl/context-garden/actions/workflows/app-windows.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-windows.yml?query=branch%3Amain)
+
 Self-contained Agent Skills that cut an agent's context usage — deterministic, offline, no LLM calls inside the tooling.
 
 **[See the showcase →](https://oliverweissl.github.io/context-garden/)**
@@ -105,6 +110,22 @@ its mode itself when it loads: in `manual` it proceeds only if you asked for it,
 stops. Its one-line description is still listed to Claude (about 60-100 tokens per skill). To
 drop that too, copy the skill instead of using the plugin, or disable the whole plugin with
 `/plugin disable context-garden`.
+
+## Optional: the desktop app
+
+Everything above works without it. If you want one window for a whole platform, `app/`
+holds a small desktop app (Windows, macOS, Linux; Tauri + xterm.js) that:
+
+- starts a **garden** from repos, local folders, GitLab groups (with subgroups) or GitHub orgs,
+  typed into one field and told apart automatically; clones nested by group, or flat;
+- recommends and applies the skills per repo (same `skillOverrides` as `/context-garden:setup`);
+- shows garden stats (repos, uncommitted changes, always-loaded agent-file tokens, seedbank facts,
+  greenhouse cards, Claude Code tokens of the last 30 days);
+- runs Claude Code, Codex, Gemini CLI or a plain shell in arrangeable terminal panes, optionally
+  under named **accounts** (separate `CLAUDE_CONFIG_DIR` / `CODEX_HOME`, each with its own icon).
+
+It talks to GitHub/GitLab only through your logged-in `gh` / `glab` CLIs and never touches agent
+credentials. Build and run: see [`app/README.md`](app/README.md).
 
 ## Hooks and agents
 

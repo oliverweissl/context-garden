@@ -42,8 +42,9 @@ def test_mode_module_is_identical_in_every_skill():
 @pytest.mark.parametrize("skill", SKILLS)
 def test_skill_md_injects_its_own_banner(skill):
     text = (REPO_ROOT / "skills" / skill / "SKILL.md").read_text()
-    assert f"\n!`${{CLAUDE_SKILL_DIR}}/bin/{skill} mode --banner`\n" in text
-    assert f"allowed-tools: Bash(${{CLAUDE_SKILL_DIR}}/bin/{skill} *)" in text
+    # Quoted: plugin dirs can contain spaces (macOS "Application Support").
+    assert f'\n!`"${{CLAUDE_SKILL_DIR}}/bin/{skill}" mode --banner`\n' in text
+    assert f'allowed-tools: Bash(${{CLAUDE_SKILL_DIR}}/bin/{skill} *), Bash("${{CLAUDE_SKILL_DIR}}/bin/{skill}" *)' in text
 
 
 @pytest.mark.parametrize("skill", SKILLS)

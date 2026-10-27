@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -112,7 +113,7 @@ def banner(skill: str) -> str:
     if mode == "off":
         return (
             f"**{skill} is turned OFF here** (off is the default). Do not use it; continue the "
-            f"task without it. Only if the user asks to turn it on: `{BIN_DIR / skill} mode on` "
+            f"task without it. Only if the user asks to turn it on: `{shlex.quote(str(BIN_DIR / skill))} mode on` "
             "(automatic) or `mode manual` (only when called)."
         )
     return ""

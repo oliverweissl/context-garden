@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -23,7 +24,8 @@ from my_store import Store  # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 # Absolute wrapper path so printed handles run as-is (mycelium is not on PATH).
-BIN = str(SKILL_DIR / "bin" / "mycelium")
+# Shell-quoted: printed for the agent to run, and plugin paths may contain spaces.
+BIN = shlex.quote(str(SKILL_DIR / "bin" / "mycelium"))
 
 
 def cmd_brief(store: Store, args) -> int:

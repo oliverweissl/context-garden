@@ -34,7 +34,8 @@ from co_store import Store, find_repo_root, find_store_root
 
 # Absolute path of the wrapper, so printed retrieval handles are runnable
 # as-is (`compost` itself is not expected to be on PATH).
-BIN = str(Path(__file__).resolve().parent.parent / "bin" / "compost")
+# Shell-quoted: printed for the agent to run, and plugin paths may contain spaces.
+BIN = shlex.quote(str(Path(__file__).resolve().parent.parent / "bin" / "compost"))
 _handle_prefix = BIN
 
 MAX_GET_LINES = 400
@@ -787,7 +788,7 @@ def main(argv=None) -> int:
     global _handle_prefix
     args = build_parser().parse_args(argv)
     if args.store:
-        _handle_prefix = f"{BIN} --store {Path(args.store).resolve()}"
+        _handle_prefix = f"{BIN} --store {shlex.quote(str(Path(args.store).resolve()))}"
     store = Store(find_store_root(args.store))
     handlers = {
         "run": cmd_run,

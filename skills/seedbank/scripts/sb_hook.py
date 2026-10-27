@@ -22,6 +22,7 @@ import contextlib
 import io
 import json
 import os
+import shlex
 import sys
 import time
 import traceback
@@ -190,7 +191,7 @@ def stop_main() -> int:
             tmp = nudged_path.with_suffix(".tmp")
             tmp.write_text(json.dumps(dict(keep)))
             os.replace(tmp, nudged_path)
-        bin_path = Path(__file__).resolve().parent.parent / "bin" / "seedbank"
+        bin_path = shlex.quote(str(Path(__file__).resolve().parent.parent / "bin" / "seedbank"))
         top = ", ".join(f"`{c['key']}`" for c in mine[:NUDGE_TOP])
         print(json.dumps({"decision": "block", "reason": (
             f"seedbank: this session rediscovered {len(mine)} thing(s) worth caching "

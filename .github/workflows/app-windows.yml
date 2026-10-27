@@ -1,0 +1,15 @@
+name: App · Windows
+
+# Desktop app on Windows; its status is the Windows badge in the README.
+on:
+  pull_request:
+    paths: ["app/**", ".github/workflows/app-*.yml"]
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/app-*.yml"]
+
+jobs:
+  app:
+    uses: ./.github/workflows/app-checks.yml
+    with:
+      os: windows-latest

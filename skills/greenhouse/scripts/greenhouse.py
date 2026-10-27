@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -21,7 +22,8 @@ from gh_base import (
 )
 from gh_harvest import harvest, repo_slug
 
-BIN = Path(__file__).resolve().parent.parent / "bin" / "greenhouse"
+# Shell-quoted: printed for the agent to run, and plugin paths may contain spaces.
+BIN = shlex.quote(str(Path(__file__).resolve().parent.parent / "bin" / "greenhouse"))
 DEFAULT_BUDGET = 600
 HOOK_BUDGET = 400
 CONFIG_DEFAULTS = {"auto_sync": False}  # stored in greenhouse.json, shared with every repo

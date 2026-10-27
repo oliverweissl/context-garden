@@ -651,9 +651,16 @@ def cmd_compile(args, store: Store, repo_root: Path) -> int:
     for path in report["written"]:
         print(f"  wrote {path}")
     if "AGENTS.md" in targets:
+        # Claude Code reads CLAUDE.md, never AGENTS.md. A missing CLAUDE.md is
+        # created as a one-line import; an existing one is the user's and only gets a hint.
         claude_md = repo_root / "CLAUDE.md"
-        if not claude_md.is_file() or "@AGENTS.md" not in claude_md.read_text(errors="replace"):
-            print("hint: Claude Code reads CLAUDE.md, not AGENTS.md -- add a line `@AGENTS.md` to CLAUDE.md")
+        try:
+            with open(claude_md, "x") as f:
+                f.write("@AGENTS.md\n")
+            print(f"  wrote {claude_md} (imports AGENTS.md for Claude Code)")
+        except FileExistsError:
+            if "@AGENTS.md" not in claude_md.read_text(errors="replace"):
+                print("hint: Claude Code reads CLAUDE.md, not AGENTS.md -- add a line `@AGENTS.md` to CLAUDE.md")
     kept_stale = [
         f["id"] for f in facts["facts"].values() if f.get("stale") and f.get("protected")
     ]
