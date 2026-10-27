@@ -8,6 +8,9 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/mycelium *)
 
 !`${CLAUDE_SKILL_DIR}/bin/mycelium mode --banner`
 
+Agents that do not expand the line above (e.g. Codex): run
+`<this-skill-dir>/bin/mycelium mode --banner` first and follow it.
+
 Delegation costs a fresh context per agent. Default to doing the work
 yourself: a single file lookup, a small edit or one test command never
 needs an agent.

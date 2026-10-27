@@ -260,7 +260,7 @@ class TestMycelium:
         def answer(prompt: str, workdir: Path) -> AgentRunResult:
             (workdir / "ANSWERS.txt").write_text(
                 "COMPOST_KEEP: 10\nCOMPOST_MB: 200\nSEEDBANK_LOCK: fcntl.flock\n"
-                "SEEDBANK_WINDOWS: no-op (no locking)\nPRUNER_WRITE: os.replace\nVERSION: 0.3.1\n"
+                "SEEDBANK_WINDOWS: no-op (no locking)\nPRUNER_WRITE: os.replace\nVERSION: 0.4.0\n"
             )
             return AgentRunResult(success=True)
 
@@ -270,7 +270,7 @@ class TestMycelium:
         def wrong(prompt: str, workdir: Path) -> AgentRunResult:
             (workdir / "ANSWERS.txt").write_text(
                 "COMPOST_KEEP: 20\nCOMPOST_MB: 200\nSEEDBANK_LOCK: fcntl.flock\n"
-                "SEEDBANK_WINDOWS: no-op\nPRUNER_WRITE: os.rename\nVERSION: 0.3.1\n"
+                "SEEDBANK_WINDOWS: no-op\nPRUNER_WRITE: os.rename\nVERSION: 0.4.0\n"
             )
             return AgentRunResult(success=True)
 
@@ -283,7 +283,7 @@ class TestMycelium:
         assert '{"keep_per_command": 10, "max_store_mb": 200}' in co and "def gc(" in co
         assert "fcntl.flock" in (REPO_ROOT / "skills/seedbank/scripts/sb_store.py").read_text()
         assert "os.replace" in (REPO_ROOT / "skills/pruner/scripts/pr_select.py").read_text()
-        assert 'version = "0.3.1"' in (REPO_ROOT / "pyproject.toml").read_text()
+        assert 'version = "0.4.0"' in (REPO_ROOT / "pyproject.toml").read_text()
 
     def test_followup_runs_second_session_and_sums_usage(self, tmp_path):
         prompts = []

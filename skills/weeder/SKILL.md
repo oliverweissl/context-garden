@@ -8,6 +8,9 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/weeder *)
 
 !`${CLAUDE_SKILL_DIR}/bin/weeder mode --banner`
 
+Agents that do not expand the line above (e.g. Codex): run
+`<this-skill-dir>/bin/weeder mode --banner` first and follow it.
+
 The description loads every session; the SKILL.md body loads on every
 trigger. **Never optimize on token count alone**: a shorter SKILL.md that
 routes worse or drops an instruction is a regression. Every step below

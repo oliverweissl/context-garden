@@ -106,6 +106,22 @@ stops. Its one-line description is still listed to Claude (about 60-100 tokens p
 drop that too, copy the skill instead of using the plugin, or disable the whole plugin with
 `/plugin disable context-garden`.
 
+## Optional: the desktop app
+
+Everything above works without it. If you want one window for a whole platform, `app/`
+holds a small desktop app (Windows, macOS, Linux; Tauri + xterm.js) that:
+
+- starts a **garden** from repos, local folders, GitLab groups (with subgroups) or GitHub orgs,
+  typed into one field and told apart automatically; clones nested by group, or flat;
+- recommends and applies the skills per repo (same `skillOverrides` as `/context-garden:setup`);
+- shows garden stats (repos, uncommitted changes, always-loaded agent-file tokens, seedbank facts,
+  greenhouse cards, Claude Code tokens of the last 30 days);
+- runs Claude Code, Codex, Gemini CLI or a plain shell in arrangeable terminal panes, optionally
+  under named **accounts** (separate `CLAUDE_CONFIG_DIR` / `CODEX_HOME`, each with its own icon).
+
+It talks to GitHub/GitLab only through your logged-in `gh` / `glab` CLIs and never touches agent
+credentials. Build and run: see [`app/README.md`](app/README.md).
+
 ## Hooks and agents
 
 Skills teach Claude *how* to do a job; the deterministic parts run as hooks, and jobs worth

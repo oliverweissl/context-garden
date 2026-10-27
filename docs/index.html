@@ -247,6 +247,20 @@ h2 { font-size: clamp(1.9rem, 4.2vw, 3rem); line-height: 1.08; letter-spacing: -
 .term pre.real { height: auto; min-height: 300px; white-space: pre-wrap; font-size: 0.78rem; }
 .term .ghc { color: #7cc4ff; }
 .term .my { color: #c3b2ff; }
+.term.app { display: flex; flex-direction: column; }
+.app-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px; min-height: 300px; }
+.app-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.app-tiles div { border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; background: rgba(255, 255, 255, 0.02); }
+.app-tiles small { display: block; font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.app-tiles b { font: 700 1.15rem/1.2 var(--display); }
+.app-panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.app-pane { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.app-pane-h { display: flex; align-items: center; gap: 6px; padding: 5px 9px; font-size: 0.68rem; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); white-space: nowrap; overflow: hidden; }
+.app-pane-h span { color: var(--faint); }
+.app-pane-h i.live { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.app-pane-h em { font-style: normal; font-size: 0.6rem; color: #050805; background: var(--b); border-radius: 4px; padding: 0 3px; }
+.term .app-pane pre { height: auto; padding: 9px; font-size: 0.68rem; white-space: pre-wrap; }
+@media (max-width: 520px) { .app-tiles { grid-template-columns: repeat(2, 1fr); } .app-panes { grid-template-columns: 1fr; } }
 .term[style*="--c"] { border-top: 3px solid var(--c); }
 .tradeoffs { margin-top: 28px; padding: 22px; border-radius: 20px; border: 1px dashed var(--line); background: var(--surface); }
 .tradeoffs h3 { margin: 0 0 10px; font-size: 1.05rem; }
@@ -605,7 +619,7 @@ footer { border-top: 1px solid var(--line); font-size: 0.74rem; text-transform: 
     <ol>
       <li><a class="big" style="--i:0" href="#garden">Plant it</a></li>
       <li><a class="big" style="--i:1" href="#why">Why</a></li>
-      <li><a class="big" style="--i:2" href="#real">Real output</a></li>
+      <li><a class="big" style="--i:2" href="#real">The app</a></li>
       <li><a class="big" style="--i:3" href="#skills">Six skills</a></li>
       <li><a class="big" style="--i:4" href="#how">How it works</a></li>
       <li><a class="big" style="--i:5" href="#modes">Pick your skills</a></li>
@@ -622,7 +636,7 @@ footer { border-top: 1px solid var(--line); font-size: 0.74rem; text-transform: 
 <nav class="chapters" aria-label="Chapters">
   <a href="#garden"><span>Plant it</span></a>
   <a href="#why"><span>Why</span></a>
-  <a href="#real"><span>Real output</span></a>
+  <a href="#real"><span>The app</span></a>
   <a href="#benefits"><span>Savings</span></a>
   <a href="#skills"><span>Skills</span></a>
   <a href="#demo"><span>See it work</span></a>
@@ -656,7 +670,7 @@ footer { border-top: 1px solid var(--line); font-size: 0.74rem; text-transform: 
   </svg>
   <canvas id="pollen" aria-hidden="true"></canvas>
   <div class="intro-inner">
-    <p class="kicker"><b>v0.3</b> &nbsp;·&nbsp; For multi-repo platforms and agent swarms</p>
+    <p class="kicker"><b>v0.4</b> &nbsp;·&nbsp; For multi-repo platforms and agent swarms</p>
     <h1 class="title"><span class="w1">Context.</span> <span class="w2">Cultivated.</span></h1>
     <p class="intro-lede">Keep a <b>whole platform</b> in your agents' heads. Six offline Skills for Claude Code share what every repo and every agent already knows, and trim what each one reads.</p>
   </div>
@@ -927,9 +941,9 @@ footer { border-top: 1px solid var(--line); font-size: 0.74rem; text-transform: 
 <section class="alt" id="real">
   <div class="wrap">
     <div class="reveal">
-      <div class="eyebrow">What your agents actually see</div>
-      <h2>Real output, not a mock-up.</h2>
-      <p class="sub">Captured from a three-repo test platform: <code>auth-service</code>, <code>api-gateway</code> and <code>web-app</code>. Each repo ran <code>greenhouse sync</code> once.</p>
+      <div class="eyebrow">New in v0.4 · optional desktop app</div>
+      <h2>Your whole platform, one window.</h2>
+      <p class="sub">Pull repos or entire GitLab groups and GitHub orgs into a garden, pick the skills, then run Claude Code, Codex or a plain shell side by side, each with its own account. Left: real greenhouse output from a three-repo test platform. The skills work the same without the app.</p>
     </div>
     <div class="demo">
       <div class="term reveal" style="--c:var(--greenhouse)">
@@ -946,18 +960,30 @@ This repo uses: <span class="ghc">api-gateway</span>; used by: -
   and refresh tokens. <span class="dim">[checkout ../auth-service]</span>
 <span class="dim">Read another repo's files only if a card points there.</span></pre>
       </div>
-      <div class="term reveal" style="--c:var(--mycelium)">
-        <div class="term-head"><i></i><i></i><i></i><span class="t">Agent spawn: "explain how the gateway validates JWT tokens"</span></div>
-<pre class="real"><span class="err">✗ denied</span> <span class="dim">by the mycelium delegation gate:</span>
-shared notes already cover part of this task:
-- [n001] token-validation: Gateway validates JWTs in
-  <span class="my">src/auth.py:validate</span>; expiry is checked, signature
-  key comes from auth-service JWKS <span class="dim">(paths: src/auth.py)</span>
-Re-issue with a `Known:` line carrying the relevant
-notes (tell the agent to verify, not rediscover) ...
-
-<span class="ok">✓ allowed</span> <span class="dim">after the brief adds:</span>
-<span class="my">Known: n001</span> <span class="dim">(verify, don't rediscover)</span></pre>
+      <div class="term app reveal" style="--c:var(--accent)" aria-label="Context Garden desktop app">
+        <div class="term-head"><i></i><i></i><i></i><span class="t">Context Garden &nbsp;/&nbsp; shop-platform</span></div>
+        <div class="app-body">
+          <div class="app-tiles">
+            <div><small>Repos</small><b>3</b></div>
+            <div><small>Agent files</small><b>1.2k</b></div>
+            <div><small>Greenhouse</small><b>3</b></div>
+            <div><small>Claude tokens</small><b>4.1M</b></div>
+          </div>
+          <div class="app-panes">
+            <div class="app-pane"><div class="app-pane-h"><i class="live"></i><em style="--b:#f0b43c">★</em>Claude Code · work <span>web-app</span></div>
+<pre><span class="dim">&gt;</span> add token refresh to the
+  dashboard login
+<span class="ghc">greenhouse</span> <span class="dim">brief: auth-service</span>
+<span class="dim">/refresh, 15 min expiry</span>
+<span class="ok">● Editing src/login.ts</span></pre></div>
+            <div class="app-pane"><div class="app-pane-h"><i class="live"></i>Terminal <span>garden root</span></div>
+<pre><span class="dim">$</span> git -C web-app status -sb
+<span class="ok">## feat/refresh</span>
+ M src/login.ts
+<span class="dim">$</span> git -C web-app push -u
+<span class="dim">$</span> <span class="hl">▌</span></pre></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

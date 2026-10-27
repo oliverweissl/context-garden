@@ -8,6 +8,9 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/greenhouse *)
 
 !`${CLAUDE_SKILL_DIR}/bin/greenhouse mode --banner`
 
+Agents that do not expand the line above (e.g. Codex): run
+`<this-skill-dir>/bin/greenhouse mode --banner` first and follow it.
+
 A *base* is a folder (usually `<workspace>/.greenhouse/`, beside the repos)
 with one card per repo and platform-wide notes. Cards are harvested
 deterministically: README summary, packages provided, dependencies,

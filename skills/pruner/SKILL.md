@@ -8,6 +8,9 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/pruner *)
 
 !`${CLAUDE_SKILL_DIR}/bin/pruner mode --banner`
 
+Agents that do not expand the line above (e.g. Codex): run
+`<this-skill-dir>/bin/pruner mode --banner` first and follow it.
+
 Offline indexer + lexical/structural relevance scorer (keyword overlap,
 call graph, error-stack membership, test relationships; no embeddings,
 no LLM). How scores work: `references/scoring.md`.

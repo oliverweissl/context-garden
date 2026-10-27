@@ -8,6 +8,9 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/seedbank *)
 
 !`${CLAUDE_SKILL_DIR}/bin/seedbank mode --banner`
 
+Agents that do not expand the line above (e.g. Codex): run
+`<this-skill-dir>/bin/seedbank mode --banner` first and follow it.
+
 Offline fact store + profiler. It counts rediscoveries and mistake cost;
 you supply the fact text and decide what to promote. Nothing is promoted
 just because it was seen once; promotion is always a deliberate `promote` call. Formulas: `references/scoring.md`.

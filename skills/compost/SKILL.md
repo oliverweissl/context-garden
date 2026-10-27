@@ -8,6 +8,9 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/compost *)
 
 !`${CLAUDE_SKILL_DIR}/bin/compost mode --banner`
 
+Agents that do not expand the line above (e.g. Codex): run
+`<this-skill-dir>/bin/compost mode --banner` first and follow it.
+
 Offline, deterministic: output is parsed and clustered by script (no LLM);
 the full raw output is always kept on disk. Skip it for short output --
 just read that directly.
