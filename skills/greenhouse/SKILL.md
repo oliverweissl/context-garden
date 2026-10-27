@@ -1,12 +1,12 @@
 ---
 name: greenhouse
 description: Shared memory across the repositories of one platform (what each repo provides, depends on, and its key facts) kept in a base folder next to the repos. Use when a task touches an API, package, schema or convention shared with other repos, instead of opening those repos; publish this repo's card at task end.
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/greenhouse *)
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/greenhouse *), Bash("${CLAUDE_SKILL_DIR}/bin/greenhouse" *)
 ---
 
 # greenhouse
 
-!`${CLAUDE_SKILL_DIR}/bin/greenhouse mode --banner`
+!`"${CLAUDE_SKILL_DIR}/bin/greenhouse" mode --banner`
 
 Agents that do not expand the line above (e.g. Codex): run
 `<this-skill-dir>/bin/greenhouse mode --banner` first and follow it.

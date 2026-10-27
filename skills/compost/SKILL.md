@@ -1,12 +1,12 @@
 ---
 name: compost
 description: Run long or repetitive commands (builds, pytest/ctest, SLURM jobs, solver logs) through a clustering summarizer instead of reading raw output; re-runs show only what changed. Use for output likely over ~100 lines or fix-test-fix loops.
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/compost *)
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/compost *), Bash("${CLAUDE_SKILL_DIR}/bin/compost" *)
 ---
 
 # compost
 
-!`${CLAUDE_SKILL_DIR}/bin/compost mode --banner`
+!`"${CLAUDE_SKILL_DIR}/bin/compost" mode --banner`
 
 Agents that do not expand the line above (e.g. Codex): run
 `<this-skill-dir>/bin/compost mode --banner` first and follow it.

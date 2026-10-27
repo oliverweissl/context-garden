@@ -1,12 +1,12 @@
 ---
 name: mycelium
 description: Decide whether to spawn subagents (one, or several in parallel) to search, investigate or edit, and brief them well; passes finding notes between agents so they don't redo the same exploration. Use before delegating to an agent and after an agent reports findings.
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/mycelium *)
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/mycelium *), Bash("${CLAUDE_SKILL_DIR}/bin/mycelium" *)
 ---
 
 # mycelium
 
-!`${CLAUDE_SKILL_DIR}/bin/mycelium mode --banner`
+!`"${CLAUDE_SKILL_DIR}/bin/mycelium" mode --banner`
 
 Agents that do not expand the line above (e.g. Codex): run
 `<this-skill-dir>/bin/mycelium mode --banner` first and follow it.

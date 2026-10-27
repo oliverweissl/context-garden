@@ -1,12 +1,12 @@
 ---
 name: seedbank
 description: Maintain a small, generated AGENTS.md of repository facts (build commands, conventions, invariants, past mistakes) that were rediscovered often or were costly to get wrong. Use at task start to check cached facts, and at task end to log and promote what you had to dig for.
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/seedbank *)
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/seedbank *), Bash("${CLAUDE_SKILL_DIR}/bin/seedbank" *)
 ---
 
 # seedbank
 
-!`${CLAUDE_SKILL_DIR}/bin/seedbank mode --banner`
+!`"${CLAUDE_SKILL_DIR}/bin/seedbank" mode --banner`
 
 Agents that do not expand the line above (e.g. Codex): run
 `<this-skill-dir>/bin/seedbank mode --banner` first and follow it.
