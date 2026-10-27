@@ -143,8 +143,20 @@ const inside = (r, e) => e.clientX >= r.left && e.clientX <= r.right && e.client
 /** What to save about a pane to start it again. */
 const record = (o) => ({
   key: o.key, title: o.title, cwd: o.cwd, cwd_label: o.cwdLabel || "",
-  agent: o.agent || null, profile: o.profile || null, session: o.session || null,
+  agent: o.agent || null, profile: o.profile || null, session: o.session || null, flags: o.flags || [],
 });
+
+/** Split a flags line like a shell would: spaces separate, quotes group. */
+export function splitFlags(line) {
+  const out = [];
+  for (const m of line.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) out.push(m[1] ?? m[2] ?? m[3]);
+  return out;
+}
+
+const QUICK_FLAGS = { claude: [["--chrome", "Claude in Chrome"], ["--ide", "Connect to your IDE"]], codex: [["--search", "Web search"]] };
+const FLAGS_KEY = (agent) => `cg.flags.${agent}`;
+const loadFlags = (agent) => { try { return localStorage.getItem(FLAGS_KEY(agent)) || ""; } catch { return ""; } };
+const storeFlags = (agent, v) => { try { localStorage.setItem(FLAGS_KEY(agent), v); } catch { /* private mode */ } };
 
 class Pane {
   constructor(ws, opts) {
@@ -187,7 +199,7 @@ class Pane {
         ? await api.login({ profile: this.opts.login, ...size }, out, exit)
         : await api.spawn(
           { garden: this.ws.gardenId, cwd: this.opts.cwd, agent: this.opts.agent, profile: this.opts.profile,
-            session: this.opts.session, resume: !!this.opts.resume, ...size },
+            session: this.opts.session, resume: !!this.opts.resume, flags: this.opts.flags, ...size },
           out, exit);
       this.term.focus();
     } catch (e) {
@@ -251,6 +263,34 @@ export async function terminalArea(garden) {
         return h("option", { value: `profile:${p.id}`, disabled: a && !a.found }, `${p.icon || "●"} ${a?.label || p.agent} · ${p.name}`);
       }))
       : null);
+  // Startup flags for the chosen agent (e.g. --chrome), remembered per agent.
+  const agentOf = () => {
+    const [kind, id] = what.value.split(":");
+    return kind === "agent" ? id : kind === "profile" ? profiles.find((p) => p.id === id)?.agent : null;
+  };
+  const flags = h("input", {
+    class: "mono flags", placeholder: "flags, e.g. --model opus",
+    title: "Startup flags for the agent, as on the command line. Resuming keeps them.",
+  });
+  const quick = h("span", { class: "quick-flags" });
+  const drawFlags = () => {
+    const agent = agentOf();
+    flags.hidden = !agent;
+    flags.value = agent ? loadFlags(agent) : "";
+    const on = splitFlags(flags.value);
+    quick.replaceChildren(...(QUICK_FLAGS[agent] || []).map(([flag, help]) => h("button", {
+      class: `chip toggle${on.includes(flag) ? " on" : ""}`, title: help,
+      onclick: () => {
+        const now = splitFlags(flags.value);
+        flags.value = (now.includes(flag) ? now.filter((f) => f !== flag) : [...now, flag]).join(" ");
+        storeFlags(agent, flags.value);
+        drawFlags();
+      },
+    }, flag.replace(/^--/, ""))));
+  };
+  flags.addEventListener("change", () => { const a = agentOf(); if (a) storeFlags(a, flags.value.trim()); drawFlags(); });
+  what.addEventListener("change", drawFlags);
+
   const where = h("select", {},
     h("option", { value: garden.root }, "garden root"),
     garden.repos.filter((r) => ["cloned", "linked", "local"].includes(r.status))
@@ -276,6 +316,7 @@ export async function terminalArea(garden) {
         agent: kind === "agent" ? id : null, profile: kind === "profile" ? id : null,
         account: kind === "profile" ? profiles.find((p) => p.id === id) : null,
         title: kind === "shell" ? "Terminal" : kind === "profile" ? label.replace(/^\S+\s/, "") : label,
+        flags: kind === "shell" ? [] : splitFlags(flags.value),
       });
     } catch (e) {
       toast(errText(e), "error");
@@ -286,6 +327,7 @@ export async function terminalArea(garden) {
   const fromRecord = (r) => ({
     key: r.key, session: r.session, resume: true, title: r.title, cwd: r.cwd, cwdLabel: r.cwd_label,
     agent: r.agent, profile: r.profile, account: r.profile ? profiles.find((p) => p.id === r.profile) : null,
+    flags: r.flags || [],
   });
   const resume = async (records) => {
     for (const r of records) {
@@ -325,6 +367,7 @@ export async function terminalArea(garden) {
   };
   ws.onChange = drawResume;
   drawResume();
+  drawFlags();
 
   const empty = h("div", { class: "empty faint" },
     "Open an agent or a plain terminal. Plain terminals are for your own git work: pull, branch, push, review.");
@@ -335,7 +378,7 @@ export async function terminalArea(garden) {
 
   const el = h("div", { class: "workspace" },
     h("div", { class: "toolbar" },
-      what, h("span", { class: "faint small" }, "in"), where,
+      what, flags, quick, h("span", { class: "faint small" }, "in"), where,
       h("button", { class: "btn primary", onclick: open }, "Open"),
       recent,
       h("span", { class: "grow" }),

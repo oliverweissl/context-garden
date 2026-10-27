@@ -71,6 +71,9 @@ pub struct SavedTerminal {
     /// Agent session id (Claude Code), so this pane resumes its own conversation.
     #[serde(default)]
     pub session: Option<String>,
+    /// Startup flags the agent was launched with, e.g. ["--chrome"].
+    #[serde(default)]
+    pub flags: Vec<String>,
     /// Still open when the app last saw it.
     #[serde(default)]
     pub open: bool,

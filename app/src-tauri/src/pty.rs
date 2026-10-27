@@ -143,12 +143,12 @@ impl Ptys {
     }
 }
 
-#[cfg(test)]
+// The test drives a POSIX shell, so it only exists on Unix.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
     #[test]
-    #[cfg(unix)]
     fn agent_command_runs_in_cwd_with_env() {
         let cwd = std::env::temp_dir().canonicalize().unwrap();
         let launch = Launch {

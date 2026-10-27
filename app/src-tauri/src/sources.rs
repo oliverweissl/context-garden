@@ -421,11 +421,14 @@ pub fn plan(root: &str, flat: bool, protocol: &str, inputs: &[String], existing:
     Ok(Plan { repos, groups, warnings, repo_inputs, group_inputs })
 }
 
+#[cfg(unix)]
 fn link_dir(source: &Path, target: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    return std::os::unix::fs::symlink(source, target);
-    #[cfg(windows)]
-    return std::os::windows::fs::symlink_dir(source, target);
+    std::os::unix::fs::symlink(source, target)
+}
+
+#[cfg(windows)]
+fn link_dir(source: &Path, target: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(source, target)
 }
 
 /// Clone (or link) every pending repo, 4 at a time. `report(index, repo)` runs after each.
@@ -559,7 +562,7 @@ mod clone_tests {
         let p = plan(garden.to_str().unwrap(), false, "ssh", &inputs, &[]).unwrap();
         assert_eq!(p.group_inputs, inputs);
         assert_eq!(p.repos.iter().map(|r| r.status.as_str()).collect::<Vec<_>>(), vec!["pending", "pending"]);
-        assert!(p.repos[1].path.ends_with("code/nested/b"));
+        assert!(Path::new(&p.repos[1].path).ends_with("code/nested/b"));
 
         let results = Arc::new(Mutex::new(Vec::new()));
         let sink = results.clone();

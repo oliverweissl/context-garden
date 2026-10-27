@@ -413,15 +413,49 @@ fn claude_session_exists(config_dir: &Path, session: &str) -> bool {
     projects.flatten().any(|p| p.path().join(format!("{session}.jsonl")).is_file())
 }
 
+/// One argument for the shell that runs agents (`sh -lc` / `powershell -Command`),
+/// quoted so it stays a single literal argument whatever it contains.
+fn shell_quote(arg: &str) -> String {
+    if !arg.is_empty() && arg.chars().all(|c| c.is_ascii_alphanumeric() || "-_.=:/@,+%".contains(c)) {
+        arg.to_string()
+    } else if cfg!(windows) {
+        format!("'{}'", arg.replace('\'', "''"))
+    } else {
+        format!("'{}'", arg.replace('\'', r"'\''"))
+    }
+}
+
+/// Session flags the app sets itself (resume / session id); users may not pass them.
+const RESERVED_FLAGS: [&str; 7] = ["--resume", "-r", "--session-id", "--continue", "-c", "--fork-session", "resume"];
+
+fn check_flags(flags: &[String]) -> Result<(), String> {
+    match flags.iter().find(|f| RESERVED_FLAGS.contains(&f.split('=').next().unwrap_or(f))) {
+        Some(f) => Err(format!("{f} is set by the app (terminals resume on their own)")),
+        None => Ok(()),
+    }
+}
+
 /// The agent's command line: a new session (Claude: with our id, so it can be
-/// resumed exactly) or the pane's previous one.
-fn agent_command(agent: &str, bin: &str, config_dir: &Path, session: Option<&str>, resume: bool) -> String {
-    match (agent, session) {
+/// resumed exactly) or the pane's previous one, then the user's startup flags.
+fn agent_command(
+    agent: &str,
+    bin: &str,
+    config_dir: &Path,
+    session: Option<&str>,
+    resume: bool,
+    flags: &[String],
+) -> String {
+    let mut cmd = match (agent, session) {
         ("claude", Some(id)) if resume && claude_session_exists(config_dir, id) => format!("{bin} --resume {id}"),
         ("claude", Some(id)) => format!("{bin} --session-id {id}"),
         ("codex", _) if resume => format!("{bin} resume --last"),
         _ => bin.to_string(),
+    };
+    for f in flags {
+        cmd.push(' ');
+        cmd.push_str(&shell_quote(f));
     }
+    cmd
 }
 
 #[tauri::command]
@@ -435,6 +469,7 @@ fn terminal_spawn(
     profile: Option<String>,
     session: Option<String>,
     resume: bool,
+    flags: Option<Vec<String>>,
     cols: u16,
     rows: u16,
     on_event: Channel<PtyEvent>,
@@ -452,6 +487,8 @@ fn terminal_spawn(
     if session.as_deref().is_some_and(|s| !valid_session(s)) {
         return Err("invalid session id".into());
     }
+    let flags: Vec<String> = flags.unwrap_or_default().into_iter().filter(|f| !f.is_empty()).collect();
+    check_flags(&flags)?;
     let mut env = vec![("CONTEXT_GARDEN".to_string(), g.name.clone())];
     let base = Path::new(&g.root).join(".greenhouse");
     if base.join("greenhouse.json").is_file() {
@@ -466,13 +503,13 @@ fn terminal_spawn(
             .ok_or("that account no longer exists")?;
         let (_, _, bin, var) = AGENTS.iter().find(|a| a.0 == p.agent).ok_or("unknown agent")?;
         env.push((var.unwrap().to_string(), p.dir.clone()));
-        command = Some(agent_command(&p.agent, bin, &expand_tilde(&p.dir), session.as_deref(), resume));
+        command = Some(agent_command(&p.agent, bin, &expand_tilde(&p.dir), session.as_deref(), resume, &flags));
     } else if let Some(agent) = agent.filter(|a| !a.is_empty()) {
         let (_, _, bin, _) = AGENTS.iter().find(|a| a.0 == agent).ok_or("unknown agent")?;
         let config = std::env::var_os("CLAUDE_CONFIG_DIR")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| home_dir().join(".claude"));
-        command = Some(agent_command(&agent, bin, &config, session.as_deref(), resume));
+        command = Some(agent_command(&agent, bin, &config, session.as_deref(), resume, &flags));
     }
     ptys.spawn(Launch { command, cwd, env, cols, rows }, on_event)
 }
@@ -581,12 +618,27 @@ mod tests {
         assert!(!valid_session("x; rm -rf ~"));
         let dir = std::env::temp_dir().join(format!("cg-session-{}", std::process::id()));
         let id = "0f8e2c1a-1b2c-4d5e-8f90-123456789abc";
-        assert_eq!(agent_command("claude", "claude", &dir, Some(id), true), format!("claude --session-id {id}"));
+        assert_eq!(agent_command("claude", "claude", &dir, Some(id), true, &[]), format!("claude --session-id {id}"));
         std::fs::create_dir_all(dir.join("projects/-tmp-x")).unwrap();
         std::fs::write(dir.join(format!("projects/-tmp-x/{id}.jsonl")), "{}").unwrap();
-        assert_eq!(agent_command("claude", "claude", &dir, Some(id), true), format!("claude --resume {id}"));
-        assert_eq!(agent_command("codex", "codex", &dir, None, true), "codex resume --last");
-        assert_eq!(agent_command("codex", "codex", &dir, None, false), "codex");
+        assert_eq!(agent_command("claude", "claude", &dir, Some(id), true, &[]), format!("claude --resume {id}"));
+        assert_eq!(agent_command("codex", "codex", &dir, None, true, &[]), "codex resume --last");
+        assert_eq!(agent_command("codex", "codex", &dir, None, false, &[]), "codex");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn startup_flags_are_quoted_and_session_flags_refused() {
+        let flags = vec!["--chrome".to_string(), "--append-system-prompt".into(), "be brief; rm -rf ~ 'x'".into()];
+        let cmd = agent_command("claude", "claude", Path::new("/nonexistent"), None, false, &flags);
+        assert_eq!(cmd, r"claude --chrome --append-system-prompt 'be brief; rm -rf ~ '\''x'\'''");
+        // The shell hands the agent exactly the three arguments, nothing runs.
+        let args = cmd.strip_prefix("claude ").unwrap();
+        let out = std::process::Command::new("sh").args(["-c", &format!("printf '%s|' {args}")]).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "--chrome|--append-system-prompt|be brief; rm -rf ~ 'x'|");
+        assert!(check_flags(&["--resume=abc".into()]).is_err());
+        assert!(check_flags(&["-c".into()]).is_err());
+        assert!(check_flags(&["--model".into(), "opus".into()]).is_ok());
     }
 }

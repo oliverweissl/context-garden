@@ -1,11 +1,8 @@
-name: Desktop app
+name: Desktop app release
 
+# Installers for every OS, attached to a draft release, on version tags only.
 on:
-  pull_request:
-    paths: ["app/**", ".github/workflows/app.yml"]
   push:
-    branches: [main]
-    paths: ["app/**", ".github/workflows/app.yml"]
     tags: ["v*"]
 
 jobs:
@@ -14,34 +11,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: app
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - name: Linux webview dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - run: npm ci
-      - run: npm run build
-      - name: Rust tests and lint
-        working-directory: app/src-tauri
-        run: |
-          cargo test
-          cargo clippy --all-targets -- -D warnings
+    uses: ./.github/workflows/app-checks.yml
+    with:
+      os: ${{ matrix.os }}
 
-  # Installers for every OS, attached to a draft release, on version tags only.
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: test
     permissions:
       contents: write

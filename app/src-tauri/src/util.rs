@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 static LOGIN_PATH: OnceLock<Option<String>> = OnceLock::new();
 
@@ -16,6 +16,7 @@ pub fn login_path() -> Option<String> {
 
 #[cfg(unix)]
 fn read_login_path() -> Option<String> {
+    use std::time::{Duration, Instant};
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
     let mut child = Command::new(shell)
         .args(["-ilc", "printf '__CG_PATH__%s__CG_PATH__' \"$PATH\""])

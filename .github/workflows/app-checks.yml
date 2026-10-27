@@ -1,0 +1,37 @@
+name: Desktop app checks
+
+# Build, test and lint the desktop app on one OS. Called by the per-OS
+# workflows (one README badge each) and before a release.
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ${{ inputs.os }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Linux webview dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - run: npm run build
+      - name: Rust tests and lint
+        working-directory: app/src-tauri
+        run: |
+          cargo test
+          cargo clippy --all-targets -- -D warnings

@@ -1,17 +1,17 @@
 ---
 description: Turn on the context-garden skills that fit how you work (all start off)
 argument-hint: "[solo|platform|swarm|platform-swarm|logs|all|off] [--scope local|project|user]"
-allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/hooks/garden.py *)
+allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/hooks/garden.py *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/hooks/garden.py" *)
 ---
 
 # context-garden setup
 
 Every context-garden skill starts `off`. Help the user turn on the right ones.
-The helper is `python3 ${CLAUDE_PLUGIN_ROOT}/hooks/garden.py` (not on PATH; always
+The helper is `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/garden.py"` (not on PATH; always
 use this full path).
 
-1. Run `python3 ${CLAUDE_PLUGIN_ROOT}/hooks/garden.py status` and
-   `python3 ${CLAUDE_PLUGIN_ROOT}/hooks/garden.py presets`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/garden.py" status` and
+   `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/garden.py" presets`.
 2. If the arguments below already name a preset (and optionally `--scope`), apply
    it and skip to step 5.
 3. Otherwise ask the user (AskUserQuestion, one question per item):
@@ -26,7 +26,7 @@ use this full path).
      Mention `all` and `off` only if asked.
    - Scope: `local` (this repo, only them; default), `project` (this repo,
      shared with the team via `.claude/settings.json`), `user` (every repo).
-4. Apply: `python3 ${CLAUDE_PLUGIN_ROOT}/hooks/garden.py preset <name> --scope <scope>`.
+4. Apply: `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/garden.py" preset <name> --scope <scope>`.
    For a single change: `... garden.py set <skill> <on|manual|off> --scope <scope>`.
 5. Show the resulting status and say in two or three lines what is now on and
    what it does; skills set to `manual` run only when called, e.g.

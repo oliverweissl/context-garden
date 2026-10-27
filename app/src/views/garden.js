@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { h, toast, errText, setCrumbs, tile, fmt, languageBar, SKILL_COLORS } from "../ui.js";
+import { h, toast, errText, setCrumbs, tile, fmt, languageBar, modal, SKILL_COLORS } from "../ui.js";
 import { cloneBoard, READY } from "./cloning.js";
 import { planCard, SOURCES_HINT, LINK_HELP } from "./plant.js";
 import { skillPicker } from "./skills.js";
@@ -21,10 +21,12 @@ export async function renderGarden(app, id) {
   const langs = h("div");
   const boardSlot = h("div");
   let board = null;
-  const repoTable = h("div", { class: "repo-table", hidden: true });
+  const repoTable = h("div", { class: "repo-table" }, h("div", { class: "faint small" }, "Reading garden…"));
   const extra = h("div");
 
+  const refreshBtn = h("button", { class: "icon refresh", title: "Refresh numbers", onclick: () => refresh() }, "↻");
   async function refresh() {
+    refreshBtn.classList.add("spin");
     try {
       const s = await api.stats(id);
       const c = s.claude;
@@ -55,6 +57,7 @@ export async function renderGarden(app, id) {
     } catch (e) {
       toast(errText(e), "error");
     }
+    refreshBtn.classList.remove("spin");
   }
 
   const skillDots = () => Object.entries(garden.skills).filter(([, m]) => m === "on")
@@ -79,7 +82,7 @@ export async function renderGarden(app, id) {
     await board.watch();
   }
 
-  const addPanel = () => {
+  const addPanel = (close) => {
     const sources = h("textarea", { rows: 4, class: "mono", placeholder: SOURCES_HINT });
     const preview = h("div");
     let plan = null;
@@ -102,8 +105,7 @@ export async function renderGarden(app, id) {
       go.disabled = true;
       try {
         garden = await api.addToGarden(id, plan);
-        extra.dataset.panel = "";
-        extra.replaceChildren();
+        close();
         await showBoard();
       } catch (e) {
         toast(errText(e), "error");
@@ -112,7 +114,7 @@ export async function renderGarden(app, id) {
     };
     sources.addEventListener("input", () => { plan = null; go.textContent = "Find repositories"; preview.replaceChildren(); });
     return h("div", {},
-      h("div", { class: "card form" },
+      h("div", { class: "form" },
         h("label", {}, h("span", {}, "Add repositories or groups",
           h("em", {}, `same layout as the garden (${garden.layout}, ${garden.protocol})`),
           h("span", { class: "info", title: LINK_HELP }, "i")), sources),
@@ -129,6 +131,21 @@ export async function renderGarden(app, id) {
     extra.replaceChildren(await build());
   };
 
+  const openRepos = () => modal(`${garden.repos.length} repositories`, repoTable, { wide: true });
+  const openAdd = () => {
+    const m = modal("Add repositories or groups", h("div"), { wide: true });
+    m.body.replaceChildren(addPanel(m.close));
+  };
+  const openSkills = async () => {
+    const m = modal("Skills", h("div", { class: "faint small" }, "Loading…"), { wide: true });
+    m.body.replaceChildren(await skillPicker(garden, (modes) => {
+      garden.skills = modes;
+      dots.replaceChildren(...skillDots());
+      m.close();
+      refresh();
+    }));
+  };
+
   const head = h("div", { class: "garden-head" },
     gardenArt(garden.id, garden.repos.length),
     h("div", {},
@@ -136,19 +153,9 @@ export async function renderGarden(app, id) {
       h("div", { class: "faint small mono" }, garden.root)),
     dots,
     h("span", { class: "grow" }),
-    h("button", { class: "btn", onclick: () => { repoTable.hidden = !repoTable.hidden; } }, "Repos"),
-    h("button", { class: "btn", onclick: toggle("add", addPanel) }, "Add"),
-    h("button", {
-      class: "btn",
-      onclick: toggle("skills", () => skillPicker(garden, (modes) => {
-        garden.skills = modes;
-        dots.replaceChildren(...skillDots());
-        extra.dataset.panel = "";
-        extra.replaceChildren();
-        refresh();
-      })),
-    }, "Skills"),
-    h("button", { class: "btn", onclick: refresh }, "Refresh"),
+    h("button", { class: "btn", onclick: openRepos }, "Repos"),
+    h("button", { class: "btn", onclick: openAdd }, "Add"),
+    h("button", { class: "btn", onclick: openSkills }, "Skills"),
     h("button", {
       class: "btn ghost",
       onclick: toggle("forget", () => h("div", { class: "card row between" },
@@ -160,7 +167,7 @@ export async function renderGarden(app, id) {
     }, "…"));
 
   const terms = await terminalArea(garden);
-  app.append(h("div", { class: "dash" }, head, tiles, langs, extra, boardSlot, repoTable), terms.el);
+  app.append(h("div", { class: "dash" }, head, tiles, h("div", { class: "dash-meta" }, langs, refreshBtn), extra, boardSlot), terms.el);
   refresh();
   if (!garden.repos.every((r) => READY.has(r.status))) showBoard();
   return () => { board?.dispose(); terms.dispose(); };

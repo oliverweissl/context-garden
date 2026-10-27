@@ -34,9 +34,10 @@ export const api = {
   on: listen,
 
   /** Start a terminal; onOutput gets Uint8Array chunks, onExit the exit code. */
-  spawn: ({ garden, cwd, agent, profile, session, resume, cols, rows }, onOutput, onExit) =>
+  spawn: ({ garden, cwd, agent, profile, session, resume, flags, cols, rows }, onOutput, onExit) =>
     pty("terminal_spawn", {
-      garden, cwd, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume, cols, rows,
+      garden, cwd, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume,
+      flags: flags || [], cols, rows,
     }, onOutput, onExit),
   saveTerminals: (id, terminals) => invoke("save_terminals", { id, terminals }),
   /** Terminal running an account's sign-in. */

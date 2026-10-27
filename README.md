@@ -1,5 +1,10 @@
 # 🌱 Context Garden
 
+[![CI](https://github.com/oliverweissl/context-garden/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/ci.yml?query=branch%3Amain)
+[![App · Ubuntu](https://github.com/oliverweissl/context-garden/actions/workflows/app-ubuntu.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-ubuntu.yml?query=branch%3Amain)
+[![App · macOS](https://github.com/oliverweissl/context-garden/actions/workflows/app-macos.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-macos.yml?query=branch%3Amain)
+[![App · Windows](https://github.com/oliverweissl/context-garden/actions/workflows/app-windows.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-windows.yml?query=branch%3Amain)
+
 Self-contained Agent Skills that cut an agent's context usage — deterministic, offline, no LLM calls inside the tooling.
 
 **[See the showcase →](https://oliverweissl.github.io/context-garden/)**

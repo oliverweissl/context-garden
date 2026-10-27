@@ -92,3 +92,25 @@ export function badge(profile, big = false) {
   return h("span", { class: `badge${big ? " big" : ""}`, style: `--c:${color}`, title: profile.name || "" },
     profile.icon || (profile.name || "?").slice(0, 1).toUpperCase());
 }
+
+/**
+ * Popup window over the page. Esc, the × or a click outside closes it.
+ * Returns { el, body, close }; `onClose` runs once it is gone.
+ */
+export function modal(title, content, { onClose, wide = false } = {}) {
+  const body = h("div", { class: "modal-body" }, content);
+  const dialog = h("dialog", { class: `modal${wide ? " wide" : ""}` },
+    h("div", { class: "modal-head" },
+      h("h3", {}, title),
+      h("button", { class: "icon", title: "Close", onclick: () => dialog.close() }, "×")),
+    body);
+  // A click on the backdrop lands on the dialog itself, outside its box.
+  dialog.addEventListener("click", (e) => {
+    const r = dialog.getBoundingClientRect();
+    if (e.target === dialog && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) dialog.close();
+  });
+  dialog.addEventListener("close", () => { dialog.remove(); onClose?.(); });
+  document.body.append(dialog);
+  dialog.showModal();
+  return { el: dialog, body, close: () => dialog.close() };
+}
