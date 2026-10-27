@@ -1,7 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { api } from "./api.js";
-import { h, toast, errText, badge } from "./ui.js";
+import { h, toast, errText, badge, modal } from "./ui.js";
 
 const THEME = {
   background: "#040604", foreground: "#d9f2dc", cursor: "#46d872", cursorAccent: "#040604",
@@ -68,6 +68,18 @@ class Workspace {
   /** Forget that saved panes were open (they stay under "Resume"). */
   dismiss() {
     this.saved = this.saved.map((r) => ({ ...r, open: false }));
+    this.persist();
+  }
+
+  /** Drop one saved pane from the list. */
+  forget(key) {
+    this.saved = this.saved.filter((r) => r.key !== key);
+    this.persist();
+  }
+
+  /** Drop closed panes from the list. Their conversations stay in the agent's own history. */
+  forgetClosed() {
+    this.saved = this.saved.filter((r) => r.open);
     this.persist();
   }
 
@@ -368,20 +380,41 @@ export async function terminalArea(garden) {
     const m = Math.round((now() - t) / 60);
     return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
   };
-  const recent = h("select", {
-    title: "Reopen a terminal you closed; agents continue their conversation",
-    onchange: () => {
-      const r = ws.saved.find((x) => x.key === recent.value);
-      recent.value = "";
-      if (r) resume([r]);
-    },
-  });
+  // Closed terminals: a button that opens a list; each row reopens or forgets one.
+  const recent = h("button", { class: "btn resume-pick", title: "Terminals you closed in this garden", onclick: () => showRecent() });
+  function showRecent() {
+    const list = h("div", { class: "recent-list" });
+    const m = modal("Closed terminals", h("div", {},
+      h("p", { class: "muted small" },
+        "Terminals you closed in this garden. Resume opens one again in the same folder and account; ",
+        "a Claude conversation continues where it stopped (Codex continues its latest one). ",
+        "Forgetting only removes it from this list."),
+      list), { wide: true });
+    let previews = {};
+    const draw = () => {
+      const closed = ws.saved.filter((r) => !r.open);
+      if (!closed.length) return m.close();
+      list.replaceChildren(...closed.map((r) => {
+        const account = r.profile ? profiles.find((p) => p.id === r.profile) : null;
+        return h("div", { class: "recent-row" },
+          account ? badge(account) : null,
+          h("div", { class: "grow recent-what" },
+            h("div", {}, h("b", {}, r.title), h("span", { class: "faint small" }, ` · ${r.cwd_label || "garden root"} · ${ago(r.used_at)}`)),
+            h("div", { class: "faint small ellipsis" }, previews[r.key] ? `“${previews[r.key]}”` : r.session ? "no messages yet" : "")),
+          h("button", { class: "btn primary", onclick: () => { m.close(); resume([r]); } }, "Resume"),
+          h("button", { class: "icon", title: "Forget this one", onclick: () => { ws.forget(r.key); draw(); } }, "×"));
+      }),
+      h("div", { class: "row end" },
+        h("button", { class: "btn ghost", onclick: () => { ws.forgetClosed(); m.close(); } }, "Forget all")));
+    };
+    draw();
+    api.terminalPreviews(ws.gardenId).then((p) => { previews = p; if (list.isConnected) draw(); }).catch(() => {});
+  }
   const banner = h("div", { class: "resume-bar" });
   const drawResume = () => {
     const closed = ws.saved.filter((r) => !r.open);
     recent.hidden = !closed.length;
-    recent.replaceChildren(h("option", { value: "" }, `Resume… (${closed.length})`),
-      closed.map((r) => h("option", { value: r.key }, `${r.title} · ${r.cwd_label || "garden root"} · ${ago(r.used_at)}`)));
+    recent.textContent = `↺ Recent (${closed.length})`;
     const last = ws.saved.filter((r) => r.open);
     banner.hidden = !last.length;
     banner.replaceChildren(
@@ -389,7 +422,7 @@ export async function terminalArea(garden) {
         h("span", { class: "faint" }, last.map((r) => r.title).join(", "))),
       h("span", { class: "grow" }),
       h("button", { class: "btn primary", onclick: () => resume(last) }, "Resume all"),
-      h("button", { class: "icon", title: "Not now (they stay under Resume…)", onclick: () => ws.dismiss() }, "×"));
+      h("button", { class: "icon", title: "Not now (they stay under Recent)", onclick: () => ws.dismiss() }, "×"));
   };
   ws.onChange = drawResume;
   drawResume();
@@ -404,9 +437,9 @@ export async function terminalArea(garden) {
 
   const el = h("div", { class: "workspace" },
     h("div", { class: "toolbar" },
+      recent,
       what, flags, quick, h("span", { class: "faint small" }, "in"), where,
       h("button", { class: "btn primary", onclick: open }, "Open"),
-      recent,
       h("span", { class: "grow" }),
       layout),
     banner,

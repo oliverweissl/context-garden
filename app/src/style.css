@@ -329,6 +329,11 @@ th .sort .arrow { font-size: 8px; min-width: 8px; }
 
 /* agent startup flags in the terminal toolbar */
 .toolbar .flags { width: 190px; font-size: 12px; }
+.toolbar .resume-pick { margin-right: 10px; }
+.recent-list { display: flex; flex-direction: column; }
+.recent-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.recent-what { min-width: 0; }
+.recent-list .row.end { padding-top: 10px; border-top: 1px solid var(--line); }
 .quick-flags { display: inline-flex; gap: 4px; }
 .chip.toggle { background: none; cursor: pointer; font: 600 11px var(--body); }
 .chip.toggle.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); background: var(--accent-soft); }

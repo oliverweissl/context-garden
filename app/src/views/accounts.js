@@ -59,10 +59,10 @@ export async function renderAccounts(app) {
     const show = async () => {
       const version = await api.pluginVersion(p.id).catch(() => null);
       const has = !!version;
-      line.replaceChildren(has
-        ? h("span", { class: "muted" }, `✓ context-garden ${version}`)
-        : h("span", { class: "warn" }, "No context-garden skills in this account"),
-      has ? null : h("button", { class: "btn", onclick: (e) => install(e.target) }, "Install skills"));
+      line.replaceChildren(...(has
+        ? [h("span", { class: "muted" }, `✓ context-garden ${version}`)]
+        : [h("span", { class: "warn" }, "No context-garden skills in this account"),
+          h("button", { class: "btn", onclick: (e) => install(e.target) }, "Install skills")]));
     };
     show();
     return line;

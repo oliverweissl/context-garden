@@ -29,6 +29,7 @@ const presets = [
 ];
 
 const handlers = {
+  terminal_previews: () => ({}),
   default_root: () => "/Users/me/gardens",
   list_gardens: () => gardens,
   get_garden: ({ id }) => gardens.find((g) => g.id === id),

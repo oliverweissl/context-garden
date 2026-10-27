@@ -46,6 +46,8 @@ export const api = {
       garden, cwd, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume,
       flags: flags || [], cols, rows,
     }, onOutput, onExit),
+  /** First prompt of each saved Claude terminal, by key. */
+  terminalPreviews: (id) => invoke("terminal_previews", { id }).then((m) => m || {}),
   saveTerminals: (id, terminals) => invoke("save_terminals", { id, terminals }),
   /** Terminal running an account's sign-in. */
   login: ({ profile, cols, rows }, onOutput, onExit) =>

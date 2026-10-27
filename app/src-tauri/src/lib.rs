@@ -504,6 +504,63 @@ fn claude_session_exists(config_dir: &Path, session: &str) -> bool {
     projects.flatten().any(|p| p.path().join(format!("{session}.jsonl")).is_file())
 }
 
+/// The first thing the user typed in a Claude session, to tell saved terminals
+/// apart. Slash commands, pasted command output and caveats are skipped.
+fn claude_first_prompt(config_dir: &Path, session: &str) -> Option<String> {
+    use std::io::{BufRead, BufReader};
+    let projects = std::fs::read_dir(config_dir.join("projects")).ok()?;
+    let file = projects.flatten().map(|p| p.path().join(format!("{session}.jsonl"))).find(|f| f.is_file())?;
+    let reader = BufReader::new(std::fs::File::open(file).ok()?);
+    for line in reader.lines().map_while(Result::ok).take(400) {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+        if v["type"] != "user" || v["isMeta"] == true {
+            continue;
+        }
+        let content = &v["message"]["content"];
+        let text = content.as_str().map(String::from).or_else(|| {
+            content.as_array()?.iter().find(|c| c["type"] == "text")?["text"].as_str().map(String::from)
+        });
+        let Some(mut text) = text else { continue };
+        // Pasted text is wrapped in <pasted_content id=…> tags: keep the text, drop the tags.
+        while let Some(start) = text.find("<pasted_content") {
+            let end = text[start..].find('>').map_or(text.len(), |e| start + e + 1);
+            text.replace_range(start..end, " ");
+        }
+        let text = text.replace("</pasted_content>", " ").split_whitespace().collect::<Vec<_>>().join(" ");
+        if text.is_empty() || text.starts_with('<') || text.starts_with("Caveat:") {
+            continue;
+        }
+        return Some(if text.chars().count() > 90 { format!("{}…", text.chars().take(90).collect::<String>()) } else { text });
+    }
+    None
+}
+
+/// First prompt of each saved Claude terminal of a garden, by terminal key.
+#[tauri::command]
+fn terminal_previews(store: State<Store>, id: String) -> Result<BTreeMap<String, String>, String> {
+    let profiles = store.profiles()?;
+    let default_dir = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| home_dir().join(".claude"));
+    Ok(store
+        .garden(&id)?
+        .terminals
+        .iter()
+        .filter_map(|t| {
+            let session = t.session.as_deref().filter(|s| valid_session(s))?;
+            let dir = match t.profile.as_deref() {
+                Some(pid) => {
+                    let p = profiles.iter().find(|p| p.id == pid && p.agent == "claude")?;
+                    expand_tilde(&p.dir)
+                }
+                None if t.agent.as_deref() == Some("claude") => default_dir.clone(),
+                None => return None,
+            };
+            Some((t.key.clone(), claude_first_prompt(&dir, session)?))
+        })
+        .collect())
+}
+
 /// One argument for the shell that runs agents (`sh -lc` / `powershell -Command`),
 /// quoted so it stays a single literal argument whatever it contains.
 fn shell_quote(arg: &str) -> String {
@@ -673,6 +730,7 @@ pub fn run() {
             clipboard_read,
             inspect_plugin_source,
             remove_garden_plugin,
+            terminal_previews,
             clipboard_write,
             default_root,
             list_gardens,
@@ -711,6 +769,22 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_prompt_skips_commands_and_unwraps_pastes() {
+        let dir = std::env::temp_dir().join(format!("cg-prompt-{}", std::process::id()));
+        let project = dir.join("projects/-x");
+        std::fs::create_dir_all(&project).unwrap();
+        let lines = [
+            r#"{"type":"user","message":{"content":"<command-name>/chrome</command-name>"}}"#,
+            r#"{"type":"user","isMeta":true,"message":{"content":"Base directory for this skill"}}"#,
+            r#"{"type":"user","message":{"content":[{"type":"text","text":"\n<pasted_content id=\"a1\">\n# Task: check   the nightly\n</pasted_content>"}]}}"#,
+        ];
+        std::fs::write(project.join("abc-1.jsonl"), lines.join("\n")).unwrap();
+        let got = claude_first_prompt(&dir, "abc-1");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(got.as_deref(), Some("# Task: check the nightly"));
+    }
 
     #[test]
     fn session_ids_are_checked_and_resumed_only_with_a_transcript() {

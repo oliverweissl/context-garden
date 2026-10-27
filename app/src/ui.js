@@ -79,7 +79,12 @@ export const accountTotal = (a) => a.input + a.cache_read + a.cache_write + a.ou
 export function tokenDonut(accounts, days) {
   const rows = accounts.map((a) => ({ a, n: accountTotal(a) })).filter((r) => r.n > 0).sort((x, y) => y.n - x.n);
   const total = rows.reduce((t, r) => t + r.n, 0);
-  if (!total) return null;
+  if (!total) {
+    return h("div", { class: "tile" },
+      h("div", { class: "tile-label" }, "Tokens by account"),
+      h("div", { class: "tile-value faint" }, "–"),
+      h("div", { class: "tile-note" }, "No stats yet: no agent has run in this garden"));
+  }
   // Spare colors for the default dirs: series colors not close to any account's.
   const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
   const near = (x, y) => Math.hypot(...rgb(x).map((v, i) => v - rgb(y)[i])) < 90;
