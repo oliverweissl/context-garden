@@ -1,9 +1,10 @@
 name: Desktop app release
 
-# Installers for every OS, attached to a draft release, on version tags only.
+# Installers for every OS, attached to a draft release, on version tags only
+# (0.4.0 or v0.4.0).
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]*", "[0-9]*"]
 
 jobs:
   test:
@@ -51,6 +52,6 @@ jobs:
         with:
           projectPath: app
           tagName: ${{ github.ref_name }}
-          releaseName: Context Garden ${{ github.ref_name }}
+          releaseName: ContextGarden ${{ github.ref_name }}
           releaseDraft: true
           args: ${{ matrix.args }}

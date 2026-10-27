@@ -23,7 +23,8 @@ fn refs() -> Result<Refs, String> {
             return Ok(refs.clone());
         }
     }
-    let out = run("git", &["ls-remote", REPO, "refs/heads/main", "refs/tags/v*"], None)
+    // Releases are tagged 0.3.0 or v0.4.0; both count.
+    let out = run("git", &["ls-remote", REPO, "refs/heads/main", "refs/tags/*"], None)
         .map_err(|e| format!("could not reach GitHub: {e}"))?;
     let refs: Refs = out
         .lines()
@@ -77,7 +78,7 @@ pub fn open_repo_page(url: &str) -> Result<(), String> {
     let ok = url.strip_prefix(REPO).is_some_and(|rest| rest.starts_with('/'))
         && url.chars().all(|c| c.is_ascii_alphanumeric() || "-_./:".contains(c));
     if !ok {
-        return Err("only pages of the Context Garden repository can be opened".into());
+        return Err("only pages of the context-garden repository can be opened".into());
     }
     let (program, args): (&str, Vec<&str>) = if cfg!(target_os = "macos") {
         ("open", vec![url])
@@ -99,7 +100,7 @@ mod tests {
 
     #[test]
     fn picks_the_newest_higher_tag() {
-        let tags = ["v0.3.1", "v0.4.0", "v0.4.2", "v0.4.10", "v0.5.0-rc1", "not-a-version"];
+        let tags = ["0.3.1", "v0.4.0", "0.4.2", "v0.4.10", "v0.5.0-rc1", "not-a-version"];
         let r = newest_above("0.4.0", tags.iter().copied()).unwrap();
         assert_eq!(r.version, "0.4.10");
         assert_eq!(r.url, format!("{REPO}/releases/tag/v0.4.10"));

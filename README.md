@@ -5,17 +5,71 @@
 [![App · macOS](https://github.com/oliverweissl/context-garden/actions/workflows/app-macos.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-macos.yml?query=branch%3Amain)
 [![App · Windows](https://github.com/oliverweissl/context-garden/actions/workflows/app-windows.yml/badge.svg?branch=main)](https://github.com/oliverweissl/context-garden/actions/workflows/app-windows.yml?query=branch%3Amain)
 
-Self-contained Agent Skills that cut an agent's context usage — deterministic, offline, no LLM calls inside the tooling.
+Self-contained Agent Skills that cut an agent's context usage: deterministic, offline, no LLM
+calls inside the tooling. Optionally with **ContextGarden**, a desktop app for whole platforms.
 
 **[See the showcase →](https://oliverweissl.github.io/context-garden/)**
+
+## Install
+
+Two options. Both give you the same six skills; the app adds one window around them.
+
+| | Full app | Skills only |
+|---|---|---|
+| For | multi-repo platforms, several agents and accounts | any Claude Code setup |
+| You get | gardens of repos, skills per garden, agent terminals, dashboard | the six skills, hooks and agents |
+| Needs | `git`; Claude Code and/or Codex; `gh` / `glab` for orgs and groups | Claude Code |
+
+### Option 1: Full app (ContextGarden)
+
+**From a release.** Download the installer for your OS from
+[Releases](https://github.com/oliverweissl/context-garden/releases): `.dmg` (macOS),
+`.msi` / `.exe` (Windows), `.deb` / `.rpm` / `.AppImage` (Linux). The builds are not
+code-signed yet, so the first start needs one extra step:
+
+- **macOS:** right-click ContextGarden in Applications, then Open (or
+  `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
+- **Windows:** SmartScreen, then "More info", then "Run anyway".
+- **Linux:** `sudo apt install ./ContextGarden_*.deb`, or `chmod +x` the `.AppImage` and run it.
+
+**From source.** Needs Rust ([rustup](https://rustup.rs)), Node 18+ and the
+[Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (WebView2 on
+Windows, `webkit2gtk` on Linux):
+```bash
+git clone https://github.com/oliverweissl/context-garden && cd context-garden/app
+npm install
+npm run tauri dev      # run it
+npm run tauri build    # or build the installer: src-tauri/target/release/bundle/
+```
+
+**Then:** add your accounts (optional; the app signs in through the agent CLI and installs the
+skills into each), start a garden from repos, folders, GitLab groups or GitHub orgs, take the
+recommended skills, and open agents side by side. Apart from the skills it installs nothing,
+never touches agent credentials, and shows a button when a newer release or newer skills are out. More:
+[`app/README.md`](app/README.md).
+
+### Option 2: Skills only
+
+As a Claude Code plugin (all six skills, their hooks and agents):
+```text
+/plugin marketplace add oliverweissl/context-garden
+/plugin install context-garden@context-garden
+/context-garden:setup    # skills start off: pick the ones for your use case
+```
+Or copy single skills (their hooks then need the settings snippet in the skill's `references/`):
+```bash
+cp -r skills/{skill} ~/.claude/skills/{skill}   # or the project's .claude/skills/
+```
+
+## The skills
 
 | Skill | Does |
 |---|---|
 | 🌰 [`seedbank`](skills/seedbank) | Promotes repeatedly-rediscovered repo facts into a small, always-loaded `AGENTS.md`. |
 | ✂️ [`pruner`](skills/pruner) | Returns exact `file:start-end` ranges worth reading (Python + C/C++) instead of grep-exploring. |
 | ♻️ [`compost`](skills/compost) | Compacts huge compiler/test/CI/HPC output into clustered summaries. |
-| 🍄 [`mycelium`](skills/mycelium) | Delegation gate for subagents (bounded brief, no duplicate investigations) plus shared finding notes so agents don't rediscover the same code. |
-| 🏡 [`greenhouse`](skills/greenhouse) | Shared memory across the repos of one platform: per-repo cards (provides, depends on, key facts) in a base folder beside the repos, so an agent knows its neighbours without reading them. |
+| 🍄 [`mycelium`](skills/mycelium) | Gates subagent delegation (bounded brief, no duplicate investigations) and shares finding notes between agents. |
+| 🏡 [`greenhouse`](skills/greenhouse) | Shared memory across the repos of one platform: per-repo cards (provides, depends on, key facts) beside the repos. |
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
 <!-- benchmark-figure:begin -->
@@ -24,114 +78,47 @@ Benchmark results for **v0.2.0** on the small fixtures in this repo, run with Cl
 ![Benchmark results for context-garden v0.2.0](docs/benchmarks/v0.2.0/benchmark.png)
 <!-- benchmark-figure:end -->
 
-## Install
+## Turn skills on
 
-As a plugin (all six skills, their hooks and agents, see [below](#hooks-and-agents)):
-```text
-/plugin marketplace add oliverweissl/context-garden
-/plugin install context-garden@context-garden
-/context-garden:setup    # skills start off: pick the ones for your use case
-```
-Or copy single skills (the hooks then need the settings snippet in the skill's `references/`):
-```bash
-cp -r skills/{skill} ~/.claude/skills/{skill}   # or the project's .claude/skills/
-```
-
-## After installing: turn skills on
-
-**Every skill starts `off`.** Nothing runs, not even the hooks, until you pick which skills
-you want. Until you do, each new session shows a reminder. With the plugin, run:
-```text
-/context-garden:setup                    # asks how you work and where to apply it
-/context-garden:setup platform           # or name a preset directly
-/context-garden:setup swarm --scope user # ... for every repo, not just this one
-```
-Or just ask Claude, e.g. "turn on compost and pruner". Changes apply from the next prompt.
-
-### Which skills for which use case
+**Every skill starts `off`**: nothing runs, not even the hooks, until you choose. The app does
+this per garden; with the plugin run `/context-garden:setup` (it asks), name a preset
+(`/context-garden:setup platform`, add `--scope user` for every repo), or ask Claude
+("turn on compost and pruner").
 
 | You work... | Preset | Turned on |
 |---|---|---|
 | in one repo, everyday coding and debugging | `solo` | seedbank, pruner, compost |
-| on a big project split over several repos that call each other (services, shared packages, APIs) | `platform` | + greenhouse |
-| with many subagents per task (parallel search, investigate, edit) | `swarm` | + mycelium |
+| on several repos that call each other (services, shared packages, APIs) | `platform` | + greenhouse |
+| with many subagents per task | `swarm` | + mycelium |
 | with many agents across a multi-repo platform | `platform-swarm` | + greenhouse, mycelium |
 | mostly with long builds, test suites, CI or HPC/SLURM logs | `logs` | compost only |
 
-Skills a preset does not turn on are set to `manual`: they never run on their own but still
-answer when you call them (e.g. `/context-garden:weeder` when you want to slim a Skill).
-`all` turns everything on; `off` keeps everything off and hides the reminder.
+Each skill is `on` (Claude uses it when relevant), `manual` (only when you call it, e.g.
+`/context-garden:compost summarize the failing pytest run`) or `off`. Skills a preset does not
+turn on become `manual`; `all` turns everything on, `off` hides the reminder.
 
-Rule of thumb: **greenhouse** pays off only when several repos interact, **mycelium** only when
-Claude delegates to many agents; **compost**, **pruner** and **seedbank** help in almost any repo;
-**weeder** is for people who write Skills.
+<details>
+<summary>Where modes are stored, scopes and overrides</summary>
 
-Scopes: `local` (default; this repo, only you, `.claude/settings.local.json`), `project` (this
-repo, shared with the team via `.claude/settings.json`), `user` (every repo, `~/.claude/settings.json`).
-
-## Modes: on, manual or off
-
-Each skill has one of three modes.
-
-| Mode | Claude uses it on its own | You can call it | Its hooks run |
-|---|---|---|---|
-| `on` | yes, when relevant | yes | yes |
-| `manual` | no | yes, with an instruction | no |
-| `off` | no | no | no |
-
-Set or show a mode (or ask Claude to, e.g. "turn compost on"):
-```bash
-skills/compost/bin/compost mode on         # this repo, only you: .claude/settings.local.json
-skills/compost/bin/compost mode manual --scope user  # every repo (or --scope project to share)
-skills/compost/bin/compost mode            # show the mode and where it comes from
-```
-With the plugin, `bin/` sits in the plugin's install directory, so use `/context-garden:setup`,
-ask Claude, or edit the setting directly. The mode is stored as Claude Code's own `skillOverrides` setting, in
-`.claude/settings.local.json` (this repo, only you), `.claude/settings.json` (shared) or
-`~/.claude/settings.json` (all repos), most specific first:
+Modes are Claude Code's own `skillOverrides` setting, most specific first:
+`.claude/settings.local.json` (this repo, only you; default), `.claude/settings.json` (this
+repo, shared), `~/.claude/settings.json` (every repo):
 ```json
 {"skillOverrides": {"compost": "on", "pruner": "user-invocable-only"}}
 ```
-`"on"`, `"user-invocable-only"` (= `manual`) and `"off"` are the values; a skill with no entry is
-`off`. For copied skills the `/skills` menu edits the same entries (Space cycles; "user-only" is
-`manual`), but Claude Code itself treats a missing entry as on, so the skill's own check does the
-switching off there too.
-`CONTEXT_GARDEN_MODE_<SKILL>=on|manual|off` overrides everything for one shell.
-
-Call a skill directly with an instruction after its name; this works in `on` and `manual`
-(an `off` skill declines and tells you how to turn it on):
-```text
-/compost summarize the failing pytest run                 # copied skill
-/context-garden:compost summarize the failing pytest run  # plugin
-```
-
-With the plugin, Claude Code ignores `skillOverrides` for plugin skills, so each skill checks
-its mode itself when it loads: in `manual` it proceeds only if you asked for it, in `off` it
-stops. Its one-line description is still listed to Claude (about 60-100 tokens per skill). To
-drop that too, copy the skill instead of using the plugin, or disable the whole plugin with
-`/plugin disable context-garden`.
-
-## Optional: the desktop app
-
-Everything above works without it. If you want one window for a whole platform, `app/`
-holds a small desktop app (Windows, macOS, Linux; Tauri + xterm.js) that:
-
-- starts a **garden** from repos, local folders, GitLab groups (with subgroups) or GitHub orgs,
-  typed into one field and told apart automatically; clones nested by group, or flat;
-- recommends and applies the skills per repo (same `skillOverrides` as `/context-garden:setup`);
-- shows garden stats (repos, uncommitted changes, always-loaded agent-file tokens, seedbank facts,
-  greenhouse cards, Claude Code tokens of the last 30 days);
-- runs Claude Code, Codex, Gemini CLI or a plain shell in arrangeable terminal panes, optionally
-  under named **accounts** (separate `CLAUDE_CONFIG_DIR` / `CODEX_HOME`, each with its own icon).
-
-It talks to GitHub/GitLab only through your logged-in `gh` / `glab` CLIs and never touches agent
-credentials. Build and run: see [`app/README.md`](app/README.md).
+`"user-invocable-only"` is `manual`; a skill with no entry is `off`.
+`CONTEXT_GARDEN_MODE_<SKILL>=on|manual|off` overrides everything for one shell. Copied skills
+can also be switched with `skills/<skill>/bin/<skill> mode on|manual|off [--scope ...]`.
+Claude Code ignores `skillOverrides` for plugin skills, so each skill checks its mode when it
+loads; its one-line description is still listed (about 60-100 tokens). To drop that too, copy
+the skill or `/plugin disable context-garden`.
+</details>
 
 ## Hooks and agents
 
 Skills teach Claude *how* to do a job; the deterministic parts run as hooks, and jobs worth
-delegating ship as agents. Every hook is a no-op unless its skill is `on`; the one exception is
-a session-start reminder to run `/context-garden:setup`, shown only while no skill has a mode set.
+delegating ship as agents. Every hook is a no-op unless its skill is `on` (except a
+session-start reminder to run `/context-garden:setup` while no skill has a mode).
 
 | Skill | Hook | Agent |
 |---|---|---|
@@ -142,17 +129,15 @@ a session-start reminder to run `/context-garden:setup`, shown only while no ski
 | greenhouse | session start: platform overview, or ask where the base is; session end: card sync if the base opted in | `envoy` reads another repo's checkout |
 | weeder | | `weeder` runs the whole slimming workflow |
 
-## CLI help and smoke tests
+## Development
 
 ```bash
 skills/{skill}/bin/{skill} --help
 bash skills/{skill}/tests/smoke_test.sh   # offline, bundled fixtures
 ```
-
-## Docs
-
 [`docs/architecture.md`](docs/architecture.md) (layout, self-containment rule, design principles) ·
 [`docs/skill-development.md`](docs/skill-development.md) (adding a Skill) ·
 [`docs/benchmarking.md`](docs/benchmarking.md) (running and plotting benchmarks) ·
-[`examples/`](examples) (measured before/after).
+[`examples/`](examples) (measured before/after) ·
+[`app/README.md`](app/README.md) (the desktop app).
 Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md). License: [`LICENSE`](LICENSE).

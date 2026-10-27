@@ -1,4 +1,4 @@
-//! Context Garden desktop app: Tauri commands the web UI calls.
+//! ContextGarden desktop app: Tauri commands the web UI calls.
 
 mod plugins;
 mod pty;
@@ -813,7 +813,7 @@ pub fn run() {
             terminal_kill,
         ])
         .build(tauri::generate_context!())
-        .expect("failed to start Context Garden");
+        .expect("failed to start ContextGarden");
     app.run(|app, event| {
         if let RunEvent::Exit = event {
             app.state::<Ptys>().kill_all();
