@@ -133,6 +133,11 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .skill-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
 .skill-name { flex: 1; }
 .skills select { max-width: 380px; }
+.skills + .skills { margin-top: 14px; }
+.skills .row input[type=text] { flex: 1; }
+.plugin-offer { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.plugin-pick { align-items: flex-start; gap: 10px; }
+.warn { color: var(--warn, #c98500); }
 
 /* garden view */
 .dash { flex: none; }
@@ -143,6 +148,18 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .tile-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .tile-value { font: 700 26px/1.2 var(--display); }
 .tile-note { font-size: 11px; color: var(--faint); }
+.token-split { grid-column: span 2; }
+.token-body { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
+.donut { width: 92px; height: 92px; flex: none; }
+.donut circle:hover { filter: brightness(1.25); }
+.donut-value { font: 700 15px var(--display); fill: var(--text); }
+.donut-note { font-size: 8px; fill: var(--faint); }
+.token-legend { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.token-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.token-row i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.token-row b { color: var(--text); font-weight: 600; }
+.token-row .pct { width: 34px; text-align: right; }
+@media (max-width: 520px) { .token-split { grid-column: auto; } }
 .repo-table { max-height: 30vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); }
@@ -297,6 +314,10 @@ td.size { position: relative; min-width: 110px; font-variant-numeric: tabular-nu
 .modal-body > .card { border: 0; padding: 0; background: none; }
 .modal-body .form { max-width: none; }
 .modal .repo-table { max-height: none; margin: 0; }
+th .sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th .sort:hover, th .sort.active { color: var(--text); }
+th .sort:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+th .sort .arrow { font-size: 8px; min-width: 8px; }
 
 /* refresh next to the dashboard numbers */
 .dash-meta { display: flex; align-items: flex-start; gap: 10px; }

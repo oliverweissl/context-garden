@@ -22,6 +22,11 @@ export const api = {
   rename: (id, name) => invoke("rename_garden", { id, name }),
   recommend: (id) => invoke("recommend_skills", { id }),
   applySkills: (id, modes) => invoke("apply_skills", { id, modes }),
+  inspectPlugins: (source) => invoke("inspect_plugin_source", { source }),
+  addPlugins: (id, info, plugins) => invoke("add_garden_plugins", {
+    id, source: info.source, marketplace: info.marketplace, plugins,
+  }),
+  removePlugin: (id, plugin) => invoke("remove_garden_plugin", { id, plugin }),
   stats: (id) => invoke("garden_stats", { id }),
   agents: () => invoke("list_agents"),
   profiles: () => invoke("list_profiles"),

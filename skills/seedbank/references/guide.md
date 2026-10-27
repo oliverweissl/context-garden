@@ -65,8 +65,8 @@ Commit `AGENTS.md` and `.seedbank/warm/*.md`. A new store writes
 observation history. An existing `.seedbank/.gitignore` is never
 overwritten.
 
-If Claude Code works in this repository, also commit a one-line
-`CLAUDE.md` containing `@AGENTS.md`. Claude Code reads `CLAUDE.md`, never
-`AGENTS.md`; the import avoids a second copy, so `compile` only touches
-`AGENTS.md`. A symlink also works but fails on Windows without
+Also commit `CLAUDE.md`: Claude Code reads `CLAUDE.md`, never `AGENTS.md`.
+When the repo has none, `compile` creates it as the one line `@AGENTS.md`;
+the import avoids a second copy. An existing `CLAUDE.md` is never touched,
+`compile` only hints to add that line. A symlink also works but fails on Windows without
 admin/Developer Mode.

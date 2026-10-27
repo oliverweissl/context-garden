@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Absolute wrapper path so printed handles run as-is (pruner is not on PATH).
-BIN = str(Path(__file__).resolve().parent.parent / "bin" / "pruner")
+# Shell-quoted: printed for the agent to run, and plugin paths may contain spaces.
+BIN = shlex.quote(str(Path(__file__).resolve().parent.parent / "bin" / "pruner"))
 
 from pr_common import changed_files_from_git
 from pr_index import load_or_build_index

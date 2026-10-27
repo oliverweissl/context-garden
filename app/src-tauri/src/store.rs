@@ -55,6 +55,19 @@ pub struct Garden {
     /// Terminals open last time and recently closed ones, newest first, to resume.
     #[serde(default)]
     pub terminals: Vec<SavedTerminal>,
+    /// Other people's Claude Code plugins (skills, agents, MCP) used in this garden.
+    #[serde(default)]
+    pub plugins: Vec<GardenPlugin>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenPlugin {
+    /// <plugin>@<marketplace>, as Claude Code names it.
+    pub id: String,
+    /// What `claude plugin marketplace add` takes: owner/repo, a git URL or a folder.
+    pub source: String,
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

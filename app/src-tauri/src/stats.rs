@@ -36,6 +36,17 @@ pub struct TokenUse {
     pub cache_write: u64,
 }
 
+#[derive(Serialize)]
+pub struct AccountUse {
+    pub name: String,
+    /// claude | codex
+    pub agent: String,
+    pub icon: String,
+    pub color: String,
+    #[serde(flatten)]
+    pub tokens: TokenUse,
+}
+
 #[derive(Serialize, Default)]
 pub struct GardenStats {
     pub repos: Vec<RepoStats>,
@@ -48,8 +59,9 @@ pub struct GardenStats {
     pub files: usize,
     pub lines: u64,
     pub languages: BTreeMap<String, u64>,
-    /// Claude Code usage of the last `days` days in this garden's folders.
-    pub claude: TokenUse,
+    /// Agent usage of the last `days` days in this garden's folders, per account
+    /// (Claude Code and Codex; the default config dirs count as accounts too).
+    pub accounts: Vec<AccountUse>,
     pub days: u64,
 }
 
@@ -118,71 +130,139 @@ fn claude_project_name(path: &str) -> String {
     path.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
 }
 
-fn claude_config_dirs(profiles: &[Profile]) -> Vec<PathBuf> {
-    let mut dirs = vec![std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home_dir().join(".claude"))];
-    dirs.extend(profiles.iter().filter(|p| p.agent == "claude").map(|p| expand_tilde(&p.dir)));
+/// Every config dir to read usage from: the default one per agent, then the accounts.
+fn usage_sources(profiles: &[Profile]) -> Vec<(PathBuf, AccountUse)> {
+    let blank = |name: &str, agent: &str| AccountUse {
+        name: name.into(),
+        agent: agent.into(),
+        icon: String::new(),
+        color: String::new(),
+        tokens: TokenUse::default(),
+    };
+    let env_dir = |var: &str, fallback: &str| {
+        std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| home_dir().join(fallback))
+    };
+    let mut out = vec![
+        (env_dir("CLAUDE_CONFIG_DIR", ".claude"), blank("Claude (default)", "claude")),
+        (env_dir("CODEX_HOME", ".codex"), blank("Codex (default)", "codex")),
+    ];
+    for p in profiles {
+        let mut a = blank(&p.name, &p.agent);
+        a.icon = p.icon.clone();
+        a.color = p.color.clone();
+        out.push((expand_tilde(&p.dir), a));
+    }
     let mut seen = HashSet::new();
-    dirs.retain(|d| seen.insert(d.clone()));
-    dirs
+    out.retain(|(d, _)| seen.insert(d.clone()));
+    out
 }
 
-fn claude_usage(garden: &Garden, profiles: &[Profile], days: u64) -> TokenUse {
-    let mut prefixes: Vec<String> = vec![claude_project_name(&expand_tilde(&garden.root).to_string_lossy())];
-    prefixes.extend(garden.repos.iter().map(|r| claude_project_name(&r.path)));
-    let cutoff = SystemTime::now() - Duration::from_secs(days * 86_400);
-    let mut use_ = TokenUse::default();
+fn recent(entry: &std::fs::DirEntry, cutoff: SystemTime) -> bool {
+    entry.metadata().and_then(|m| m.modified()).map(|t| t >= cutoff).unwrap_or(false)
+}
+
+fn jsonl_files(dir: &Path) -> impl Iterator<Item = std::fs::DirEntry> {
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("jsonl"))
+}
+
+/// Claude Code: <config>/projects/<cwd as name>/<session>.jsonl, one usage per message.
+fn claude_usage(config: &Path, prefixes: &[String], cutoff: SystemTime, use_: &mut TokenUse) {
+    let Ok(entries) = std::fs::read_dir(config.join("projects")) else { return };
     // Streamed responses repeat the same message id; count each once.
     let mut seen_ids: HashSet<String> = HashSet::new();
-    for config in claude_config_dirs(profiles) {
-        let Ok(entries) = std::fs::read_dir(config.join("projects")) else { continue };
-        for project in entries.flatten() {
-            let name = project.file_name().to_string_lossy().to_string();
-            let ours = prefixes
-                .iter()
-                .any(|p| name == *p || name.starts_with(&format!("{p}-")));
-            if !ours {
-                continue;
-            }
-            let Ok(files) = std::fs::read_dir(project.path()) else { continue };
-            for file in files.flatten() {
-                let path = file.path();
-                if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+    for project in entries.flatten() {
+        let name = project.file_name().to_string_lossy().to_string();
+        if !prefixes.iter().any(|p| name == *p || name.starts_with(&format!("{p}-"))) {
+            continue;
+        }
+        for file in jsonl_files(&project.path()).filter(|f| recent(f, cutoff)) {
+            let Ok(f) = std::fs::File::open(file.path()) else { continue };
+            use_.sessions += 1;
+            for line in BufReader::new(f).lines().map_while(Result::ok) {
+                if !line.contains("\"usage\"") {
                     continue;
                 }
-                let recent = file
-                    .metadata()
-                    .and_then(|m| m.modified())
-                    .map(|t| t >= cutoff)
-                    .unwrap_or(false);
-                if !recent {
-                    continue;
-                }
-                let Ok(f) = std::fs::File::open(&path) else { continue };
-                use_.sessions += 1;
-                for line in BufReader::new(f).lines().map_while(Result::ok) {
-                    if !line.contains("\"usage\"") {
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+                let msg = &v["message"];
+                let Some(u) = msg.get("usage") else { continue };
+                if let Some(id) = msg.get("id").and_then(|i| i.as_str()) {
+                    if !seen_ids.insert(id.to_string()) {
                         continue;
                     }
-                    let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
-                    let msg = &v["message"];
-                    let Some(u) = msg.get("usage") else { continue };
-                    if let Some(id) = msg.get("id").and_then(|i| i.as_str()) {
-                        if !seen_ids.insert(id.to_string()) {
-                            continue;
-                        }
-                    }
-                    let n = |k: &str| u.get(k).and_then(|x| x.as_u64()).unwrap_or(0);
-                    use_.input += n("input_tokens");
-                    use_.output += n("output_tokens");
-                    use_.cache_read += n("cache_read_input_tokens");
-                    use_.cache_write += n("cache_creation_input_tokens");
                 }
+                let n = |k: &str| u.get(k).and_then(|x| x.as_u64()).unwrap_or(0);
+                use_.input += n("input_tokens");
+                use_.output += n("output_tokens");
+                use_.cache_read += n("cache_read_input_tokens");
+                use_.cache_write += n("cache_creation_input_tokens");
             }
         }
     }
-    use_
+}
+
+/// Codex: <home>/sessions/YYYY/MM/DD/rollout-*.jsonl. The first line names the
+/// cwd; token_count events carry the session's running total, so the last wins.
+fn codex_usage(home: &Path, roots: &[PathBuf], cutoff: SystemTime, use_: &mut TokenUse) {
+    let mut stack = vec![home.join("sessions")];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for e in entries.flatten() {
+            if e.file_type().is_ok_and(|t| t.is_dir()) {
+                stack.push(e.path());
+            }
+        }
+        for file in jsonl_files(&dir).filter(|f| recent(f, cutoff)) {
+            let Ok(f) = std::fs::File::open(file.path()) else { continue };
+            let mut lines = BufReader::new(f).lines().map_while(Result::ok);
+            let Some(first) = lines.next() else { continue };
+            let cwd = serde_json::from_str::<serde_json::Value>(&first)
+                .ok()
+                .and_then(|v| v["payload"]["cwd"].as_str().map(PathBuf::from));
+            if !cwd.is_some_and(|c| roots.iter().any(|r| c.starts_with(r))) {
+                continue;
+            }
+            use_.sessions += 1;
+            let mut total = None;
+            for line in lines.filter(|l| l.contains("\"token_count\"")) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
+                    if let Some(t) = v["payload"]["info"].get("total_token_usage") {
+                        total = Some(t.clone());
+                    }
+                }
+            }
+            let Some(t) = total else { continue };
+            let n = |k: &str| t.get(k).and_then(|x| x.as_u64()).unwrap_or(0);
+            // Codex counts cached input inside input_tokens.
+            use_.input += n("input_tokens").saturating_sub(n("cached_input_tokens"));
+            use_.cache_read += n("cached_input_tokens");
+            use_.output += n("output_tokens");
+        }
+    }
+}
+
+/// Usage per account in this garden's folders; accounts without any are left out.
+fn usage(garden: &Garden, profiles: &[Profile], days: u64) -> Vec<AccountUse> {
+    let root = expand_tilde(&garden.root);
+    let mut roots = vec![root.clone()];
+    roots.extend(garden.repos.iter().map(|r| PathBuf::from(&r.path)));
+    let prefixes: Vec<String> = roots.iter().map(|r| claude_project_name(&r.to_string_lossy())).collect();
+    let cutoff = SystemTime::now() - Duration::from_secs(days * 86_400);
+    let mut out = Vec::new();
+    for (dir, mut account) in usage_sources(profiles) {
+        match account.agent.as_str() {
+            "claude" => claude_usage(&dir, &prefixes, cutoff, &mut account.tokens),
+            "codex" => codex_usage(&dir, &roots, cutoff, &mut account.tokens),
+            _ => {}
+        }
+        if account.tokens.sessions > 0 {
+            out.push(account);
+        }
+    }
+    out
 }
 
 pub fn collect(garden: &Garden, profiles: &[Profile]) -> GardenStats {
@@ -225,7 +305,7 @@ pub fn collect(garden: &Garden, profiles: &[Profile]) -> GardenStats {
         files: repos.iter().map(|r| r.files).sum(),
         lines: repos.iter().map(|r| r.lines).sum(),
         languages,
-        claude: claude_usage(garden, profiles, days),
+        accounts: usage(garden, profiles, days),
         days,
         repos,
     }
@@ -233,6 +313,30 @@ pub fn collect(garden: &Garden, profiles: &[Profile]) -> GardenStats {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn codex_usage_takes_each_sessions_last_total() {
+        let home = std::env::temp_dir().join(format!("cg-codex-{}", std::process::id()));
+        let day = home.join("sessions/2026/10/27");
+        std::fs::create_dir_all(&day).unwrap();
+        let count = |input: u64, cached: u64, out: u64| {
+            format!(
+                r#"{{"type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"input_tokens":{input},"cached_input_tokens":{cached},"output_tokens":{out}}}}}}}}}"#
+            )
+        };
+        let session = |cwd: &str| format!(r#"{{"type":"session_meta","payload":{{"cwd":"{cwd}"}}}}"#);
+        std::fs::write(
+            day.join("rollout-a.jsonl"),
+            [session("/g/repo"), count(100, 40, 10), count(300, 200, 30)].join("\n"),
+        )
+        .unwrap();
+        std::fs::write(day.join("rollout-b.jsonl"), [session("/elsewhere"), count(999, 0, 999)].join("\n")).unwrap();
+        let mut use_ = super::TokenUse::default();
+        let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        super::codex_usage(&home, &[std::path::PathBuf::from("/g")], cutoff, &mut use_);
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!((use_.sessions, use_.input, use_.cache_read, use_.output), (1, 100, 200, 30));
+    }
+
     #[test]
     fn project_name_matches_claude_code() {
         assert_eq!(

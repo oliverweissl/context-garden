@@ -96,6 +96,7 @@ CC compile >/dev/null
 agents="$(cat AGENTS.md)"
 assert_contains "compile: hand-written AGENTS.md text preserved" "$agents" "Hand-written: ask @alice before touching CI."
 assert_eq "compile: exactly one seedbank block after two compiles" "$(grep -c 'seedbank:begin' AGENTS.md)" "1"
+assert_eq "compile: missing CLAUDE.md created as an AGENTS.md import" "$(cat CLAUDE.md)" "@AGENTS.md"
 assert_contains "compile: build command present verbatim" "$agents" "cmake -S . -B build && cmake --build build -j"
 assert_contains "compile: generated-file invariant present verbatim" "$agents" "Do not edit src/generated/**; regenerate with tools/codegen.py."
 assert_contains "compile: tolerance invariant present verbatim" "$agents" "Never weaken convergence tolerances"

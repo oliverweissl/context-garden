@@ -1,8 +1,8 @@
 import { api } from "../api.js";
-import { h, toast, errText, setCrumbs, tile, fmt, languageBar, modal, SKILL_COLORS } from "../ui.js";
+import { h, toast, errText, setCrumbs, tile, fmt, languageBar, tokenDonut, modal, SKILL_COLORS } from "../ui.js";
 import { cloneBoard, READY } from "./cloning.js";
 import { planCard, SOURCES_HINT, LINK_HELP } from "./plant.js";
-import { skillPicker } from "./skills.js";
+import { skillPicker, pluginPanel } from "./skills.js";
 import { terminalArea } from "../terminals.js";
 import { gardenArt } from "../art.js";
 
@@ -24,13 +24,48 @@ export async function renderGarden(app, id) {
   const repoTable = h("div", { class: "repo-table" }, h("div", { class: "faint small" }, "Reading garden…"));
   const extra = h("div");
 
+  // Repository table: click a header to sort by it, again to flip the order.
+  let repos = [];
+  const sort = { key: "lines", desc: true };
+  const COLUMNS = [
+    ["Repository", "name"], ["Branch", "branch"], ["Lines", "lines"],
+    ["Changes", "changed"], ["Agent file tokens", "agent_tokens"], ["Facts", "seedbank_facts"],
+  ];
+  const TEXT = new Set(["name", "branch"]);
+  const byText = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  function drawRepos() {
+    const { key, desc } = sort;
+    const value = (r) => (key === "branch" ? r.branch || r.status : r[key] ?? 0);
+    const rows = [...repos].sort((a, b) => {
+      const d = TEXT.has(key) ? byText.compare(value(a), value(b)) : value(a) - value(b);
+      return (desc ? -d : d) || byText.compare(a.name, b.name);
+    });
+    const most = Math.max(1, ...repos.map((r) => r.lines));
+    repoTable.replaceChildren(h("table", {},
+      h("thead", {}, h("tr", {}, COLUMNS.map(([label, k]) => h("th", { "aria-sort": k === key ? (desc ? "descending" : "ascending") : "none" },
+        h("button", {
+          class: `sort${k === key ? " active" : ""}`,
+          onclick: () => {
+            if (sort.key === k) sort.desc = !sort.desc;
+            else Object.assign(sort, { key: k, desc: !TEXT.has(k) }); // names A→Z, numbers biggest first
+            drawRepos();
+          },
+        }, label, h("span", { class: "arrow" }, k === key ? (desc ? "▼" : "▲") : "")))))),
+      h("tbody", {}, rows.map((r) => h("tr", { class: r.status === "failed" ? "bad" : "" },
+        h("td", {}, h("b", {}, r.name), h("div", { class: "faint small mono ellipsis" }, r.path)),
+        h("td", { class: "mono small" }, r.branch || r.status),
+        h("td", { class: "size", title: `${r.lines.toLocaleString()} lines · ${r.files.toLocaleString()} files` },
+          h("span", { class: "size-bar", style: `width:${(100 * r.lines) / most}%` }), fmt(r.lines)),
+        h("td", {}, r.changed || "–"),
+        h("td", {}, r.agent_tokens ? fmt(r.agent_tokens) : "–"),
+        h("td", {}, r.seedbank_facts || "–"))))));
+  }
+
   const refreshBtn = h("button", { class: "icon refresh", title: "Refresh numbers", onclick: () => refresh() }, "↻");
   async function refresh() {
     refreshBtn.classList.add("spin");
     try {
       const s = await api.stats(id);
-      const c = s.claude;
-      const ctx = c.input + c.cache_read + c.cache_write;
       const n = s.repos.length;
       tiles.replaceChildren(
         tile("Repositories", n, s.groups ? `${s.groups} groups · ${s.namespaces} folders` : "added one by one"),
@@ -40,20 +75,10 @@ export async function renderGarden(app, id) {
         tile("Seedbank", s.seedbank_facts, "cached facts"),
         tile("Greenhouse", s.greenhouse_cards ?? "–", s.greenhouse_cards == null ? "no base yet" : "repo cards",
           s.greenhouse_cards == null ? null : n ? s.greenhouse_cards / n : 0),
-        tile("Claude tokens", fmt(ctx + c.output), `${c.sessions} sessions · ${s.days} d · ${fmt(c.output)} out · ${ctx ? Math.round((100 * c.cache_read) / ctx) : 0}% cache`,
-          ctx ? c.cache_read / ctx : null));
+        tokenDonut(s.accounts, s.days));
       langs.replaceChildren(languageBar(s.languages));
-      const most = Math.max(1, ...s.repos.map((r) => r.lines));
-      repoTable.replaceChildren(h("table", {},
-        h("thead", {}, h("tr", {}, ["Repository", "Branch", "Lines", "Changes", "Agent file tokens", "Facts"].map((t) => h("th", {}, t)))),
-        h("tbody", {}, [...s.repos].sort((a, b) => b.lines - a.lines).map((r) => h("tr", { class: r.status === "failed" ? "bad" : "" },
-          h("td", {}, h("b", {}, r.name), h("div", { class: "faint small mono ellipsis" }, r.path)),
-          h("td", { class: "mono small" }, r.branch || r.status),
-          h("td", { class: "size", title: `${r.lines.toLocaleString()} lines · ${r.files.toLocaleString()} files` },
-            h("span", { class: "size-bar", style: `width:${(100 * r.lines) / most}%` }), fmt(r.lines)),
-          h("td", {}, r.changed || "–"),
-          h("td", {}, r.agent_tokens ? fmt(r.agent_tokens) : "–"),
-          h("td", {}, r.seedbank_facts || "–"))))));
+      repos = s.repos;
+      drawRepos();
     } catch (e) {
       toast(errText(e), "error");
     }
@@ -143,7 +168,7 @@ export async function renderGarden(app, id) {
       dots.replaceChildren(...skillDots());
       m.close();
       refresh();
-    }));
+    }), pluginPanel(garden));
   };
 
   const head = h("div", { class: "garden-head" },

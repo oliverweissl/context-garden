@@ -98,7 +98,13 @@ fn override_value(mode: &str) -> Result<&'static str, String> {
     }
 }
 
-fn write_repo_modes(repo: &Path, modes: &BTreeMap<String, String>) -> Result<(), String> {
+/// Writes skill modes (when chosen) and plugin switches into one folder's
+/// .claude/settings.local.json; every other key stays as it is.
+fn write_folder(
+    repo: &Path,
+    modes: &BTreeMap<String, String>,
+    plugins: &BTreeMap<String, bool>,
+) -> Result<(), String> {
     let path = repo.join(".claude").join("settings.local.json");
     let mut settings: serde_json::Value = match std::fs::read_to_string(&path) {
         Ok(text) if text.trim().is_empty() => serde_json::json!({}),
@@ -111,21 +117,39 @@ fn write_repo_modes(repo: &Path, modes: &BTreeMap<String, String>) -> Result<(),
     let obj = settings
         .as_object_mut()
         .ok_or_else(|| format!("{} is not a JSON object; left untouched", path.display()))?;
-    let overrides = obj
-        .entry("skillOverrides")
-        .or_insert_with(|| serde_json::json!({}))
-        .as_object_mut()
-        .ok_or("skillOverrides is not an object")?;
-    for (skill, mode) in modes {
-        overrides.insert(skill.clone(), serde_json::Value::from(override_value(mode)?));
+    let mut switches = plugins.clone();
+    if !modes.is_empty() {
+        let overrides = obj
+            .entry("skillOverrides")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("skillOverrides is not an object")?;
+        for (skill, mode) in modes {
+            overrides.insert(skill.clone(), serde_json::Value::from(override_value(mode)?));
+        }
+        switches.insert(PLUGIN.into(), modes.values().any(|m| m != "off"));
     }
-    let enabled = modes.values().any(|m| m != "off");
-    obj.entry("enabledPlugins")
+    let enabled = obj
+        .entry("enabledPlugins")
         .or_insert_with(|| serde_json::json!({}))
         .as_object_mut()
-        .ok_or("enabledPlugins is not an object")?
-        .insert(PLUGIN.into(), serde_json::Value::from(enabled));
+        .ok_or("enabledPlugins is not an object")?;
+    for (id, on) in switches {
+        enabled.insert(id, serde_json::Value::from(on));
+    }
     atomic_write(&path, &(serde_json::to_string_pretty(&settings).unwrap() + "\n"))
+}
+
+/// The garden's own plugins, all switched on.
+fn garden_plugins(garden: &Garden) -> BTreeMap<String, bool> {
+    garden.plugins.iter().map(|p| (p.id.clone(), true)).collect()
+}
+
+/// Terminals start in the garden root or a repo; both carry the settings.
+fn folders(garden: &Garden) -> Vec<(String, std::path::PathBuf)> {
+    let mut out = vec![("garden root".to_string(), expand_tilde(&garden.root))];
+    out.extend(garden.repos.iter().filter(|r| r.ready()).map(|r| (r.name.clone(), Path::new(&r.path).to_path_buf())));
+    out
 }
 
 /// <garden root>/.greenhouse: every repo below the root finds it by ancestor
@@ -149,10 +173,10 @@ pub fn ensure_greenhouse_base(garden: &Garden) -> Result<(), String> {
 /// Make sure a folder a terminal starts in carries the garden's skill choice
 /// (it may predate the choice, or be the root of a garden set up earlier).
 pub fn ensure_folder(garden: &Garden, dir: &Path) -> Result<(), String> {
-    if garden.skills.is_empty() {
+    if garden.skills.is_empty() && garden.plugins.is_empty() {
         return Ok(());
     }
-    write_repo_modes(dir, &garden.skills)
+    write_folder(dir, &garden.skills, &garden_plugins(garden))
 }
 
 /// `CONTEXT_GARDEN_MODE_<SKILL>` for each chosen mode; the skills read it first.
@@ -165,24 +189,29 @@ pub fn mode_env(garden: &Garden) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Writes the modes into every repo and the garden root (terminals start there
-/// too). Returns one error line per folder that could not be updated.
+/// Writes the modes and the garden's plugins into every repo and the garden
+/// root. Returns one error line per folder that could not be updated.
 pub fn apply(garden: &Garden, modes: &BTreeMap<String, String>) -> Vec<String> {
-    let mut errors = Vec::new();
-    if let Err(e) = write_repo_modes(&expand_tilde(&garden.root), modes) {
-        errors.push(format!("garden root: {e}"));
-    }
-    for repo in garden.repos.iter().filter(|r| r.ready()) {
-        if let Err(e) = write_repo_modes(Path::new(&repo.path), modes) {
-            errors.push(format!("{}: {e}", repo.name));
-        }
-    }
+    let plugins = garden_plugins(garden);
+    let mut errors: Vec<String> = folders(garden)
+        .into_iter()
+        .filter_map(|(name, dir)| write_folder(&dir, modes, &plugins).err().map(|e| format!("{name}: {e}")))
+        .collect();
     if modes.get("greenhouse").map(String::as_str) == Some("on") {
         if let Err(e) = ensure_greenhouse_base(garden) {
             errors.push(format!("greenhouse base: {e}"));
         }
     }
     errors
+}
+
+/// Switch one plugin on or off in every folder of the garden.
+pub fn switch_plugin(garden: &Garden, id: &str, on: bool) -> Vec<String> {
+    let plugins = BTreeMap::from([(id.to_string(), on)]);
+    folders(garden)
+        .into_iter()
+        .filter_map(|(name, dir)| write_folder(&dir, &BTreeMap::new(), &plugins).err().map(|e| format!("{name}: {e}")))
+        .collect()
 }
 
 #[cfg(test)]
@@ -220,6 +249,7 @@ mod tests {
             skills: BTreeMap::new(),
             created_at: 0,
             terminals: Vec::new(),
+            plugins: Vec::new(),
         };
         let errors = apply(&garden, &preset_modes("platform"));
         assert_eq!(errors.len(), 1, "{errors:?}");

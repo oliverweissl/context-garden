@@ -1,5 +1,6 @@
 //! Context Garden desktop app: Tauri commands the web UI calls.
 
+mod plugins;
 mod pty;
 mod skills;
 mod sources;
@@ -7,7 +8,7 @@ mod stats;
 mod store;
 mod util;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 use std::sync::Mutex;
@@ -16,7 +17,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
 use pty::{Launch, PtyEvent, Ptys};
 use skills::PLUGIN;
-use store::{Garden, Profile, Repo, SavedTerminal, Store};
+use store::{Garden, GardenPlugin, Profile, Repo, SavedTerminal, Store};
 use util::{expand_tilde, home_dir, now_secs, run_env, slugify, which};
 
 /// (id, label, binary, env var that selects its config dir / account).
@@ -172,6 +173,7 @@ fn create_garden(
             skills: BTreeMap::new(),
             created_at: now_secs(),
             terminals: Vec::new(),
+            plugins: Vec::new(),
         };
         all.push(g.clone());
         Ok(g)
@@ -395,6 +397,12 @@ async fn install_profile_plugin(store: State<'_, Store>, id: String) -> Result<(
             }
             run_env("claude", &["plugin", "install", PLUGIN, "--scope", "user"], None, &env)?;
             run_env("claude", &["plugin", "disable", PLUGIN, "--scope", "user"], None, &env)?;
+            // Plugins gardens added from elsewhere, so this account has them too.
+            for gp in store.gardens()?.iter().flat_map(|g| g.plugins.iter()) {
+                if let Err(e) = plugins::install_claude(&p.dir, &gp.source, &gp.id) {
+                    eprintln!("{} for {}: {e}", gp.id, p.name);
+                }
+            }
         }
         "codex" => {
             if which("codex").is_none() {
@@ -409,6 +417,70 @@ async fn install_profile_plugin(store: State<'_, Store>, id: String) -> Result<(
         other => return Err(format!("'{other}' has no plugin support")),
     }
     Ok(())
+}
+
+/// What a plugin marketplace offers, read before anything is installed.
+#[tauri::command]
+async fn inspect_plugin_source(source: String) -> Result<plugins::SourceInfo, String> {
+    plugins::inspect(&source)
+}
+
+#[derive(Deserialize)]
+struct PluginPick {
+    name: String,
+    #[serde(default)]
+    description: String,
+}
+
+/// Add plugins from a marketplace to a garden: installed (disabled) into every
+/// Claude account, enabled in the garden's folders. Returns per-account problems.
+#[tauri::command]
+async fn add_garden_plugins(
+    store: State<'_, Store>,
+    id: String,
+    source: String,
+    marketplace: String,
+    plugins: Vec<PluginPick>,
+) -> Result<Vec<String>, String> {
+    let source = plugins::normalize(&source)?;
+    if marketplace.is_empty() || plugins.is_empty() {
+        return Err("pick at least one plugin".into());
+    }
+    let accounts: Vec<Profile> = store.profiles()?.into_iter().filter(|p| p.agent == "claude").collect();
+    if accounts.is_empty() {
+        return Err("add a Claude account first: plugins are installed into accounts".into());
+    }
+    let added: Vec<GardenPlugin> = plugins
+        .into_iter()
+        .map(|p| GardenPlugin { id: format!("{}@{marketplace}", p.name), source: source.clone(), description: p.description })
+        .collect();
+    let mut problems = Vec::new();
+    for gp in &added {
+        for account in &accounts {
+            if let Err(e) = plugins::install_claude(&account.dir, &gp.source, &gp.id) {
+                problems.push(format!("{} in {}: {e}", gp.id, account.name));
+            }
+        }
+    }
+    let garden = store.update_garden(&id, |g| {
+        for gp in added {
+            g.plugins.retain(|p| p.id != gp.id);
+            g.plugins.push(gp);
+        }
+        Ok(g.clone())
+    })?;
+    problems.extend(skills::apply(&garden, &garden.skills));
+    Ok(problems)
+}
+
+/// Stop using a plugin in this garden. Accounts keep it installed (disabled).
+#[tauri::command]
+fn remove_garden_plugin(store: State<Store>, id: String, plugin: String) -> Result<Vec<String>, String> {
+    let garden = store.update_garden(&id, |g| {
+        g.plugins.retain(|p| p.id != plugin);
+        Ok(g.clone())
+    })?;
+    Ok(skills::switch_plugin(&garden, &plugin, false))
 }
 
 /// Forget an account. Its config dir (and the login inside) stays on disk.
@@ -597,7 +669,10 @@ pub fn run() {
         .manage(Ptys::default())
         .manage(Cloning::default())
         .invoke_handler(tauri::generate_handler![
+            add_garden_plugins,
             clipboard_read,
+            inspect_plugin_source,
+            remove_garden_plugin,
             clipboard_write,
             default_root,
             list_gardens,

@@ -68,6 +68,74 @@ export function languageBar(languages) {
         h("span", { class: "faint" }, ` ${pct(n) < 1 ? "<1" : Math.round(pct(n))}%`)))));
 }
 
+/** Everything an account read and wrote: fresh input, cache and output tokens. */
+export const accountTotal = (a) => a.input + a.cache_read + a.cache_write + a.output;
+
+/**
+ * Token use split by account as a donut with a legend. Each slice wears the
+ * account's own badge color (the one on its terminals); the default config
+ * dirs, which have none, take series colors. The legend repeats the badge.
+ */
+export function tokenDonut(accounts, days) {
+  const rows = accounts.map((a) => ({ a, n: accountTotal(a) })).filter((r) => r.n > 0).sort((x, y) => y.n - x.n);
+  const total = rows.reduce((t, r) => t + r.n, 0);
+  if (!total) return null;
+  // Spare colors for the default dirs: series colors not close to any account's.
+  const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const near = (x, y) => Math.hypot(...rgb(x).map((v, i) => v - rgb(y)[i])) < 90;
+  const used = rows.map((r) => r.a.color).filter((c) => /^#[0-9a-f]{6}$/i.test(c));
+  const spare = SERIES.filter((c) => !used.some((u) => near(c, u)));
+  rows.forEach((r) => {
+    if (r.a.color) r.color = r.a.color;
+    else { r.color = spare.shift() || "#9ba596"; used.push(r.color); }
+  });
+  const R = 38, C = 2 * Math.PI * R, GAP = rows.length > 1 ? 2 : 0;
+  let at = 0;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("class", "donut");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `Tokens by account, ${fmt(total)} in all`);
+  for (const r of rows) {
+    const len = (C * r.n) / total;
+    const arc = document.createElementNS(NS, "circle");
+    for (const [k, v] of Object.entries({
+      cx: 50, cy: 50, r: R, fill: "none", stroke: r.color, "stroke-width": 14,
+      "stroke-dasharray": `${Math.max(0.5, len - GAP)} ${C}`, "stroke-dashoffset": -at, transform: "rotate(-90 50 50)",
+    })) arc.setAttribute(k, v);
+    const tip = document.createElementNS(NS, "title");
+    tip.textContent = `${r.a.name}: ${fmt(r.n)} tokens (${((100 * r.n) / total).toFixed(1)}%) · ${r.a.sessions} sessions`;
+    arc.append(tip);
+    svg.append(arc);
+    at += len;
+  }
+  const label = (y, text, cls) => {
+    const t = document.createElementNS(NS, "text");
+    for (const [k, v] of Object.entries({ x: 50, y, "text-anchor": "middle", class: cls })) t.setAttribute(k, v);
+    t.textContent = text;
+    svg.append(t);
+  };
+  label(52, fmt(total), "donut-value");
+  label(64, "tokens", "donut-note");
+  const sessions = rows.reduce((t, r) => t + r.a.sessions, 0);
+  const read = rows.reduce((t, r) => t + r.a.input + r.a.cache_read + r.a.cache_write, 0);
+  const cache = read ? Math.round((100 * rows.reduce((t, r) => t + r.a.cache_read, 0)) / read) : 0;
+  const pct = (n) => { const v = (100 * n) / total; return v < 1 ? "<1%" : `${Math.round(v)}%`; };
+  return h("div", { class: "tile token-split" },
+    h("div", { class: "tile-label" }, "Tokens by account"),
+    h("div", { class: "token-body" }, svg,
+      h("div", { class: "token-legend small" }, rows.map((r) =>
+        h("div", { class: "token-row", title: `${fmt(r.a.output)} out · ${fmt(r.a.cache_read)} from cache` },
+          h("i", { style: `background:${r.color}` }),
+          r.a.icon ? badge(r.a) : null,
+          h("span", { class: "ellipsis" }, r.a.name, h("span", { class: "faint" }, ` · ${r.a.agent}`)),
+          h("span", { class: "grow" }),
+          h("b", {}, fmt(r.n)),
+          h("span", { class: "faint pct" }, pct(r.n)))))),
+    h("div", { class: "tile-note" }, `Claude Code + Codex in this garden · ${sessions} sessions · last ${days} days · ${cache}% from cache`));
+}
+
 export const SKILL_COLORS = {
   greenhouse: "var(--sky)", mycelium: "var(--violet)", seedbank: "var(--amber)",
   pruner: "var(--rose)", compost: "var(--compost)", weeder: "var(--weeder)",
