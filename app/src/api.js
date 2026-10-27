@@ -30,6 +30,8 @@ export const api = {
   pluginVersion: (id) => invoke("profile_plugin_version", { id }),
   installPlugin: (id) => invoke("install_profile_plugin", { id }),
   removeProfile: (id) => invoke("remove_profile", { id }),
+  copy: (text) => (mock ? navigator.clipboard.writeText(text) : invoke("clipboard_write", { text })),
+  pasteText: () => (mock ? navigator.clipboard.readText() : invoke("clipboard_read")),
   pickFolder: (defaultPath) => open({ directory: true, defaultPath }),
   on: listen,
 

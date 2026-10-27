@@ -158,6 +158,29 @@ const FLAGS_KEY = (agent) => `cg.flags.${agent}`;
 const loadFlags = (agent) => { try { return localStorage.getItem(FLAGS_KEY(agent)) || ""; } catch { return ""; } };
 const storeFlags = (agent, v) => { try { localStorage.setItem(FLAGS_KEY(agent), v); } catch { /* private mode */ } };
 
+const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+
+/**
+ * Copy and paste for a terminal: Cmd+C / Cmd+V on macOS; Ctrl+Shift+C / V
+ * elsewhere, plus Ctrl+C while text is selected and Ctrl+V. Ctrl+C without a
+ * selection still interrupts. Returns false for keys handled here.
+ */
+function clipboardKey(term, e) {
+  if (e.type !== "keydown" || e.altKey) return true;
+  const key = e.key.toLowerCase();
+  const mod = MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  if (!mod || (key !== "c" && key !== "v")) return true;
+  if (key === "c") {
+    if (!term.hasSelection()) return !MAC && !e.shiftKey; // plain Ctrl+C: interrupt
+    e.preventDefault();
+    api.copy(term.getSelection()).then(() => term.clearSelection(), (err) => toast(errText(err), "error"));
+    return false;
+  }
+  e.preventDefault(); // no second, native paste
+  api.pasteText().then((text) => text && term.paste(text), (err) => toast(errText(err), "error"));
+  return false;
+}
+
 class Pane {
   constructor(ws, opts) {
     this.ws = ws;
@@ -166,7 +189,10 @@ class Pane {
     this.term = new Terminal({
       theme: THEME, fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
       fontSize: 13, cursorBlink: true, allowProposedApi: false, scrollback: 5000,
+      // Agents that capture the mouse still let Option-drag (macOS) / Shift-drag select.
+      macOptionClickForcesSelection: true,
     });
+    this.term.attachCustomKeyEventHandler((e) => clipboardKey(this.term, e));
     this.fitter = new FitAddon();
     this.term.loadAddon(this.fitter);
     const body = h("div", { class: "pane-body" });

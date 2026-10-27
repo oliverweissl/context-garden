@@ -118,6 +118,15 @@ fn clone_in_background(
                 Progress { garden: report_id.clone(), index, repo: repo.clone() },
             );
         });
+        // Repos that came in after the skills were chosen (added, retried) need
+        // the same settings, or the skills read "off" in them.
+        if let Ok(g) = app.state::<Store>().garden(&id) {
+            if !g.skills.is_empty() {
+                for e in skills::apply(&g, &g.skills) {
+                    eprintln!("skills: {e}");
+                }
+            }
+        }
         app.state::<Cloning>().0.lock().unwrap().remove(&id);
         let _ = app.emit("garden-ready", id);
     });
@@ -331,6 +340,16 @@ fn codex_config_has(dir: &Path, section: &str) -> bool {
     std::fs::read_to_string(dir.join("config.toml")).is_ok_and(|t| t.lines().any(|l| l.trim() == section))
 }
 
+#[tauri::command]
+fn clipboard_write(text: String) -> Result<(), String> {
+    util::clipboard_write(&text)
+}
+
+#[tauri::command]
+fn clipboard_read() -> Result<String, String> {
+    util::clipboard_read()
+}
+
 /// Installed version of the context-garden plugin in an account, or None.
 /// A fresh config dir has no plugins at all, so its terminals have none of the skills.
 #[tauri::command]
@@ -490,6 +509,10 @@ fn terminal_spawn(
     let flags: Vec<String> = flags.unwrap_or_default().into_iter().filter(|f| !f.is_empty()).collect();
     check_flags(&flags)?;
     let mut env = vec![("CONTEXT_GARDEN".to_string(), g.name.clone())];
+    // The skills resolve their mode from the git root they run in; group folders,
+    // linked repos and repos without settings would read "off". The garden's
+    // choice holds for the whole session this way.
+    env.extend(skills::mode_env(&g));
     let base = Path::new(&g.root).join(".greenhouse");
     if base.join("greenhouse.json").is_file() {
         env.push(("GREENHOUSE_BASE".into(), base.to_string_lossy().into()));
@@ -574,6 +597,8 @@ pub fn run() {
         .manage(Ptys::default())
         .manage(Cloning::default())
         .invoke_handler(tauri::generate_handler![
+            clipboard_read,
+            clipboard_write,
             default_root,
             list_gardens,
             get_garden,

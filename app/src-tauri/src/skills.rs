@@ -155,6 +155,16 @@ pub fn ensure_folder(garden: &Garden, dir: &Path) -> Result<(), String> {
     write_repo_modes(dir, &garden.skills)
 }
 
+/// `CONTEXT_GARDEN_MODE_<SKILL>` for each chosen mode; the skills read it first.
+pub fn mode_env(garden: &Garden) -> Vec<(String, String)> {
+    garden
+        .skills
+        .iter()
+        .filter(|(skill, mode)| SKILLS.contains(&skill.as_str()) && override_value(mode).is_ok())
+        .map(|(skill, mode)| (format!("CONTEXT_GARDEN_MODE_{}", skill.to_uppercase()), mode.clone()))
+        .collect()
+}
+
 /// Writes the modes into every repo and the garden root (terminals start there
 /// too). Returns one error line per folder that could not be updated.
 pub fn apply(garden: &Garden, modes: &BTreeMap<String, String>) -> Vec<String> {
@@ -222,6 +232,10 @@ mod tests {
         assert!(tmp.join(".claude/settings.local.json").is_file(), "garden root gets the modes too");
         assert_eq!(std::fs::read_to_string(broken.join(".claude/settings.local.json")).unwrap(), "{oops");
         assert!(tmp.join(".greenhouse/greenhouse.json").is_file());
+        let garden = Garden { skills: preset_modes("logs"), ..garden };
+        let env = mode_env(&garden);
+        assert!(env.contains(&("CONTEXT_GARDEN_MODE_COMPOST".into(), "on".into())), "{env:?}");
+        assert!(env.contains(&("CONTEXT_GARDEN_MODE_GREENHOUSE".into(), "manual".into())), "{env:?}");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }

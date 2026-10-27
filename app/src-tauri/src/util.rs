@@ -181,3 +181,66 @@ pub fn slugify(name: &str) -> String {
 pub fn estimate_tokens(text: &str) -> u64 {
     (text.len() as u64).div_ceil(4)
 }
+
+/// System clipboard through the platform's own tool (pbcopy, Set-Clipboard,
+/// wl-copy / xclip): the webview cannot see xterm's selection as a copyable
+/// one, and its clipboard API asks for permission on every paste.
+const CLIPBOARD_WRITE: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
+    &[("pbcopy", &[])]
+} else if cfg!(windows) {
+    &[(
+        "powershell",
+        &["-NoProfile", "-Command", "[Console]::InputEncoding=[Text.Encoding]::UTF8; Set-Clipboard -Value ([Console]::In.ReadToEnd())"],
+    )]
+} else {
+    &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"])]
+};
+
+const CLIPBOARD_READ: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
+    &[("pbpaste", &[])]
+} else if cfg!(windows) {
+    &[(
+        "powershell",
+        &["-NoProfile", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Raw"],
+    )]
+} else {
+    &[("wl-paste", &["--no-newline"]), ("xclip", &["-selection", "clipboard", "-o"])]
+};
+
+pub fn clipboard_write(text: &str) -> Result<(), String> {
+    use std::io::Write;
+    let (program, args) = CLIPBOARD_WRITE
+        .iter()
+        .find(|(p, _)| which(p).is_some())
+        .ok_or("no clipboard tool found (install wl-clipboard or xclip)")?;
+    let mut child = Command::new(program)
+        .args(*args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("could not run `{program}`: {e}"))?;
+    child.stdin.take().ok_or("no stdin")?.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("`{program}` exited with {status}"))
+    }
+}
+
+pub fn clipboard_read() -> Result<String, String> {
+    let (program, args) = CLIPBOARD_READ
+        .iter()
+        .find(|(p, _)| which(p).is_some())
+        .ok_or("no clipboard tool found (install wl-clipboard or xclip)")?;
+    let out = Command::new(program)
+        .args(*args)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .map_err(|e| format!("could not run `{program}`: {e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    // Get-Clipboard -Raw adds a line break of its own.
+    Ok(if cfg!(windows) { text.strip_suffix("\r\n").map(str::to_string).unwrap_or(text) } else { text })
+}
