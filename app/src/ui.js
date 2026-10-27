@@ -138,7 +138,8 @@ export function tokenDonut(accounts, days) {
           h("span", { class: "grow" }),
           h("b", {}, fmt(r.n)),
           h("span", { class: "faint pct" }, pct(r.n)))))),
-    h("div", { class: "tile-note" }, `Claude Code + Codex in this garden · ${sessions} sessions · last ${days} days · ${cache}% from cache`));
+    h("div", { class: "tile-note", title: "Claude Code and Codex sessions started in this garden's folders" },
+      `${sessions} sessions · ${days} days · ${cache}% from cache`));
 }
 
 export const SKILL_COLORS = {

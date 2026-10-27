@@ -56,13 +56,29 @@ export async function renderAccounts(app) {
       }
       show();
     };
+    const update = async (btn) => {
+      btn.disabled = true;
+      btn.textContent = "Updating…";
+      try {
+        await api.updatePlugin(p.id);
+        toast(`Skills updated for ${p.name}; new terminals load them`);
+      } catch (e) {
+        toast(errText(e), "error");
+      }
+      show();
+    };
     const show = async () => {
       const version = await api.pluginVersion(p.id).catch(() => null);
-      const has = !!version;
-      line.replaceChildren(...(has
-        ? [h("span", { class: "muted" }, `✓ context-garden ${version}`)]
-        : [h("span", { class: "warn" }, "No context-garden skills in this account"),
-          h("button", { class: "btn", onclick: (e) => install(e.target) }, "Install skills")]));
+      if (!version) {
+        return line.replaceChildren(h("span", { class: "warn" }, "No context-garden skills in this account"),
+          h("button", { class: "btn", onclick: (e) => install(e.target) }, "Install skills"));
+      }
+      line.replaceChildren(h("span", { class: "muted" }, `✓ context-garden ${version}`));
+      // Offline or GitHub unreachable: just no update hint.
+      if (await api.pluginOutdated(p.id).catch(() => false)) {
+        line.replaceChildren(h("span", { class: "warn", title: "main has changes these skills do not have yet" }, `context-garden ${version} · update available`),
+          h("button", { class: "btn", onclick: (e) => update(e.target) }, "Update skills"));
+      }
     };
     show();
     return line;

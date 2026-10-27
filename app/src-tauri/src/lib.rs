@@ -1,4 +1,4 @@
-//! Context Garden desktop app: Tauri commands the web UI calls.
+//! ContextGarden desktop app: Tauri commands the web UI calls.
 
 mod plugins;
 mod pty;
@@ -6,6 +6,7 @@ mod skills;
 mod sources;
 mod stats;
 mod store;
+mod updates;
 mod util;
 
 use serde::{Deserialize, Serialize};
@@ -377,6 +378,56 @@ fn profile_plugin_version(store: State<Store>, id: String) -> Result<Option<Stri
     })
 }
 
+/// The commit of main an account's skills were installed from, if known.
+fn installed_commit(dir: &Path) -> Option<String> {
+    std::fs::read_to_string(dir.join("plugins").join("installed_plugins.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| v["plugins"][PLUGIN][0]["gitCommitSha"].as_str().map(String::from))
+}
+
+/// Whether main has moved past the skills an account has. Claude accounts
+/// only: they record the commit they installed. Unknown counts as current.
+#[tauri::command]
+async fn profile_plugin_outdated(store: State<'_, Store>, id: String) -> Result<bool, String> {
+    let p = store.profiles()?.into_iter().find(|p| p.id == id).ok_or("that account no longer exists")?;
+    if p.agent != "claude" {
+        return Ok(false);
+    }
+    let Some(installed) = installed_commit(&expand_tilde(&p.dir)) else { return Ok(false) };
+    Ok(updates::main_commit()? != installed)
+}
+
+/// Pull the latest skills from main into an account; it stays switched off
+/// account-wide (gardens switch it on).
+#[tauri::command]
+async fn update_profile_plugin(store: State<'_, Store>, id: String) -> Result<(), String> {
+    let p = store.profiles()?.into_iter().find(|p| p.id == id).ok_or("that account no longer exists")?;
+    if p.agent != "claude" {
+        return Err("only Claude accounts can update here; reinstall the skills for Codex".into());
+    }
+    if which("claude").is_none() {
+        return Err("`claude` is not installed".into());
+    }
+    let env = [("CLAUDE_CONFIG_DIR", p.dir.as_str())];
+    run_env("claude", &["plugin", "marketplace", "update", MARKETPLACE.0], None, &env)?;
+    run_env("claude", &["plugin", "update", PLUGIN, "--scope", "user"], None, &env)?;
+    // Already off is fine; the update must not leave it on everywhere.
+    let _ = run_env("claude", &["plugin", "disable", PLUGIN, "--scope", "user"], None, &env);
+    Ok(())
+}
+
+/// A release newer than this app, if one is tagged.
+#[tauri::command]
+async fn app_update(app: AppHandle) -> Result<Option<updates::AppRelease>, String> {
+    updates::newer_release(&app.package_info().version.to_string())
+}
+
+#[tauri::command]
+fn open_repo_page(url: String) -> Result<(), String> {
+    updates::open_repo_page(&url)
+}
+
 /// Install the plugin into an account with the agent's own plugin commands,
 /// run against that account's config dir. Claude: disabled account-wide and
 /// enabled per garden folder (see skills.rs). Codex reads the same marketplace
@@ -727,6 +778,10 @@ pub fn run() {
         .manage(Cloning::default())
         .invoke_handler(tauri::generate_handler![
             add_garden_plugins,
+            app_update,
+            open_repo_page,
+            profile_plugin_outdated,
+            update_profile_plugin,
             clipboard_read,
             inspect_plugin_source,
             remove_garden_plugin,
@@ -758,7 +813,7 @@ pub fn run() {
             terminal_kill,
         ])
         .build(tauri::generate_context!())
-        .expect("failed to start Context Garden");
+        .expect("failed to start ContextGarden");
     app.run(|app, event| {
         if let RunEvent::Exit = event {
             app.state::<Ptys>().kill_all();
