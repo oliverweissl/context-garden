@@ -33,6 +33,12 @@ export const api = {
   addProfile: (name, agent, dir, icon, color) => invoke("add_profile", { name, agent, dir: dir || null, icon, color }),
   /** Installed context-garden version in an account, or null. */
   pluginVersion: (id) => invoke("profile_plugin_version", { id }),
+  /** True when main has newer skills than the account installed (Claude accounts). */
+  pluginOutdated: (id) => invoke("profile_plugin_outdated", { id }),
+  updatePlugin: (id) => invoke("update_profile_plugin", { id }),
+  /** { version, url } of a newer app release, or null. */
+  appUpdate: () => invoke("app_update"),
+  openRepoPage: (url) => invoke("open_repo_page", { url }),
   installPlugin: (id) => invoke("install_profile_plugin", { id }),
   removeProfile: (id) => invoke("remove_profile", { id }),
   copy: (text) => (mock ? navigator.clipboard.writeText(text) : invoke("clipboard_write", { text })),

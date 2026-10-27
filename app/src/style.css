@@ -149,8 +149,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .tile-value { font: 700 26px/1.2 var(--display); }
 .tile-note { font-size: 11px; color: var(--faint); }
 .token-split { grid-column: span 2; }
-.token-body { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
-.donut { width: 92px; height: 92px; flex: none; }
+.token-body { display: flex; align-items: center; gap: 14px; margin: 4px 0; }
+.donut { width: 64px; height: 64px; flex: none; }
 .donut circle:hover { filter: brightness(1.25); }
 .donut-value { font: 700 15px var(--display); fill: var(--text); }
 .donut-note { font-size: 8px; fill: var(--faint); }
@@ -337,3 +337,5 @@ th .sort .arrow { font-size: 8px; min-width: 8px; }
 .quick-flags { display: inline-flex; gap: 4px; }
 .chip.toggle { background: none; cursor: pointer; font: 600 11px var(--body); }
 .chip.toggle.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); background: var(--accent-soft); }
+
+.nav .update { margin-right: 14px; padding: 4px 12px; font-size: 12px; border-color: var(--accent); color: var(--accent); }
