@@ -118,6 +118,23 @@ out=$(G note "API versioning" "All public HTTP APIs are versioned under /v<N>; b
 assert_contains "note recorded" "$out" "p001 API versioning [orders-api]"
 out=$(G brief "add a breaking change to the orders http api")
 assert_contains "brief returns the platform note" "$out" "[p001] API versioning"
+# --- ranking: repos before notes, no empty headers, obsolete below live, exact slug wins
+out=$(G brief "add a breaking change to the orders http api")
+[ "$(grep -n 'Related repos:' <<<"$out" | cut -d: -f1)" -lt "$(grep -n 'Platform notes:' <<<"$out" | cut -d: -f1)" ] \
+  && echo "PASS: brief lists repos before platform notes" || { echo "FAIL: notes before repos"; echo "$out"; fail=1; }
+out=$(G brief "add a breaking change to the orders http api" --budget 5)
+assert_not_contains "brief: no empty section headers" "$out" "Related repos:"
+assert_contains "brief: says the matches did not fit" "$out" "raise --budget"
+mkdir -p "$WS/orders-legacy" && (cd "$WS/orders-legacy" && git init -q . && echo x > a.txt && commit i \
+  && G sync --summary "OBSOLETE orders http api, replaced by orders-api" >/dev/null)
+out=$(G brief "orders http api")
+[ "$(grep -n -- '- web:' <<<"$out" | cut -d: -f1)" -lt "$(grep -n -- '- orders-legacy' <<<"$out" | cut -d: -f1 || echo 99)" ] \
+  && echo "PASS: brief ranks an obsolete repo below a live one" || { echo "FAIL: obsolete repo ranked first"; echo "$out"; fail=1; }
+G forget orders-legacy >/dev/null && rm -rf "$WS/orders-legacy"
+out=$(cd "$WS" && G brief "change the shared-lib money type")
+assert_contains "brief: an exact slug in the task ranks that repo" "$(sed -n 3p <<<"$out")" "- shared-lib"
+assert_not_contains "brief from the workspace: no 'this repo has no card'" "$out" "has no card yet"
+cd "$WS/orders-api"
 G note "API versioning" "updated text" >/dev/null
 out=$(cat "$WS/.greenhouse/notes.json")
 assert_contains "same topic replaces the note" "$out" "updated text"
