@@ -53,6 +53,8 @@ pub struct GardenStats {
     pub groups: usize,
     pub namespaces: usize,
     pub dirty: usize,
+    /// Repos the garden lists whose folder is gone from disk.
+    pub missing: usize,
     pub agent_tokens: u64,
     pub seedbank_facts: usize,
     pub greenhouse_cards: Option<usize>,
@@ -88,6 +90,9 @@ fn repo_stats(repo: &crate::store::Repo) -> RepoStats {
         ..Default::default()
     };
     if !present {
+        if repo.ready() {
+            s.status = "missing".into(); // was on disk, folder deleted since
+        }
         return s;
     }
     s.branch = git(&["rev-parse", "--abbrev-ref", "HEAD"], path);
@@ -297,6 +302,7 @@ pub fn collect(garden: &Garden, profiles: &[Profile]) -> GardenStats {
     });
     GardenStats {
         dirty: repos.iter().filter(|r| r.changed > 0).count(),
+        missing: repos.iter().filter(|r| r.status == "missing").count(),
         agent_tokens: repos.iter().map(|r| r.agent_tokens).sum(),
         seedbank_facts: repos.iter().map(|r| r.seedbank_facts).sum(),
         groups: garden.group_inputs.len(),
@@ -335,6 +341,21 @@ mod tests {
         super::codex_usage(&home, &[std::path::PathBuf::from("/g")], cutoff, &mut use_);
         let _ = std::fs::remove_dir_all(&home);
         assert_eq!((use_.sessions, use_.input, use_.cache_read, use_.output), (1, 100, 200, 30));
+    }
+
+    #[test]
+    fn deleted_repo_is_missing_not_an_empty_repo() {
+        let repo = |status: &str| crate::store::Repo {
+            name: "gone".into(),
+            path: "/nonexistent/context-garden-test/gone".into(),
+            url: None,
+            source: None,
+            group: None,
+            status: status.into(),
+            error: None,
+        };
+        assert_eq!(super::repo_stats(&repo("cloned")).status, "missing");
+        assert_eq!(super::repo_stats(&repo("pending")).status, "pending"); // never was on disk
     }
 
     #[test]

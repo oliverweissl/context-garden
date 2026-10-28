@@ -5,6 +5,7 @@ import { planCard, SOURCES_HINT, LINK_HELP } from "./plant.js";
 import { skillPicker, pluginPanel } from "./skills.js";
 import { terminalArea } from "../terminals.js";
 import { gardenArt } from "../art.js";
+import { setPageSettings } from "./settings.js";
 
 export async function renderGarden(app, id) {
   let garden;
@@ -22,7 +23,7 @@ export async function renderGarden(app, id) {
   const boardSlot = h("div");
   let board = null;
   const repoTable = h("div", { class: "repo-table" }, h("div", { class: "faint small" }, "Reading garden…"));
-  const extra = h("div");
+  const missingSlot = h("div");
 
   // Repository table: click a header to sort by it, again to flip the order.
   let repos = [];
@@ -51,7 +52,7 @@ export async function renderGarden(app, id) {
             drawRepos();
           },
         }, label, h("span", { class: "arrow" }, k === key ? (desc ? "▼" : "▲") : "")))))),
-      h("tbody", {}, rows.map((r) => h("tr", { class: r.status === "failed" ? "bad" : "" },
+      h("tbody", {}, rows.map((r) => h("tr", { class: ["failed", "missing"].includes(r.status) ? "bad" : "" },
         h("td", {}, h("b", {}, r.name), h("div", { class: "faint small mono ellipsis" }, r.path)),
         h("td", { class: "mono small" }, r.branch || r.status),
         h("td", { class: "size", title: `${r.lines.toLocaleString()} lines · ${r.files.toLocaleString()} files` },
@@ -66,9 +67,10 @@ export async function renderGarden(app, id) {
     refreshBtn.classList.add("spin");
     try {
       const s = await api.stats(id);
-      const n = s.repos.length;
+      const n = s.repos.length - s.missing;
       tiles.replaceChildren(
-        tile("Repositories", n, s.groups ? `${s.groups} groups · ${s.namespaces} folders` : "added one by one"),
+        tile("Repositories", n, s.missing ? `${s.missing} deleted from disk`
+          : s.groups ? `${s.groups} groups · ${s.namespaces} folders` : "added one by one"),
         tile("Code", fmt(s.lines), `lines in ${fmt(s.files)} tracked files`),
         tile("Uncommitted", s.dirty, s.dirty === 1 ? "repo with changes" : "repos with changes", n ? s.dirty / n : 0),
         tile("Agent files", fmt(s.agent_tokens), "tokens always loaded (AGENTS.md + CLAUDE.md)"),
@@ -77,6 +79,12 @@ export async function renderGarden(app, id) {
           s.greenhouse_cards == null ? null : n ? s.greenhouse_cards / n : 0),
         tokenDonut(s.accounts, s.days));
       langs.replaceChildren(languageBar(s.languages));
+      missingSlot.replaceChildren(s.missing ? h("div", { class: "card row between" },
+        h("span", { class: "small" }, `${s.missing} ${s.missing === 1 ? "repository was" : "repositories were"} deleted from disk.`),
+        h("button", {
+          class: "btn",
+          onclick: async () => { garden = await api.forgetMissing(id); refresh(); },
+        }, "Remove from garden")) : "");
       repos = s.repos;
       drawRepos();
     } catch (e) {
@@ -147,29 +155,38 @@ export async function renderGarden(app, id) {
       preview);
   };
 
-  const toggle = (panel, build) => async () => {
-    if (extra.dataset.panel === panel) {
-      extra.dataset.panel = "";
-      return extra.replaceChildren();
-    }
-    extra.dataset.panel = panel;
-    extra.replaceChildren(await build());
+  /** The repository table, with adding more in the same popup. */
+  const openRepos = () => {
+    const addSlot = h("div");
+    const addBtn = h("button", { class: "btn primary" }, "+ Add repositories or groups");
+    const m = modal(`${garden.repos.length} repositories`, h("div", { class: "repos-pop" },
+      h("div", { class: "row end" }, addBtn), addSlot, repoTable), { wide: true });
+    addBtn.onclick = () => {
+      addBtn.hidden = true;
+      addSlot.replaceChildren(h("div", { class: "card add-inline" }, addPanel(m.close)));
+      addSlot.querySelector("textarea")?.focus();
+    };
   };
 
-  const openRepos = () => modal(`${garden.repos.length} repositories`, repoTable, { wide: true });
-  const openAdd = () => {
-    const m = modal("Add repositories or groups", h("div"), { wide: true });
-    m.body.replaceChildren(addPanel(m.close));
-  };
-  const openSkills = async () => {
-    const m = modal("Skills", h("div", { class: "faint small" }, "Loading…"), { wide: true });
-    m.body.replaceChildren(await skillPicker(garden, (modes) => {
+  // This garden's part of Settings (the gear in the top bar), in front of Accounts.
+  setPageSettings([
+    { name: "Skills", build: async (close) => skillPicker(garden, (modes) => {
       garden.skills = modes;
       dots.replaceChildren(...skillDots());
-      m.close();
+      close();
       refresh();
-    }), pluginPanel(garden));
-  };
+    }) },
+    { name: "External plugins", build: () => pluginPanel(garden) },
+    { name: "Garden", build: () => h("div", { class: "card skills" },
+      h("h3", {}, garden.name),
+      h("div", { class: "faint small mono" }, garden.root),
+      h("div", { class: "row between" },
+        h("span", { class: "small" }, "Remove this garden from the app? Repositories on disk are not touched."),
+        h("button", {
+          class: "btn danger",
+          onclick: async () => { await api.forget(id); location.hash = "#/"; },
+        }, "Remove garden"))) },
+  ]);
 
   const head = h("div", { class: "garden-head" },
     gardenArt(garden.id, garden.repos.length),
@@ -178,21 +195,10 @@ export async function renderGarden(app, id) {
       h("div", { class: "faint small mono" }, garden.root)),
     dots,
     h("span", { class: "grow" }),
-    h("button", { class: "btn", onclick: openRepos }, "Repos"),
-    h("button", { class: "btn", onclick: openAdd }, "Add"),
-    h("button", { class: "btn", onclick: openSkills }, "Skills"),
-    h("button", {
-      class: "btn ghost",
-      onclick: toggle("forget", () => h("div", { class: "card row between" },
-        h("span", { class: "small" }, "Remove this garden from the app? Repositories on disk are not touched."),
-        h("button", {
-          class: "btn danger",
-          onclick: async () => { await api.forget(id); location.hash = "#/"; },
-        }, "Remove"))),
-    }, "…"));
+    h("button", { class: "btn", onclick: openRepos }, "Repositories"));
 
   const terms = await terminalArea(garden);
-  app.append(h("div", { class: "dash" }, head, tiles, h("div", { class: "dash-meta" }, langs, refreshBtn), extra, boardSlot), terms.el);
+  app.append(h("div", { class: "dash" }, head, tiles, missingSlot, h("div", { class: "dash-meta" }, langs, refreshBtn), boardSlot), terms.el);
   refresh();
   if (!garden.repos.every((r) => READY.has(r.status))) showBoard();
   return () => { board?.dispose(); terms.dispose(); };

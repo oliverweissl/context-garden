@@ -42,6 +42,7 @@ const handlers = {
     warnings: ["https://github.com/acme-old: gh: Not Found (HTTP 404)"], repo_inputs: [], group_inputs: ["x"],
   }),
   retry_repos: ({ id }) => gardens.find((g) => g.id === id),
+  forget_missing_repos: ({ id }) => gardens.find((g) => g.id === id),
   add_to_garden: ({ id }) => gardens.find((g) => g.id === id),
   recommend_skills: () => ({ preset: "platform", reason: "6 repositories: greenhouse shares what each repo provides.", modes: gardens[0].skills, presets }),
   apply_skills: () => [],
@@ -54,7 +55,7 @@ const handlers = {
       })),
       files: 1200, lines: 100900,
       languages: { ts: 41000, py: 22000, rs: 15000, md: 8000, json: 6000, yaml: 3000, sql: 2400, sh: 1200, other: 2300 },
-      groups: g.group_inputs.length, namespaces: 1, dirty: 2, agent_tokens: 3800, seedbank_facts: 15, greenhouse_cards: 6,
+      groups: g.group_inputs.length, namespaces: 1, dirty: 2, missing: 0, agent_tokens: 3800, seedbank_facts: 15, greenhouse_cards: 6,
       accounts: [
         { name: "Work", agent: "claude", icon: "◆", color: "#5bb0ff", sessions: 29, input: 90000, output: 260000, cache_read: 6100000, cache_write: 420000 },
         { name: "Personal", agent: "claude", icon: "✿", color: "#ff7a8f", sessions: 8, input: 20000, output: 80000, cache_read: 2300000, cache_write: 160000 },
@@ -70,6 +71,13 @@ const handlers = {
   ],
   list_profiles: () => [{ id: "claude-work", name: "work", agent: "claude", dir: "~/.claude-work", icon: "★", color: "#f0b43c" }],
   profile_plugin_version: () => "0.3.1",
+  profile_plugin_outdated: () => true,
+  account_plugins: () => [
+    { id: "context-garden@context-garden", version: "0.4.2", latest: null, stamp: "a" },
+    { id: "ase@ase", version: "1.0.0", latest: "1.1.0", stamp: "b" },
+  ],
+  update_account_plugin: () => null,
+  terminal_locations: ({ panes }) => Object.fromEntries(panes.map((p) => [p.key, "ledger"])),
   terminal_spawn: ({ onEvent }) => {
     setTimeout(() => onEvent.onmessage({ event: "output", data: btoa("mock terminal $ ") }), 50);
     return 1;

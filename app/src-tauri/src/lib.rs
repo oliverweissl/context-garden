@@ -1,5 +1,6 @@
 //! ContextGarden desktop app: Tauri commands the web UI calls.
 
+mod accounts;
 mod plugins;
 mod pty;
 mod skills;
@@ -222,6 +223,16 @@ fn retry_repos(app: AppHandle, id: String, paths: Vec<String>) -> Result<Garden,
     })
 }
 
+/// Drop repos whose folder was deleted from disk. Repos still being fetched
+/// (or that failed) are kept: they were never on disk.
+#[tauri::command]
+fn forget_missing_repos(store: State<Store>, id: String) -> Result<Garden, String> {
+    store.update_garden(&id, |g| {
+        g.repos.retain(|r| !r.ready() || Path::new(&r.path).is_dir());
+        Ok(g.clone())
+    })
+}
+
 /// Forget a garden. Files on disk are never touched.
 #[tauri::command]
 fn forget_garden(store: State<Store>, id: String) -> Result<(), String> {
@@ -378,43 +389,57 @@ fn profile_plugin_version(store: State<Store>, id: String) -> Result<Option<Stri
     })
 }
 
-/// The commit of main an account's skills were installed from, if known.
-fn installed_commit(dir: &Path) -> Option<String> {
-    std::fs::read_to_string(dir.join("plugins").join("installed_plugins.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-        .and_then(|v| v["plugins"][PLUGIN][0]["gitCommitSha"].as_str().map(String::from))
-}
-
-/// Whether main has moved past the skills an account has. Claude accounts
-/// only: they record the commit they installed. Unknown counts as current.
+/// Whether main has moved past the skills an account has: Claude records the
+/// commit it installed, Codex keeps a checkout of the marketplace. Unknown
+/// counts as current.
 #[tauri::command]
 async fn profile_plugin_outdated(store: State<'_, Store>, id: String) -> Result<bool, String> {
     let p = store.profiles()?.into_iter().find(|p| p.id == id).ok_or("that account no longer exists")?;
-    if p.agent != "claude" {
-        return Ok(false);
-    }
-    let Some(installed) = installed_commit(&expand_tilde(&p.dir)) else { return Ok(false) };
+    let Some(installed) = accounts::installed_commit(&p.agent, &expand_tilde(&p.dir), PLUGIN) else { return Ok(false) };
     Ok(updates::main_commit()? != installed)
 }
 
-/// Pull the latest skills from main into an account; it stays switched off
-/// account-wide (gardens switch it on).
+/// The config dir of an account, or of the agent's default login.
+fn account_dir(store: &Store, agent: Option<&str>, profile: Option<&str>) -> Result<(String, std::path::PathBuf), String> {
+    match profile.filter(|p| !p.is_empty()) {
+        Some(pid) => {
+            let p = store.profiles()?.into_iter().find(|p| p.id == pid).ok_or("that account no longer exists")?;
+            let dir = accounts::config_dir(&p.agent, Some(&p.dir));
+            Ok((p.agent, dir))
+        }
+        None => {
+            let agent = agent.ok_or("name an agent or an account")?;
+            Ok((agent.to_string(), accounts::config_dir(agent, None)))
+        }
+    }
+}
+
+/// Plugins installed in an account (or the agent's default login), with the
+/// newer version its marketplace copy has, if any.
+#[tauri::command]
+fn account_plugins(store: State<Store>, agent: Option<String>, profile: Option<String>) -> Result<Vec<accounts::Installed>, String> {
+    let (agent, dir) = account_dir(&store, agent.as_deref(), profile.as_deref())?;
+    Ok(accounts::installed(&agent, &dir))
+}
+
+/// Update one plugin of an account to its marketplace's newest version.
+#[tauri::command]
+async fn update_account_plugin(
+    store: State<'_, Store>,
+    agent: Option<String>,
+    profile: Option<String>,
+    plugin: String,
+) -> Result<(), String> {
+    let (agent, dir) = account_dir(&store, agent.as_deref(), profile.as_deref())?;
+    accounts::update(&agent, &dir, &plugin)
+}
+
+/// Pull the latest skills from main into an account; Claude keeps them
+/// switched off account-wide (gardens switch them on).
 #[tauri::command]
 async fn update_profile_plugin(store: State<'_, Store>, id: String) -> Result<(), String> {
-    let p = store.profiles()?.into_iter().find(|p| p.id == id).ok_or("that account no longer exists")?;
-    if p.agent != "claude" {
-        return Err("only Claude accounts can update here; reinstall the skills for Codex".into());
-    }
-    if which("claude").is_none() {
-        return Err("`claude` is not installed".into());
-    }
-    let env = [("CLAUDE_CONFIG_DIR", p.dir.as_str())];
-    run_env("claude", &["plugin", "marketplace", "update", MARKETPLACE.0], None, &env)?;
-    run_env("claude", &["plugin", "update", PLUGIN, "--scope", "user"], None, &env)?;
-    // Already off is fine; the update must not leave it on everywhere.
-    let _ = run_env("claude", &["plugin", "disable", PLUGIN, "--scope", "user"], None, &env);
-    Ok(())
+    let (agent, dir) = account_dir(&store, None, Some(&id))?;
+    accounts::update(&agent, &dir, PLUGIN)
 }
 
 /// A release newer than this app, if one is tagged.
@@ -674,7 +699,7 @@ fn terminal_spawn(
     on_event: Channel<PtyEvent>,
 ) -> Result<u32, String> {
     let g = store.garden(&garden)?;
-    let allowed = cwd == g.root || g.repos.iter().any(|r| r.path == cwd);
+    let allowed = spawn_folders(&g).contains(&cwd);
     if !allowed || !Path::new(&cwd).is_dir() {
         return Err(format!("{cwd} is not a folder of this garden"));
     }
@@ -715,6 +740,72 @@ fn terminal_spawn(
         command = Some(agent_command(&agent, bin, &config, session.as_deref(), resume, &flags));
     }
     ptys.spawn(Launch { command, cwd, env, cols, rows }, on_event)
+}
+
+/// Where terminals may start: the garden root, its repos, and the folders
+/// between them (groups and namespaces of a nested garden).
+fn spawn_folders(g: &Garden) -> HashSet<String> {
+    let root = Path::new(&g.root);
+    let mut out: HashSet<String> = HashSet::from([g.root.clone()]);
+    for r in g.repos.iter().filter(|r| r.ready()) {
+        out.insert(r.path.clone());
+        let mut dir = Path::new(&r.path).parent();
+        while let Some(d) = dir.filter(|d| d.starts_with(root) && *d != root) {
+            out.insert(d.to_string_lossy().into());
+            dir = d.parent();
+        }
+    }
+    out
+}
+
+#[derive(Deserialize)]
+struct PaneRef {
+    key: String,
+    agent: Option<String>,
+    profile: Option<String>,
+    session: Option<String>,
+    cwd: String,
+    /// When the pane started, in seconds (finds its Codex rollout).
+    started: u64,
+}
+
+/// Where each agent pane is working now, as the garden names it: the repo
+/// (or folder under the root) its newest tool call touched. Panes with no
+/// trace yet are left out.
+#[tauri::command]
+fn terminal_locations(store: State<Store>, id: String, panes: Vec<PaneRef>) -> Result<BTreeMap<String, String>, String> {
+    let g = store.garden(&id)?;
+    let mut out = BTreeMap::new();
+    for pane in panes {
+        let Ok((agent, dir)) = account_dir(&store, pane.agent.as_deref(), pane.profile.as_deref()) else { continue };
+        let at = match agent.as_str() {
+            "claude" => pane.session.as_deref().filter(|s| valid_session(s)).and_then(|s| accounts::claude_location(&dir, s)),
+            "codex" => accounts::codex_location(&dir, &pane.cwd, pane.started),
+            _ => None,
+        };
+        if let Some(label) = at.and_then(|p| garden_label(&g, &p)) {
+            out.insert(pane.key, label);
+        }
+    }
+    Ok(out)
+}
+
+/// A path as the garden names it: its repo, else its folder under the root,
+/// else the path itself.
+fn garden_label(g: &Garden, path: &Path) -> Option<String> {
+    let repo = g
+        .repos
+        .iter()
+        .filter(|r| path.starts_with(&r.path))
+        .max_by_key(|r| r.path.len());
+    if let Some(r) = repo {
+        return Some(r.name.clone());
+    }
+    match path.strip_prefix(&g.root) {
+        Ok(rel) if rel.as_os_str().is_empty() => Some("garden root".into()),
+        Ok(rel) => Some(rel.to_string_lossy().into()),
+        Err(_) => Some(path.to_string_lossy().replacen(&home_dir().to_string_lossy().to_string(), "~", 1)),
+    }
 }
 
 /// Remember a garden's terminals (open ones and recently closed), newest first.
@@ -782,6 +873,9 @@ pub fn run() {
             open_repo_page,
             profile_plugin_outdated,
             update_profile_plugin,
+            account_plugins,
+            update_account_plugin,
+            terminal_locations,
             clipboard_read,
             inspect_plugin_source,
             remove_garden_plugin,
@@ -798,6 +892,7 @@ pub fn run() {
             profile_plugin_version,
             install_profile_plugin,
             forget_garden,
+            forget_missing_repos,
             rename_garden,
             recommend_skills,
             apply_skills,

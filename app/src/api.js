@@ -19,6 +19,7 @@ export const api = {
   }),
   retry: (id, paths = []) => invoke("retry_repos", { id, paths }),
   forget: (id) => invoke("forget_garden", { id }),
+  forgetMissing: (id) => invoke("forget_missing_repos", { id }),
   rename: (id, name) => invoke("rename_garden", { id, name }),
   recommend: (id) => invoke("recommend_skills", { id }),
   applySkills: (id, modes) => invoke("apply_skills", { id, modes }),
@@ -36,6 +37,10 @@ export const api = {
   /** True when main has newer skills than the account installed (Claude accounts). */
   pluginOutdated: (id) => invoke("profile_plugin_outdated", { id }),
   updatePlugin: (id) => invoke("update_profile_plugin", { id }),
+  /** Plugins of an account, or of an agent's default login: [{ id, version, latest, stamp }]. */
+  accountPlugins: (agent, profile) => invoke("account_plugins", { agent: agent || null, profile: profile || null }),
+  updateAccountPlugin: (agent, profile, plugin) =>
+    invoke("update_account_plugin", { agent: agent || null, profile: profile || null, plugin }),
   /** { version, url } of a newer app release, or null. */
   appUpdate: () => invoke("app_update"),
   openRepoPage: (url) => invoke("open_repo_page", { url }),
@@ -55,6 +60,8 @@ export const api = {
   /** First prompt of each saved Claude terminal, by key. */
   terminalPreviews: (id) => invoke("terminal_previews", { id }).then((m) => m || {}),
   saveTerminals: (id, terminals) => invoke("save_terminals", { id, terminals }),
+  /** Where each agent pane works now, by pane key (repo name or folder). */
+  terminalLocations: (id, panes) => invoke("terminal_locations", { id, panes }).then((m) => m || {}),
   /** Terminal running an account's sign-in. */
   login: ({ profile, cols, rows }, onOutput, onExit) =>
     pty("profile_login", { id: profile, cols, rows }, onOutput, onExit),

@@ -17,12 +17,15 @@ export function h(tag, attrs = {}, ...children) {
 }
 
 let toastTimer;
+/** Message at the bottom; long ones stay longer. A click closes it. */
 export function toast(text, kind = "info") {
   const el = document.getElementById("toast");
   el.textContent = text;
   el.className = `toast show ${kind}`;
+  el.onclick = () => (el.className = "toast");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (el.className = "toast"), kind === "error" ? 6000 : 3000);
+  const ms = Math.min(20000, (kind === "error" ? 6000 : 3000) + 50 * String(text).length);
+  toastTimer = setTimeout(() => (el.className = "toast"), ms);
 }
 
 export function setCrumbs(...parts) {
