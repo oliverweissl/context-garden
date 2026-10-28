@@ -23,6 +23,7 @@ export async function renderGarden(app, id) {
   let board = null;
   const repoTable = h("div", { class: "repo-table" }, h("div", { class: "faint small" }, "Reading garden…"));
   const extra = h("div");
+  const missingSlot = h("div");
 
   // Repository table: click a header to sort by it, again to flip the order.
   let repos = [];
@@ -51,7 +52,7 @@ export async function renderGarden(app, id) {
             drawRepos();
           },
         }, label, h("span", { class: "arrow" }, k === key ? (desc ? "▼" : "▲") : "")))))),
-      h("tbody", {}, rows.map((r) => h("tr", { class: r.status === "failed" ? "bad" : "" },
+      h("tbody", {}, rows.map((r) => h("tr", { class: ["failed", "missing"].includes(r.status) ? "bad" : "" },
         h("td", {}, h("b", {}, r.name), h("div", { class: "faint small mono ellipsis" }, r.path)),
         h("td", { class: "mono small" }, r.branch || r.status),
         h("td", { class: "size", title: `${r.lines.toLocaleString()} lines · ${r.files.toLocaleString()} files` },
@@ -66,9 +67,10 @@ export async function renderGarden(app, id) {
     refreshBtn.classList.add("spin");
     try {
       const s = await api.stats(id);
-      const n = s.repos.length;
+      const n = s.repos.length - s.missing;
       tiles.replaceChildren(
-        tile("Repositories", n, s.groups ? `${s.groups} groups · ${s.namespaces} folders` : "added one by one"),
+        tile("Repositories", n, s.missing ? `${s.missing} deleted from disk`
+          : s.groups ? `${s.groups} groups · ${s.namespaces} folders` : "added one by one"),
         tile("Code", fmt(s.lines), `lines in ${fmt(s.files)} tracked files`),
         tile("Uncommitted", s.dirty, s.dirty === 1 ? "repo with changes" : "repos with changes", n ? s.dirty / n : 0),
         tile("Agent files", fmt(s.agent_tokens), "tokens always loaded (AGENTS.md + CLAUDE.md)"),
@@ -77,6 +79,12 @@ export async function renderGarden(app, id) {
           s.greenhouse_cards == null ? null : n ? s.greenhouse_cards / n : 0),
         tokenDonut(s.accounts, s.days));
       langs.replaceChildren(languageBar(s.languages));
+      missingSlot.replaceChildren(s.missing ? h("div", { class: "card row between" },
+        h("span", { class: "small" }, `${s.missing} ${s.missing === 1 ? "repository was" : "repositories were"} deleted from disk.`),
+        h("button", {
+          class: "btn",
+          onclick: async () => { garden = await api.forgetMissing(id); refresh(); },
+        }, "Remove from garden")) : "");
       repos = s.repos;
       drawRepos();
     } catch (e) {
@@ -192,7 +200,7 @@ export async function renderGarden(app, id) {
     }, "…"));
 
   const terms = await terminalArea(garden);
-  app.append(h("div", { class: "dash" }, head, tiles, h("div", { class: "dash-meta" }, langs, refreshBtn), extra, boardSlot), terms.el);
+  app.append(h("div", { class: "dash" }, head, tiles, missingSlot, h("div", { class: "dash-meta" }, langs, refreshBtn), extra, boardSlot), terms.el);
   refresh();
   if (!garden.repos.every((r) => READY.has(r.status))) showBoard();
   return () => { board?.dispose(); terms.dispose(); };

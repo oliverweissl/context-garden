@@ -222,6 +222,16 @@ fn retry_repos(app: AppHandle, id: String, paths: Vec<String>) -> Result<Garden,
     })
 }
 
+/// Drop repos whose folder was deleted from disk. Repos still being fetched
+/// (or that failed) are kept: they were never on disk.
+#[tauri::command]
+fn forget_missing_repos(store: State<Store>, id: String) -> Result<Garden, String> {
+    store.update_garden(&id, |g| {
+        g.repos.retain(|r| !r.ready() || Path::new(&r.path).is_dir());
+        Ok(g.clone())
+    })
+}
+
 /// Forget a garden. Files on disk are never touched.
 #[tauri::command]
 fn forget_garden(store: State<Store>, id: String) -> Result<(), String> {
@@ -798,6 +808,7 @@ pub fn run() {
             profile_plugin_version,
             install_profile_plugin,
             forget_garden,
+            forget_missing_repos,
             rename_garden,
             recommend_skills,
             apply_skills,
