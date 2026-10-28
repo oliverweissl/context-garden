@@ -215,7 +215,7 @@ def process_and_store(
     prev_run_id = store.previous_run_for(command_str)
     try:
         prev_meta = store.load_meta(prev_run_id) if prev_run_id else None
-    except (FileNotFoundError, ValueError):
+    except FileNotFoundError:
         prev_meta = None
     curr_sig_map = {
         e["signature"]: {"message": e["message"], "count": e["count"]} for e in events_index
@@ -465,8 +465,9 @@ def _signal_name(num: int) -> str:
 
 
 def _finish(args, store: Store, run_id: str, result: dict) -> None:
+    # summary first: a failing eviction must not hide a finished run
+    print(json.dumps(result, indent=2) if args.json else render_human(result), flush=True)
     store.gc(protect=(run_id,))
-    print(json.dumps(result, indent=2) if args.json else render_human(result))
 
 
 def cmd_run(args, store: Store) -> int:

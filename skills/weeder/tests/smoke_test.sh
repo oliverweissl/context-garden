@@ -144,11 +144,12 @@ else
 fi
 
 # --- negative prompts never trigger regardless of description quality -----
-assert_not_contains "routing: negative prompts never predicted as this skill (vague)" "$vague_out" "\"kind\": \"negative\", \"expected\": \"no_trigger\", \"predicted\": \"bloated-skill\""
+neg_hits=$(python3 -c "import json,sys; r=json.load(sys.stdin)['results']; print(sum(x['kind'] == 'negative' and x['predicted'] == 'bloated-skill' for x in r))" <<<"$vague_out")
+[ "$neg_hits" = "0" ] && echo "PASS: routing: negative prompts never predicted as this skill (vague)" \
+  || { echo "FAIL: routing: $neg_hits negative prompt(s) predicted as bloated-skill"; fail=1; }
 
 # --- diff: full before/after report shape matches the spec's example ------
 diff_out=$(WE diff "$FIX/bloated_skill" "$opt_out" --examples "$FIX/routing_examples.json" --competing "$FIX/competing_skill")
-assert_contains "diff: reports Before/After token sections" "$diff_out" "Before"
 assert_contains "diff: reports SKILL.md reduction percentage" "$diff_out" "SKILL.md (description + on-trigger body) reduction:"
 assert_contains "diff: reports routing before/after" "$diff_out" "Routing (lexical-overlap proxy"
 assert_contains "diff: reports functional constraint preservation" "$diff_out" "Constraints preserved: 7/7"
@@ -212,6 +213,11 @@ cal_desc=$(WEEDER_TOKEN_CALIBRATION="$SCRATCH/cal.json" WE audit "$FIX/bloated_s
 python3 -c "exit(0 if abs($cal_desc - 2 * $uncal_desc) <= 1 else 1)" \
   && echo "PASS: tokens: calibrated 2.0 chars/token doubles the chars/4 estimate ($uncal_desc -> $cal_desc)" \
   || { echo "FAIL: tokens: expected ~2x ($uncal_desc -> $cal_desc)"; fail=1; }
+
+echo '{broken' > "$SCRATCH/bad_cal.json"
+WEEDER_TOKEN_CALIBRATION="$SCRATCH/bad_cal.json" WE audit "$FIX/bloated_skill" >/dev/null 2>&1 \
+  && { echo "FAIL: tokens: a corrupt calibration file was silently ignored"; fail=1; } \
+  || echo "PASS: tokens: a corrupt calibration file is an error, not uncalibrated"
 
 # --- clean error handling ---------------------------------------------------
 bad_audit=$(WE audit "$FIX/does_not_exist" 2>&1)

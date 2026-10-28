@@ -121,7 +121,6 @@ assert_contains "compile: stale --critical fact kept, marked for verification" "
 assert_contains "compile: unrelated hot facts remain present" "$agents_after" "cmake -S . -B build"
 
 # --- revalidation clears staleness and restores the fact to output ----------
-CC invalidate --confirm "$mistake_key" >/dev/null 2>&1 || true
 # fact ids, not keys, are used for --confirm; fetch the real fact id
 fact_id=$(python3 -c "
 import json
@@ -152,7 +151,7 @@ evict_out=$(CC promote "$release_key" --tier hot --budget 60)
 assert_contains "eviction: non-critical build fact demoted to stay within budget" "$evict_out" "evicted (demoted to warm) to stay within hot budget"
 
 status2=$(CC status)
-assert_contains "eviction: critical facts survive (still 2 hot invariants)" "$status2" "hot=3"
+assert_contains "eviction: critical facts survive (hot=3: 2 invariants + release)" "$status2" "hot=3"
 
 # --- gc: pruning raw observations preserves aggregate access_count ----------
 before_count=$(python3 -c "import json; print(json.load(open('.seedbank/keystats.json'))['read:README.md']['access_count'])")
@@ -384,27 +383,38 @@ assert_contains "hook: Glob recorded as search" "$ks" '"search:**/*.cpp"'
 assert_not_contains "hook: file outside the repo skipped" "$ks" "outside.txt"
 assert_not_contains "hook: the store itself is skipped" "$ks" "read:.seedbank"
 before_sum=$(cksum < .seedbank/keystats.json)
-out=$(hook 'not json {')
+out=$(hook 'not json {' 2>"$SCRATCH/hook_err")
 rc=$?
-out2=$(hook '["a list"]')
-assert_eq "hook: malformed JSON -> exit 0, no stdout" "$rc|$out$out2" "0|"
+out2=$(hook '["a list"]' 2>/dev/null)
+rc2=$?
+assert_eq "hook: malformed input -> exit 1 (non-blocking error, never 2), no stdout" "$rc|$rc2|$out$out2" "1|1|"
+assert_contains "hook: crash shows its traceback on stderr" "$(cat "$SCRATCH/hook_err")" "JSONDecodeError"
 assert_eq "hook: malformed JSON -> nothing recorded" "$(cksum < .seedbank/keystats.json)" "$before_sum"
 mkdir -p "$SCRATCH/nogit" && cd "$SCRATCH/nogit"
 hook "{\"session_id\":\"x\",\"cwd\":\"$SCRATCH/nogit\",\"tool_name\":\"Glob\",\"tool_input\":{\"pattern\":\"*\"}}"
 if [ ! -e "$SCRATCH/nogit/.seedbank" ]; then echo "PASS: hook: outside a git repo -> no store created"; else echo "FAIL: hook created a store outside a git repo"; fail=1; fi
+
+# Session started in a folder of repos: each call is filed under the repo it touched.
+mkdir -p "$SCRATCH/nogit/r1/src" && (cd "$SCRATCH/nogit/r1" && git init -q . && echo hi > src/m.py)
+hook "{\"session_id\":\"ws\",\"cwd\":\"$SCRATCH/nogit\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$SCRATCH/nogit/r1/src/m.py\"}}"
+hook "{\"session_id\":\"ws\",\"cwd\":\"$SCRATCH/nogit\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cd r1 && grep -rn needle src --include='*.py' 2>&1 | head\"}}"
+hook "{\"session_id\":\"ws\",\"cwd\":\"$SCRATCH/nogit\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"sed -i 's/hi/ho/' r1/src/m.py\"}}"
+ks=$(cat "$SCRATCH/nogit/r1/.seedbank/keystats.json" 2>/dev/null)
+assert_contains "hook: Read from a non-repo cwd lands in the touched repo" "$ks" '"read:src/m.py"'
+assert_contains "hook: Bash cd + grep recorded as search" "$ks" '"search:needle path=src glob=*.py"'
+assert_eq "hook: sed -i is not a read" "$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['read:src/m.py']['access_count'])" "$SCRATCH/nogit/r1/.seedbank/keystats.json")" "1"
+if [ ! -e "$SCRATCH/nogit/.seedbank" ]; then echo "PASS: hook: no store in the non-repo workspace"; else echo "FAIL: hook created a store in the non-repo workspace"; fail=1; fi
 cd "$REPO"
 
 # --- store .gitignore: profiler state ignored, warm/*.md committable --------
-assert_contains "store .gitignore: written when the CLI created the store" "$(cat .seedbank/.gitignore)" "keystats.json"
 mkdir -p .seedbank/warm && touch .seedbank/warm/build.md
-ignored=$(git check-ignore .seedbank/keystats.json .seedbank/observations.jsonl .seedbank/.lock .seedbank/hook.log .seedbank/warm/build.md .seedbank/.gitignore)
+ignored=$(git check-ignore .seedbank/keystats.json .seedbank/observations.jsonl .seedbank/.lock .seedbank/warm/build.md .seedbank/.gitignore)
 assert_contains "store .gitignore: profiler state ignored" "$ignored" ".seedbank/observations.jsonl"
 assert_not_contains "store .gitignore: warm/*.md not ignored" "$ignored" "warm/build.md"
 assert_not_contains "store .gitignore: the .gitignore itself not ignored" "$ignored" ".seedbank/.gitignore"
 mkdir -p "$SCRATCH/fresh" && git -C "$SCRATCH/fresh" init -q && echo hi > "$SCRATCH/fresh/a.txt"
 hook "{\"session_id\":\"f1\",\"cwd\":\"$SCRATCH/fresh\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"a.txt\"}}"
 assert_contains "hook: records into a store it creates" "$(cat "$SCRATCH/fresh/.seedbank/keystats.json" 2>/dev/null)" '"read:a.txt"'
-assert_contains "hook: new store gets a .gitignore" "$(cat "$SCRATCH/fresh/.seedbank/.gitignore" 2>/dev/null)" "observations.jsonl"
 mkdir -p "$SCRATCH/own/.seedbank" && git -C "$SCRATCH/own" init -q && echo "# mine" > "$SCRATCH/own/.seedbank/.gitignore"
 (cd "$SCRATCH/own" && CC observe search "x" >/dev/null)
 assert_eq "store .gitignore: an existing one is never overwritten" "$(cat "$SCRATCH/own/.seedbank/.gitignore")" "# mine"

@@ -21,8 +21,8 @@ lives in `<git repo root>/.seedbank/`.
 1. **Start:** read `AGENTS.md`. If it answers your question, skip
    re-discovery.
 2. **While working**, log only "how does this repo work" discoveries, not
-   every file you touch (with the plugin hook, Read/Grep/Glob are logged
-   automatically):
+   every file you touch (with the plugin hook, Read/Grep/Glob and
+   read-only Bash such as cat/sed/grep/rg/find are logged automatically):
    ```
    bin/seedbank observe run --scope <topic> -- <command...>
    bin/seedbank observe mistake "<rule you broke>" --scope invariants [--source <file>]

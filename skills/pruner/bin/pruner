@@ -5,10 +5,11 @@ if [ "${1:-}" = "mode" ]; then
   shift; exec python3 "$DIR/scripts/cg_mode.py" pruner "$@"
 fi
 if [ "${1:-}" = "hook" ]; then
-  # Claude Code UserPromptSubmit hook: stdout is the hook's JSON answer; never
-  # fails the prompt. Runs only while pruner is on.
-  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" pruner --is-on) 2>/dev/null || exit 0
-  python3 "$DIR/scripts/pr_hook.py" 2>/dev/null
-  exit 0
+  # Claude Code hook. Not on: silent no-op. A crash exits 1 with its traceback on
+  # stderr, which Claude Code shows as a non-blocking hook error.
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" pruner --is-on)
+  case $? in 0) ;; 3) exit 0 ;; *) exit 1 ;; esac
+  python3 "$DIR/scripts/pr_hook.py"
+  rc=$?; [ "$rc" -eq 2 ] && exit 1; exit "$rc"  # 2 would block the tool call
 fi
 exec python3 "$DIR/scripts/pruner.py" "$@"

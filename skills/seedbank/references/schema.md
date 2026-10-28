@@ -48,9 +48,13 @@ conflicts. `--replace FACT_ID` deletes that fact and promotes the new one;
 
 ## `seedbank hook`
 
-Claude Code `PostToolUse` entry point for `Read|Grep|Glob` (setup:
-`references/guide.md`). Skips files outside the repo and under `.git/` or
-`.seedbank/`; errors go to `.seedbank/hook.log`.
+Claude Code `PostToolUse` entry point for `Read|Grep|Glob|Bash` (setup:
+`references/guide.md`). Bash counts only read-only commands (cat/head/tail/
+sed/awk... as reads, grep/rg/ag/git grep/find -name as searches; `cd` is
+followed). Each call is filed under the repo holding the touched path, so a
+session started in a folder of repos still works. Skips files outside any
+repo and under `.git/` or `.seedbank/`. Prints nothing on stdout; a crash exits 1
+with its traceback on stderr (a non-blocking hook error in Claude Code).
 
 ## `seedbank demote <fact_id> --tier warm|cold`
 

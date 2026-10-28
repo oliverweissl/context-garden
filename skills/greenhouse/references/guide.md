@@ -65,8 +65,9 @@ With the plugin (only while greenhouse is on):
 - `hook session-start`: with a base, a platform overview (about 400 tokens
   at most: repo one-liners, this repo's links, a sync reminder); without
   one, the ask-for-a-base instruction above.
-- `hook session-end`: re-harvests this repo's card in a detached
-  background process, only if the base opted in with
+- `hook session-end`: re-harvests this repo's card (from a folder of
+  repos: the card of every repo the session's tool calls touched) in a
+  detached background process, only if the base opted in with
   `bin/greenhouse config auto_sync true` (stored in `greenhouse.json`, so
   it holds for every repo of the base). Curated fields are kept. Off by
   default because it writes to a shared folder without being asked.

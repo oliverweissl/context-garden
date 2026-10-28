@@ -36,7 +36,6 @@ MARKER = "greenhouse.json"
 POINTER = ".greenhouse"
 ANCESTOR_DIRNAMES = (".greenhouse", "greenhouse")
 GITIGNORE = ".lock\n*.tmp\n"
-CURATED_FIELDS = ("summary", "provides", "consumes", "owners")
 _WORD_RE = re.compile(r"[a-z0-9_]{3,}")
 _STOPWORDS = {
     "the", "and", "for", "that", "this", "with", "from", "what", "which", "where",
@@ -51,7 +50,7 @@ def git(args, cwd) -> str:
             ["git", *args], cwd=cwd, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
         )
-    except OSError:
+    except FileNotFoundError:  # no git binary
         return ""
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
@@ -94,7 +93,7 @@ def atomic_write_text(path: Path, text: str) -> None:
     except BaseException:
         try:
             os.unlink(tmp)
-        except OSError:
+        except FileNotFoundError:
             pass
         raise
 
@@ -160,7 +159,7 @@ class Base:
     def meta(self) -> dict:
         try:
             return json.loads((self.root / MARKER).read_text())
-        except (OSError, ValueError):
+        except FileNotFoundError:
             return {}
 
     def set_meta(self, key: str, value) -> None:
@@ -189,7 +188,7 @@ class Base:
     def load_card(self, slug: str):
         try:
             return json.loads(self.card_path(slug).read_text())
-        except (OSError, ValueError):
+        except FileNotFoundError:
             return None
 
     def cards(self) -> list:
@@ -197,7 +196,7 @@ class Base:
         for path in sorted((self.root / "repos").glob("*.json")):
             try:
                 out.append(json.loads(path.read_text()))
-            except (OSError, ValueError):
+            except FileNotFoundError:  # forgotten since the glob
                 continue
         return out
 
@@ -236,7 +235,7 @@ class Base:
     def notes(self) -> list:
         try:
             return json.loads((self.root / "notes.json").read_text()).get("notes", [])
-        except (OSError, ValueError):
+        except FileNotFoundError:
             return []
 
     def _save_notes(self, notes: list) -> None:

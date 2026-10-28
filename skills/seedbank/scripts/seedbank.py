@@ -13,7 +13,6 @@ import json
 import re
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -43,7 +42,6 @@ from sb_store import (
     sha256_file,
 )
 
-KINDS = ("read", "search", "run", "mistake", "fact")
 MAX_TRACKED_SESSIONS = 32  # session ids kept per key; session_count keeps counting
 
 
@@ -746,7 +744,11 @@ _GEN_WARM_POINTER = re.compile(r"^\*\*[^*]+\*\*: see `\.seedbank/warm/")
 
 
 def cmd_import(args, store: Store) -> int:
-    text = Path(args.file).read_text(errors="replace")
+    try:
+        text = Path(args.file).read_text(errors="replace")
+    except FileNotFoundError:
+        print(f"error: no such file: {args.file}", file=sys.stderr)
+        return 1
     keystats = store.load_keystats()
     known_reps = {
         " ".join(f["representation"].split()) for f in store.load_facts()["facts"].values()
@@ -933,7 +935,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["hook"]:  # fast path: no argparse, never fails the tool call
+    if argv[:1] == ["hook"]:  # fast path: no argparse
         import sb_hook
 
         return sb_hook.stop_main() if argv[1:2] == ["stop"] else sb_hook.main()
@@ -953,15 +955,10 @@ def _dispatch(args, store: Store, repo_root: Path) -> int:
         handlers = {
             "read": cmd_observe_read,
             "search": cmd_observe_search,
-            "run": cmd_observe_run,
             "mistake": lambda a, s: cmd_observe_declared(a, s, "mistake"),
             "fact": lambda a, s: cmd_observe_declared(a, s, "fact"),
         }
-        try:
-            return handlers[args.obs_kind](args, store)
-        except FileNotFoundError as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 1
+        return handlers[args.obs_kind](args, store)
 
     top_handlers = {
         "candidates": cmd_candidates,
@@ -975,11 +972,7 @@ def _dispatch(args, store: Store, repo_root: Path) -> int:
     }
     if args.cmd == "compile":
         return cmd_compile(args, store, repo_root)
-    try:
-        return top_handlers[args.cmd](args, store)
-    except FileNotFoundError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
+    return top_handlers[args.cmd](args, store)
 
 
 if __name__ == "__main__":

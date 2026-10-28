@@ -1,7 +1,7 @@
 {
   "name": "context-garden",
   "description": "Tools for reducing redundant agent context and preserving important repository knowledge.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": {
     "name": "Oliver Wei\u00dfl",
     "url": "https://github.com/oliverweissl"

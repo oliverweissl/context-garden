@@ -4,7 +4,6 @@
     keystats.json       {key: aggregate stats}, key = file path, search, command, or fact/mistake digest
     facts.json          {seq, facts: {fact_id: {...}}}: promoted hot/warm facts
     config.json         overrides of CONFIG_DEFAULTS (missing keys fall back)
-    hook.log            errors swallowed by the Claude Code hook
     nudged.json         sessions the Stop hook already reminded (once per session)
     .lock               flock target serializing concurrent commands
     .gitignore          written once at creation; ignores the above, not warm/*.md
@@ -39,8 +38,6 @@ keystats.json
 facts.json
 config.json
 .lock
-hook.log
-hook.log.1
 nudged.json
 *.tmp
 """
@@ -75,7 +72,7 @@ def resolve_session(explicit: str | None = None) -> str:
             return val
     try:
         sid = os.getsid(0)
-    except (AttributeError, OSError):
+    except AttributeError:  # no getsid (Windows)
         sid = os.getppid()
     return f"{time.strftime('%Y-%m-%d')}-{sid}"
 
@@ -91,7 +88,7 @@ def find_repo_root() -> Path:
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return Path(proc.stdout.strip()).resolve()
-    except OSError:
+    except FileNotFoundError:  # no git binary
         pass
     return Path.cwd().resolve()
 
@@ -128,7 +125,7 @@ def atomic_write_text(path: Path, text: str) -> None:
     path = Path(path)
     try:
         mode = path.stat().st_mode & 0o777
-    except OSError:
+    except FileNotFoundError:
         mode = 0o644
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
@@ -152,7 +149,7 @@ def estimate_tokens(text: str) -> int:
 def sha256_file(path: str) -> str | None:
     try:
         data = Path(path).read_bytes()
-    except OSError:
+    except (FileNotFoundError, IsADirectoryError):  # source deleted, or not a file
         return None
     return hashlib.sha256(data).hexdigest()[:16]
 
@@ -227,9 +224,6 @@ class Store:
         """Stored overrides on top of CONFIG_DEFAULTS, so a config.json
         written by an older version (no half_life_days etc.) still loads."""
         return {**CONFIG_DEFAULTS, **json.loads(self.config_path.read_text())}
-
-    def save_config(self, data: dict) -> None:
-        atomic_write_text(self.config_path, json.dumps(data, indent=2))
 
     # -- observations -----------------------------------------------------
     def append_observation(self, obs: dict) -> None:

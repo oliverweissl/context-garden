@@ -27,7 +27,13 @@ Only create the directories a Skill actually needs — most don't need `referenc
 - Modes (on/manual/off, see the README): copy `scripts/cg_mode.py` unchanged from another Skill,
   dispatch `bin/<name> mode` to it, put `` !`${CLAUDE_SKILL_DIR}/bin/<name> mode --banner` `` under the
   `SKILL.md` title with `allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/<name> *)`, and make every hook
-  exit early unless `cg_mode.py <name> --is-on`. `tests/skills/test_modes.py` checks all of this.
+  exit early unless `cg_mode.py <name> --is-on` (exit 0 on, 3 manual/off; anything else is a crash).
+  `tests/skills/test_modes.py` checks all of this.
+- Errors are expressive: catch only platform fallbacks (`ImportError`), cleanup-and-reraise, named
+  expected outcomes (`FileExistsError`, a `FileNotFoundError` for a file that may not exist yet,
+  timeouts) and bad user/external input turned into a clear message. A corrupt store file raises.
+  Hooks don't catch either: the `bin/` wrapper lets a crash exit 1 with its traceback, which Claude
+  Code shows as a non-blocking hook error, and maps exit 2 (which would block) to 1.
 
 ## Adding a Skill
 

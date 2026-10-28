@@ -16,7 +16,8 @@ yourself: a single file lookup, a small edit or one test command never
 needs an agent.
 
 `mycelium` is not on PATH: always use the full `<this-skill-dir>/bin/mycelium`
-path. Notes live in `<git root>/.mycelium/notes.json`.
+path. Notes live in `<git root>/.mycelium/notes.json`. From a folder of repos,
+name files as `<repo>/<path>`: each note goes to the repo that holds the file.
 
 **Before spawning an agent**
 

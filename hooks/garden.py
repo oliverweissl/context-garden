@@ -129,12 +129,10 @@ def main(argv: list) -> int:
     if cmd == "hook":
         if rest != ["session-start"]:
             return 0
-        try:
-            if os.environ.get("CLAUDE_PROJECT_DIR"):
-                os.chdir(os.environ["CLAUDE_PROJECT_DIR"])
-            text = session_start_notice()
-        except Exception:  # a hook must never break the session
-            return 0
+        # A crash exits 1 with its traceback: a non-blocking hook error. Never 2 here.
+        if os.environ.get("CLAUDE_PROJECT_DIR"):
+            os.chdir(os.environ["CLAUDE_PROJECT_DIR"])
+        text = session_start_notice()
         if text:
             print(text)
         return 0

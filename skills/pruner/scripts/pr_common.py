@@ -87,7 +87,7 @@ def _git_tracked_files(repo_root: Path) -> list[str] | None:
             stderr=subprocess.DEVNULL,
             timeout=10,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (FileNotFoundError, subprocess.TimeoutExpired):  # no git / stuck git: walk instead
         return None
     if out.returncode != 0:
         return None
@@ -128,7 +128,7 @@ def discover_files(repo_root: Path) -> list[str]:
         try:
             if full.stat().st_size > MAX_FILE_BYTES:
                 continue
-        except OSError:
+        except FileNotFoundError:  # tracked but deleted in the worktree, or a broken symlink
             continue
         out.append(rel)
     return sorted(out)
@@ -136,10 +136,11 @@ def discover_files(repo_root: Path) -> list[str]:
 
 def read_text(path: Path) -> str | None:
     """UTF-8 text, with undecodable bytes replaced rather than dropping the
-    file (latin-1 sources etc.). Returns None for unreadable/binary files."""
+    file (latin-1 sources etc.). Returns None for missing, unreadable,
+    directory (git submodule) or binary files of the user's repo."""
     try:
         data = path.read_bytes()
-    except OSError:
+    except (FileNotFoundError, IsADirectoryError, PermissionError):
         return None
     if b"\x00" in data[:8192]:
         return None
@@ -160,7 +161,7 @@ def changed_files_from_git(repo_root: Path) -> list[str]:
             stderr=subprocess.DEVNULL,
             timeout=10,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (FileNotFoundError, subprocess.TimeoutExpired):  # no git / stuck git
         return []
     if out.returncode != 0:
         return []

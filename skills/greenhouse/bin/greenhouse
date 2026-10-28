@@ -8,10 +8,11 @@ if [ "${1:-}" = "mode" ]; then
   exit 0
 fi
 if [ "${1:-}" = "hook" ]; then
-  # Claude Code hook: stdout becomes session context; never fail the session.
-  # Prints only while greenhouse is on and a base is found.
-  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" greenhouse --is-on) 2>/dev/null || exit 0
-  cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/greenhouse.py" "$@" 2>/dev/null
-  exit 0
+  # Claude Code hook. Not on: silent no-op. A crash exits 1 with its traceback on
+  # stderr, which Claude Code shows as a non-blocking hook error.
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" greenhouse --is-on)
+  case $? in 0) ;; 3) exit 0 ;; *) exit 1 ;; esac
+  cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/greenhouse.py" "$@"
+  rc=$?; [ "$rc" -eq 2 ] && exit 1; exit "$rc"  # 2 would block the tool call
 fi
 exec python3 "$DIR/scripts/greenhouse.py" "$@"

@@ -1,5 +1,9 @@
 """Shared finding notes under <git root>/.mycelium/.
 
+A session started in a folder of repos (not itself a git work tree) is a
+workspace: each note is filed in the repo holding its files, and the gate
+reads the stores of the repos an agent's brief names (`StoreSet`).
+
 Layout:
   notes.json    {"version": 1, "notes": [note, ...]}  -- durable findings (commit it)
   spawns.jsonl  one line per gated Agent call, for duplicate detection (local)
@@ -21,7 +25,7 @@ import re
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 try:
@@ -52,9 +56,67 @@ def find_repo_root() -> Path:
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return Path(proc.stdout.strip()).resolve()
-    except OSError:
+    except FileNotFoundError:  # no git binary
         pass
     return Path.cwd().resolve()
+
+
+def git_root(start) -> Path | None:
+    """Nearest ancestor of `start` (a file or dir) containing .git, or None."""
+    d = Path(start).expanduser().resolve()
+    for cand in (d, *d.parents):
+        if (cand / ".git").exists():
+            return cand
+    return None
+
+
+def workspace_repos(base: Path) -> list:
+    """Child repos of a workspace folder."""
+    return sorted(p for p in Path(base).iterdir() if (p / ".git").exists())
+
+
+_PATHISH_RE = re.compile(r"[\w.~/-]+")
+
+
+def repos_in_text(text: str, base: Path) -> list:
+    """Repos a brief names, in order: by path (`repo/src/x.py`, absolute
+    paths) or by a child repo's bare directory name."""
+    base = Path(base).resolve()
+    names = {p.name: p for p in workspace_repos(base)}
+    found = []
+    for tok in _PATHISH_RE.findall(text or ""):
+        tok = tok.strip("./") if not tok.startswith(("/", "~")) else tok.rstrip(".")
+        if not tok:
+            continue
+        if tok.startswith(("/", "~")):
+            p = Path(tok).expanduser()
+            while not p.exists() and p != p.parent:
+                p = p.parent
+            root = git_root(p) if p != p.parent else None
+        else:
+            head = tok.split("/", 1)[0]
+            root = names.get(head) if "/" in tok or len(head) >= 3 else None
+        if root is not None and root != base and root not in found:
+            found.append(root)
+    return found
+
+
+def split_by_repo(paths, cwd: Path) -> dict:
+    """{repo root: [repo-relative path, ...]} for paths given relative to
+    `cwd` (or absolute); paths in no repo are dropped."""
+    out = {}
+    for raw in paths:
+        p = Path(raw).expanduser()
+        p = p if p.is_absolute() else Path(cwd) / p
+        root = git_root(p if p.is_dir() else p.parent)
+        if root is None:
+            continue
+        try:
+            rel = str(p.resolve().relative_to(root))
+        except ValueError:  # resolves outside its repo (symlink)
+            continue
+        out.setdefault(root, []).append(rel)
+    return out
 
 
 def words(text: str) -> set:
@@ -75,15 +137,16 @@ def atomic_write_text(path: Path, text: str) -> None:
     except BaseException:
         try:
             os.unlink(tmp)
-        except OSError:
+        except FileNotFoundError:
             pass
         raise
 
 
 def file_hash(path: Path):
+    """sha256 of a file, or None once it is gone (the note is then stale)."""
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError:
+    except (FileNotFoundError, IsADirectoryError, NotADirectoryError):
         return None
 
 
@@ -119,7 +182,7 @@ class Store:
         cfg = dict(DEFAULT_CONFIG)
         try:
             cfg.update(json.loads((self.root / "config.json").read_text()))
-        except (OSError, ValueError):
+        except FileNotFoundError:  # optional; a corrupt one raises
             pass
         env = os.environ.get("MYCELIUM_GATE")
         if env in ("enforce", "warn", "off"):
@@ -131,7 +194,7 @@ class Store:
     def load_notes(self) -> list:
         try:
             return json.loads((self.root / "notes.json").read_text()).get("notes", [])
-        except (OSError, ValueError):
+        except FileNotFoundError:  # corrupt must raise: add_note would overwrite it
             return []
 
     def _save_notes(self, notes: list) -> None:
@@ -217,13 +280,10 @@ class Store:
         try:
             with (self.root / "spawns.jsonl").open() as f:
                 for line in f:
-                    try:
-                        rec = json.loads(line)
-                    except ValueError:
-                        continue
+                    rec = json.loads(line)
                     if rec.get("session_id") == session_id:
                         out.append(rec)
-        except OSError:
+        except FileNotFoundError:
             pass
         return out
 
@@ -232,3 +292,72 @@ class Store:
                "prompt": prompt[:4000]}
         with (self.root / "spawns.jsonl").open("a") as f:
             f.write(json.dumps(rec) + "\n")
+
+
+class StoreSet:
+    """Several repos' stores seen as one by the gate and `brief`, for a
+    workspace session. Note paths are shown relative to the workspace
+    (`repo/src/x.py`); each note keeps its own store for staleness."""
+
+    def __init__(self, stores, base: Path, spawn_stores=None):
+        self.stores = list(stores)
+        self.spawn_stores = list(self.stores if spawn_stores is None else spawn_stores)
+        self.base = Path(base).resolve()
+
+    def _label(self, store: Store, path: str) -> str:
+        try:
+            return str((store.repo_root / path).resolve().relative_to(self.base))
+        except ValueError:  # resolves outside the workspace (symlink)
+            return str(store.repo_root / path)
+
+    def config(self) -> dict:
+        return self.stores[0].config() if self.stores else dict(DEFAULT_CONFIG)
+
+    @contextmanager
+    def lock(self):
+        with ExitStack() as stack:
+            unique = {str(st.root): st for st in self.stores + self.spawn_stores}
+            for key in sorted(unique):  # fixed order: no deadlock between sessions
+                stack.enter_context(unique[key].lock())
+            yield
+
+    def spawns(self, session_id: str) -> list:
+        return [rec for st in self.spawn_stores for rec in st.spawns(session_id)]
+
+    def log_spawn(self, session_id: str, description: str, prompt: str) -> None:
+        for st in self.spawn_stores:
+            st.log_spawn(session_id, description, prompt)
+
+    def load_notes(self) -> list:
+        return [self._wrap(st, n) for st in self.stores for n in st.load_notes()]
+
+    def search(self, query: str, limit: int = 5, min_overlap: int = 2) -> list:
+        hits = [self._wrap(st, n) for st in self.stores for n in st.search(query, limit, min_overlap)]
+        return hits[:limit]
+
+    def _wrap(self, store: Store, note: dict) -> dict:
+        return dict(note, id=f"{store.repo_root.name}/{note['id']}", _store=store, _orig=note,
+                    paths={self._label(store, p): h for p, h in note.get("paths", {}).items()})
+
+    def stale_paths(self, note: dict) -> list:
+        store = note.get("_store")
+        if store is None:
+            return []
+        return [self._label(store, p) for p in store.stale_paths(note["_orig"])]
+
+
+def workspace_of(cwd) -> Path | None:
+    """`cwd` itself when it is a folder of repos rather than inside one."""
+    cwd = Path(cwd).resolve()
+    return cwd if git_root(cwd) is None and workspace_repos(cwd) else None
+
+
+def workspace_stores(base: Path, text: str) -> StoreSet:
+    """The stores a workspace task reads: those of the repos `text` names;
+    naming none, every repo that has notes (spawns then go to the
+    workspace's own store, the only place left to detect duplicates)."""
+    named = repos_in_text(text, base)
+    if named:
+        return StoreSet([Store(r) for r in named], base)
+    with_notes = [Store(r) for r in workspace_repos(base) if (r / STORE_DIRNAME / "notes.json").is_file()]
+    return StoreSet(with_notes, base, spawn_stores=[Store(base)])

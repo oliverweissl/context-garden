@@ -37,7 +37,7 @@ def calibration_path() -> Path:
 def _load(path_str: str) -> dict | None:
     try:
         data = json.loads(Path(path_str).read_text())
-    except (OSError, ValueError):
+    except FileNotFoundError:  # optional (benchmarks write it); a corrupt one raises
         return None
     cats = data.get("categories") if isinstance(data, dict) else None
     if not isinstance(cats, dict):

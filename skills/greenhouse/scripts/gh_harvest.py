@@ -42,7 +42,7 @@ def _clip(text: str, n: int = MAX_ITEM_CHARS) -> str:
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+    except FileNotFoundError:  # optional file, or tracked but deleted in the worktree
         return ""
 
 
@@ -79,7 +79,7 @@ def _toml(text: str) -> dict:
         return {}
     try:
         return tomllib.loads(text)
-    except Exception:  # noqa: BLE001 -- a broken manifest must not stop the harvest
+    except tomllib.TOMLDecodeError:  # a broken manifest in the harvested repo: skip it
         return {}
 
 
@@ -109,7 +109,7 @@ def parse_manifest(path: Path) -> tuple:
     if name == "package.json":
         try:
             data = json.loads(text)
-        except ValueError:
+        except json.JSONDecodeError:
             return [], [], []
         deps = []
         for key in ("dependencies", "peerDependencies", "devDependencies"):
@@ -187,7 +187,7 @@ def garden_facts(repo_root: Path) -> list:
 def mycelium_notes(repo_root: Path) -> list:
     try:
         notes = json.loads(_read(repo_root / ".mycelium" / "notes.json") or "{}").get("notes", [])
-    except ValueError:
+    except json.JSONDecodeError:
         return []
     return [_clip(f"{n['topic']}: {n['text']}") for n in notes
             if n.get("kind") != "status" and n.get("topic") and n.get("text")][:MAX_NOTES]
