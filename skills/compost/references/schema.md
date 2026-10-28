@@ -57,8 +57,8 @@ After every `run`/`ingest` (or `bin/compost gc [--keep-per-command N]
 oldest-first while `runs/` exceeds 200 MB — never the run just created, the
 latest run of any command (so the delta keeps working), or a run in
 progress. Defaults come from `.compost/config.json`
-(`{"keep_per_command": 10, "max_store_mb": 200}`). Deleting `.compost/` is
-safe; the delta just restarts.
+(`{"keep_per_command": 10, "max_store_mb": 200}`; invalid JSON there is an
+error, not ignored). Deleting `.compost/` is safe; the delta just restarts.
 
 ## Bash hook
 
@@ -68,7 +68,9 @@ compost is on). A command whose program is a known long-output tool
 `npm test`/`npm run`, sbatch/srun/mpirun, ...) is routed through
 `compost run`. Pipes, redirections (except `2>&1`), backgrounded commands,
 help/version/collect-only runs and commands containing `# raw` are left
-alone.
+alone. A hook crash (e.g. a malformed `.compost/config.json`) exits 1 with
+its traceback: Claude Code shows a non-blocking hook error and the Bash call
+runs untouched.
 
 `hook` in `<git root>/.compost/config.json` (or `$COMPOST_HOOK`):
 `redirect` (default: deny the call and name the compost command to run

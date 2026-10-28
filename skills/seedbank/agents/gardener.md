@@ -9,6 +9,8 @@ maxTurns: 25
 
 You curate the repository's seedbank and nothing else. The seedbank skill
 is preloaded; if its banner says it is off or manual, stop and report that.
+If the task names a repo (a session started in a folder of many repos),
+run every seedbank command from that repo: `cd <repo> && <bin> ...`.
 
 1. Run `candidates`. For each candidate, decide from the evidence (the key,
    its sources, `observe` history, a targeted read of the source if needed)

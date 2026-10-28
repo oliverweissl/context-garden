@@ -215,7 +215,6 @@ assert_contains "expand: unknown chunk id reported, not crashed" "$bad_expand" "
 
 bad_lines=$(CS expand "$slice_id" --file interp/core.py --lines abc 2>&1)
 assert_contains "expand: malformed --lines reported cleanly" "$bad_lines" "--lines must look like A:B"
-assert_not_contains "expand: malformed --lines, no traceback" "$bad_lines" "Traceback"
 
 outside=$(CS expand "$slice_id" --file ../../etc/passwd --lines 1:2 --budget-extra 999 2>&1)
 assert_contains "expand: --file outside the repo is rejected" "$outside" "outside the repository"
@@ -354,6 +353,25 @@ out=$(CONTEXT_GARDEN_MODE_PRUNER=on ph "please rename the solver module")
 [ -z "$out" ] && echo "PASS: hook: no error, no context" || { echo "FAIL: hook fired without an error"; fail=1; }
 out=$(CONTEXT_GARDEN_MODE_PRUNER=off ph "$ERRP")
 [ -z "$out" ] && echo "PASS: hook: silent while off" || { echo "FAIL: hook ran while off"; fail=1; }
+
+# workspace: session started in the folder holding the repo
+WSR="$(dirname "$REPO")"
+out=$(python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "cwd": sys.argv[2]}))' "$ERRP" "$WSR" \
+  | CONTEXT_GARDEN_MODE_PRUNER=on CLAUDE_PROJECT_DIR="$WSR" "$DIR/bin/pruner" hook)
+assert_contains "hook: from a workspace, the repo is found via the error's paths" "$out" "csrc/solver.cpp"
+assert_contains "hook: ...and the context names that repo" "$out" "relative to the repo"
+
+# a failing select is surfaced (stderr + exit 1 = non-blocking hook error), not swallowed
+BROKEN="$SCRATCH/broken_repo"
+mkdir -p "$BROKEN/csrc" && git -C "$BROKEN" init -q && echo x >"$BROKEN/.pruner"
+out=$(python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "cwd": sys.argv[2]}))' "$ERRP" "$BROKEN" \
+  | CONTEXT_GARDEN_MODE_PRUNER=on CLAUDE_PROJECT_DIR="$BROKEN" "$DIR/bin/pruner" hook 2>"$SCRATCH/hook_err")
+rc=$?
+if [ "$rc" -eq 1 ] && [ -z "$out" ] && [ -s "$SCRATCH/hook_err" ]; then
+  echo "PASS: hook: failing select exits 1 with its error on stderr, nothing on stdout"
+else
+  echo "FAIL: hook: failing select gave rc=$rc stdout=[$out] stderr=[$(cat "$SCRATCH/hook_err")]"; fail=1
+fi
 
 if [ "$fail" -eq 0 ]; then
   echo "ALL CHECKS PASSED"

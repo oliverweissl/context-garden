@@ -52,7 +52,7 @@ def test_default_is_off(skill, repo):
     assert _bin(skill, "mode", repo=repo).stdout.strip() == f"{skill}: off (from default)"
     banner = _bin(skill, "mode", "--banner", repo=repo).stdout
     assert "turned OFF" in banner and f"/bin/{skill} mode on" in banner  # absolute, runnable
-    assert _bin(skill, "mode", "--is-on", repo=repo).returncode == 1
+    assert _bin(skill, "mode", "--is-on", repo=repo).returncode == 3
 
 
 @pytest.mark.parametrize("skill", SKILLS)
@@ -73,7 +73,7 @@ def test_manual_writes_skill_override_and_keeps_other_settings(repo):
     assert data["skillOverrides"] == {"compost": "user-invocable-only"}
     assert data["permissions"] == {"allow": ["Bash(ls)"]}
     assert "MANUAL mode" in _bin("compost", "mode", "--banner", repo=repo).stdout
-    assert _bin("compost", "mode", "--is-on", repo=repo).returncode == 1
+    assert _bin("compost", "mode", "--is-on", repo=repo).returncode == 3
 
 
 def test_off_banner_and_precedence(repo):

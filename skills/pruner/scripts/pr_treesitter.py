@@ -4,8 +4,10 @@ Used only when `tree_sitter` + `tree_sitter_python`/`tree_sitter_cpp` import.
 Same record shape as pr_python / pr_cpp (`imports`, `symbols`, `parse_error`);
 error tolerant, and inline C++ methods get a `Class::method` qualname.
 Targets py-tree-sitter 0.22-0.25 (older `Parser().set_language` as fallback;
-0.26.0 excluded, see _version_supported). Any failure returns None and the
-caller falls back to the builtin parser for that file.
+0.26.0 excluded, see _version_supported). A missing or incompatible
+install, or a file nested too deep for the recursive walkers, returns None
+and the caller falls back to the builtin parser; anything else is a bug
+here and raises.
 """
 
 from __future__ import annotations
@@ -38,7 +40,10 @@ def _parser(language: str):
         except TypeError:  # py-tree-sitter < 0.22
             parser = tree_sitter.Parser()
             parser.set_language(lang)
-    except Exception:  # noqa: BLE001 -- optional backend, any failure -> builtin
+    # not installed / unsupported version (ImportError), grammar ABI mismatch
+    # (ValueError: "Incompatible Language version"), binding API drift
+    # across versions (AttributeError, TypeError) -> builtin
+    except (ImportError, ValueError, AttributeError, TypeError):
         parser = None
     _parsers[language] = parser
     return parser
@@ -54,7 +59,7 @@ def _version_supported() -> bool:
         from importlib.metadata import version
 
         parts = tuple(int(x) for x in version("tree-sitter").split(".")[:2])
-    except Exception:  # noqa: BLE001
+    except (ImportError, ValueError):  # PackageNotFoundError, or a non-numeric version
         return False
     return SUPPORTED[0] <= parts < SUPPORTED[1]
 
@@ -77,7 +82,7 @@ def parse(language: str, text: str) -> dict | None:
         if language == "python":
             return _python(tree.root_node)
         return _cpp(tree.root_node)
-    except Exception:  # noqa: BLE001
+    except RecursionError:  # pathologically nested user source
         return None
     finally:
         _SRC = b""

@@ -13,7 +13,7 @@ plugin skills), so SKILL.md also injects `mode --banner` and hooks check
 `--is-on`; that makes the mode hold for plugin installs too.
 
 Usage: cg_mode.py <skill> [on|manual|off] [--scope local|project|user]
-       cg_mode.py <skill> --banner | --is-on
+       cg_mode.py <skill> --banner | --is-on   (exit 0 on, 3 manual/off)
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from pathlib import Path
 
 MODES = ("on", "manual", "off")
 DEFAULT_MODE = "off"
+NOT_ON = 3  # --is-on exit status when manual/off
 BIN_DIR = Path(__file__).resolve().parent.parent / "bin"
 TO_OVERRIDE = {"on": "on", "manual": "user-invocable-only", "off": "off"}
 FROM_OVERRIDE = {"on": "on", "name-only": "on", "user-invocable-only": "manual", "off": "off"}
@@ -130,7 +131,7 @@ def main(argv: list) -> int:
             print(text)
         return 0
     if rest == ["--is-on"]:
-        return 0 if resolve(skill)[0] == "on" else 1
+        return 0 if resolve(skill)[0] == "on" else NOT_ON  # a crash exits 1: told apart
     if not rest:
         mode, source = resolve(skill)
         print(f"{skill}: {mode} (from {source})")

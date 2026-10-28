@@ -18,6 +18,8 @@ jobs:
 
   release:
     needs: test
+    # Installers are only built and kept for release tags, never for branches.
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     strategy:

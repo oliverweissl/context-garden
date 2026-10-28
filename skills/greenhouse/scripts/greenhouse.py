@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -147,6 +148,10 @@ def cmd_link(args, repo_root) -> int:
 
 
 def cmd_sync(args, repo_root) -> int:
+    if not (repo_root / ".git").exists():
+        print(f"greenhouse: {repo_root} is not a git repo; run sync from the repo whose card "
+              f"to publish: cd <repo> && {BIN} sync", file=sys.stderr)
+        return 2
     base, how = _open(args, repo_root)
     curated = {"summary": args.summary, "provides": args.provides or None,
                "consumes": args.consumes or None, "owners": args.owner or None}
@@ -339,16 +344,23 @@ def cmd_brief(args, repo_root) -> int:
     return 0
 
 
+_OBSOLETE = re.compile(r"\b(obsolete|deprecated|archived|legacy|unmaintained)\b", re.I)
+
+
 def session_overview(base: Base, repo_root: Path) -> str:
     cards = base.cards()
-    me = repo_slug(repo_root)
-    lines = [f"[greenhouse] This repo is part of platform '{base.meta().get('name', '')}' "
+    in_repo = (repo_root / ".git").exists()
+    me = repo_slug(repo_root) if in_repo else None
+    where = "This repo is part of" if in_repo else "This folder holds"
+    lines = [f"[greenhouse] {where} platform '{base.meta().get('name', '')}' "
              f"({len(cards)} repos, {len(base.notes())} platform notes). Before changing an "
              f"interface another repo might use, run: {BIN} brief \"<task>\""]
     uses, used_by = neighbours(base, me, cards)
     if uses or used_by:
         lines.append(f"This repo uses: {', '.join(uses) or '-'}; used by: {', '.join(used_by) or '-'}")
-    others = [c for c in cards if c["slug"] != me]
+    # Obsolete repos last: an alphabetical preview otherwise fills up with them.
+    others = sorted((c for c in cards if c["slug"] != me),
+                    key=lambda c: bool(_OBSOLETE.search(f"{c['slug']} {summary_of(c)}")))
     used = estimate_tokens("\n".join(lines))
     for c in others:
         line = f"- {c['slug']}: {(summary_of(c) or '(no summary)')[:110]}"
@@ -358,34 +370,81 @@ def session_overview(base: Base, repo_root: Path) -> str:
         lines.append(line)
         used += estimate_tokens(line)
     mine = next((c for c in cards if c["slug"] == me), None)
-    if mine is None or mine.get("head") != head_of(repo_root):
+    if in_repo and (mine is None or mine.get("head") != head_of(repo_root)):
         lines.append(f"This repo's card is missing or old: run {BIN} sync after the task.")
     return "\n".join(lines)
 
 
+_PATHISH = re.compile(r"[\w.~/-]+")
+
+
+def touched_repos(transcript: str, base: Path) -> list:
+    """Child repos of `base` (a folder of repos, not a repo) that the
+    session's tool calls named: by path (`repo/...`, absolute paths under
+    `base`) or as a `cd` target. Read from the session transcript."""
+    base = base.resolve()
+    names = {c.name: c for c in sorted(base.iterdir()) if (c / ".git").exists()}
+    found = []
+    if not transcript:
+        return []
+    try:
+        lines = Path(transcript).read_text(errors="replace").splitlines()
+    except FileNotFoundError:
+        return []
+    for line in lines:
+        try:  # transcript lines may be partial or of other shapes
+            content = (json.loads(line).get("message") or {}).get("content")
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        for item in content if isinstance(content, list) else []:
+            if not isinstance(item, dict) or item.get("type") != "tool_use":
+                continue
+            for tok in _PATHISH.findall(json.dumps(item.get("input") or {})):
+                if tok.startswith(str(base) + "/"):
+                    tok = tok[len(str(base)) + 1:]
+                elif tok.startswith("/"):
+                    continue
+                head = tok.lstrip("./").split("/", 1)[0]
+                if head in names and ("/" in tok or f"cd {head}" in line) and names[head] not in found:
+                    found.append(names[head])
+    return found
+
+
 def cmd_hook(args, repo_root) -> int:
     """session-start: platform overview (or the ask-for-a-base instruction).
-    session-end: re-harvest this repo's card, only if the base opted in with
-    `config auto_sync true` (it writes to a shared folder)."""
-    try:
-        payload = json.loads(sys.stdin.read() or "{}")
-    except ValueError:
-        payload = {}
+    session-end: re-harvest this repo's card -- or, for a session started in
+    a folder of repos, the card of every repo the session touched -- only if
+    the base opted in with `config auto_sync true` (it writes to a shared folder)."""
+    payload = json.loads(sys.stdin.read() or "{}")
     root = find_repo_root(payload.get("cwd") or repo_root)
     found, _ = discover(root, None)
     if args.event == "session-start":
         print(session_overview(Base(found), root) if found else ask_for_base(root))
-    elif found and Base(found).meta().get("auto_sync") and (root / ".git").exists():
-        if args.wait:
-            Base(found).save_card(harvest(root, found), {})
-        else:  # SessionEnd hooks get ~1.5 s: harvest in a detached child instead
-            child = subprocess.Popen(
-                [sys.executable, str(Path(__file__).resolve()), "hook", "session-end", "--wait"],
-                cwd=root, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, start_new_session=True,
-            )
-            child.stdin.write(json.dumps({"cwd": str(root)}).encode())
-            child.stdin.close()  # don't wait: the child outlives this hook
+        return 0
+    if (root / ".git").exists():
+        repos = [root]
+    elif isinstance(payload.get("repos"), list):  # the detached child, below
+        repos = [Path(r) for r in payload["repos"]]
+    else:
+        repos = touched_repos(payload.get("transcript_path"), root)
+    targets = []
+    for repo in repos:
+        base, _ = discover(repo, None)
+        if base and Base(base).meta().get("auto_sync"):
+            targets.append((repo, base))
+    if not targets:
+        return 0
+    if args.wait:
+        for repo, base in targets:
+            Base(base).save_card(harvest(repo, base), {})
+    else:  # SessionEnd hooks get ~1.5 s: harvest in a detached child instead
+        child = subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "hook", "session-end", "--wait"],
+            cwd=root, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True,
+        )
+        child.stdin.write(json.dumps({"cwd": str(root), "repos": [str(r) for r, _ in targets]}).encode())
+        child.stdin.close()  # don't wait: the child outlives this hook
     return 0
 
 

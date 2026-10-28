@@ -5,15 +5,19 @@ if [ "${1:-}" = "mode" ]; then
   shift; exec python3 "$DIR/scripts/cg_mode.py" seedbank "$@"
 fi
 if [ "${1:-}" = "hook" ] && [ "${2:-}" = "stop" ]; then
-  # Claude Code Stop hook: stdout is the hook's JSON answer; silent unless on.
-  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" seedbank --is-on) 2>/dev/null || exit 0
-  python3 "$DIR/scripts/seedbank.py" hook stop 2>/dev/null
-  exit 0
+  # Claude Code hook. Not on: silent no-op. A crash exits 1 with its traceback on
+  # stderr, which Claude Code shows as a non-blocking hook error.
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" seedbank --is-on)
+  case $? in 0) ;; 3) exit 0 ;; *) exit 1 ;; esac
+  python3 "$DIR/scripts/seedbank.py" hook stop
+  rc=$?; [ "$rc" -eq 2 ] && exit 1; exit "$rc"  # 2 would block the tool call
 fi
 if [ "${1:-}" = "hook" ]; then
-  # Claude Code hook: never print, never fail the tool call; only observe while on.
-  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" seedbank --is-on) 2>/dev/null || exit 0
-  python3 "$DIR/scripts/seedbank.py" hook >/dev/null 2>&1
-  exit 0
+  # Claude Code hook. Not on: silent no-op. A crash exits 1 with its traceback on
+  # stderr, which Claude Code shows as a non-blocking hook error.
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" seedbank --is-on)
+  case $? in 0) ;; 3) exit 0 ;; *) exit 1 ;; esac
+  python3 "$DIR/scripts/seedbank.py" hook >/dev/null
+  rc=$?; [ "$rc" -eq 2 ] && exit 1; exit "$rc"  # 2 would block the tool call
 fi
 exec python3 "$DIR/scripts/seedbank.py" "$@"

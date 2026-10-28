@@ -67,14 +67,15 @@ assert_not_contains "gate: unrelated full brief -> allow" "$out" "deny"
 lines=$(wc -l < .mycelium/spawns.jsonl | tr -d ' ')
 [ "$lines" = "4" ] && echo "PASS: only allowed calls are logged (4)" || { echo "FAIL: spawns.jsonl has $lines lines, want 4"; fail=1; }
 
-# --- modes + fail-open
+# --- modes + hook errors
 out=$(MYCELIUM_GATE=warn hook s3 "x" "just look")
 assert_contains "warn mode: allows, adds context" "$out" "additionalContext"
 assert_not_contains "warn mode: no deny" "$out" '"permissionDecision"'
 out=$(MYCELIUM_GATE=off hook s3 "x" "just look")
 [ -z "$out" ] && echo "PASS: off mode: silent" || { echo "FAIL: off mode printed $out"; fail=1; }
-out=$(echo 'not json' | M hook pre-agent; echo "rc=$?")
-assert_contains "hook fails open on bad input" "$out" "rc=0"
+out=$(echo 'not json' | M hook pre-agent 2>/dev/null); rc=$?
+[ "$rc" = "1" ] && [ -z "$out" ] && echo "PASS: hook error exits 1 (non-blocking), stdout empty" \
+  || { echo "FAIL: hook error rc=$rc out=$out (want 1, empty)"; fail=1; }
 out=$(echo '{"tool_name": "Read", "tool_input": {}}' | M hook pre-agent)
 [ -z "$out" ] && echo "PASS: hook ignores non-Agent tools" || { echo "FAIL: non-Agent printed"; fail=1; }
 out=$(echo "{\"tool_name\": \"Agent\", \"cwd\": \"$REPO\", \"tool_input\": {}}" | M hook post-agent)
@@ -114,14 +115,40 @@ assert_not_contains "subagent-stop: silent while off" "$(M list)" "Off topic"
 
 # --- install-agents never overwrites
 mkdir -p .claude/agents && echo "mine" > .claude/agents/scout.md
-out=$(M install-agents)
-assert_contains "install-agents keeps an existing file" "$out" "kept existing"
+M install-agents >/dev/null
 [ "$(cat .claude/agents/scout.md)" = "mine" ] && echo "PASS: user agent untouched" || { echo "FAIL: overwritten"; fail=1; }
+
+# --- a corrupt notes.json raises instead of being overwritten
+cp .mycelium/notes.json "$SCRATCH/notes.bak"; echo '{broken' > .mycelium/notes.json
+M note "z" "z" README.md >/dev/null 2>&1; rc=$?
+[ "$rc" != "0" ] && [ "$(cat .mycelium/notes.json)" = "{broken" ] && echo "PASS: corrupt notes.json: note fails, file kept" \
+  || { echo "FAIL: corrupt notes.json rc=$rc, file now: $(head -c 80 .mycelium/notes.json)"; fail=1; }
+cp "$SCRATCH/notes.bak" .mycelium/notes.json
 
 # --- concurrent writers (lock + atomic write)
 for i in $(seq 1 10); do M note "topic $i" "finding $i" README.md >/dev/null & done; wait
 n=$(python3 -c 'import json; print(len(json.load(open(".mycelium/notes.json"))["notes"]))')
 [ "$n" = "12" ] && echo "PASS: 10 concurrent notes all kept (12 total)" || { echo "FAIL: $n notes after concurrent writes, want 12"; fail=1; }
+
+# --- workspace: a session started in a folder of repos files notes per repo
+WSP="$SCRATCH/ws"; mkdir -p "$WSP/alpha/src" "$WSP/beta"
+(cd "$WSP/alpha" && git init -q . && echo 'def refresh(): pass' > src/auth.py)
+(cd "$WSP/beta" && git init -q . && echo 'all:' > Makefile)
+cd "$WSP"
+out=$(M note "Auth refresh" "refresh in auth.py, built by beta" alpha/src/auth.py beta/Makefile)
+assert_contains "workspace note: filed in alpha" "$out" "alpha: n001"
+assert_contains "workspace note: filed in beta" "$out" "beta: n001"
+[ ! -e "$WSP/.mycelium" ] && echo "PASS: workspace note: no store in the workspace" || { echo "FAIL: store created in workspace"; fail=1; }
+out=$(M brief "where is auth refresh")
+assert_contains "workspace brief: workspace-relative paths, repo-prefixed id" "$out" "[alpha/n001] Auth refresh"
+out=$(python3 -c 'import json,sys; print(json.dumps({"session_id": "w1", "cwd": sys.argv[1], "tool_name": "Agent",
+  "tool_input": {"description": "auth", "prompt": "Task: explain auth refresh in alpha/src\nWhy delegate: x\nReturn: y\nBudget: 3"}}))' "$WSP" \
+  | M hook pre-agent)
+assert_contains "workspace gate: notes of the named repo are required" "$out" "alpha/src/auth.py"
+python3 -c 'import json,sys; print(json.dumps({"session_id": "w1", "cwd": sys.argv[1],
+  "last_assistant_message": "Notes:\n- Beta build | beta builds with make | beta/Makefile"}))' "$WSP" | M hook subagent-stop
+assert_contains "workspace subagent-stop: note lands in beta" "$(cd beta && M list)" "Beta build"
+cd "$REPO"
 
 if [ "$fail" -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit "$fail"

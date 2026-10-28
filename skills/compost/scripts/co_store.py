@@ -51,7 +51,7 @@ def find_repo_root() -> Path:
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return Path(proc.stdout.strip()).resolve()
-    except OSError:
+    except FileNotFoundError:  # no git binary
         pass
     return Path.cwd().resolve()
 
@@ -96,7 +96,7 @@ def _atomic_write(path: Path, text: str) -> None:
             fh.write(text)
         os.replace(tmp, path)
     except BaseException:
-        with contextlib.suppress(OSError):
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp)
         raise
 
@@ -108,16 +108,16 @@ def _pid_alive(pid) -> bool:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
-    except OSError:
+    except PermissionError:  # alive, owned by another user
         return True
     return True
 
 
 def _dir_size(path: Path) -> int:
     total = 0
-    with contextlib.suppress(OSError):
+    with contextlib.suppress(FileNotFoundError):
         for entry in os.scandir(path):
-            with contextlib.suppress(OSError):
+            with contextlib.suppress(FileNotFoundError):  # removed while scanning
                 if entry.is_file(follow_symlinks=False):
                     total += entry.stat(follow_symlinks=False).st_size
     return total
@@ -153,14 +153,16 @@ class Store:
         _atomic_write(self.index_path, json.dumps(data, indent=2))
 
     def config(self) -> dict:
-        """DEFAULT_CONFIG overlaid with <store>/config.json (if present/valid)."""
+        """DEFAULT_CONFIG overlaid with the numeric keys of <store>/config.json
+        (if present; invalid JSON raises)."""
         cfg = dict(DEFAULT_CONFIG)
-        path = self.root / "config.json"
-        with contextlib.suppress(OSError, ValueError, TypeError):
-            data = json.loads(path.read_text())
-            for key in DEFAULT_CONFIG:
-                if isinstance(data.get(key), (int, float)) and not isinstance(data[key], bool):
-                    cfg[key] = data[key]
+        try:
+            data = json.loads((self.root / "config.json").read_text())
+        except FileNotFoundError:
+            return cfg
+        for key in DEFAULT_CONFIG:
+            if isinstance(data.get(key), (int, float)) and not isinstance(data[key], bool):
+                cfg[key] = data[key]
         return cfg
 
     def next_run_id(self, command: str | None = None) -> str:
@@ -235,8 +237,8 @@ class Store:
         """Finished runs, and abandoned ones (status running, owner pid gone)."""
         try:
             meta = json.loads((self.runs_dir / run_id / "meta.json").read_text())
-        except (OSError, ValueError):
-            return False  # being created right now, or not ours to judge
+        except FileNotFoundError:
+            return False  # no meta.json (creator died before writing it): not ours to judge
         return meta.get("status") != "running" or not _pid_alive(meta.get("pid"))
 
     def gc(
@@ -260,11 +262,11 @@ class Store:
             def evict(run_id: str) -> bool:
                 if run_id in protected or not self._evictable(run_id):
                     return False
-                shutil.rmtree(self.runs_dir / run_id, ignore_errors=True)
+                shutil.rmtree(self.runs_dir / run_id)
                 evicted.append(run_id)
                 return True
 
-            for sig, runs in by_sig.items():
+            for runs in by_sig.values():
                 for run_id in runs[:-keep]:
                     evict(run_id)
 

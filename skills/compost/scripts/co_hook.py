@@ -13,11 +13,14 @@ What happens is `hook` in <git root>/.compost/config.json, or $COMPOST_HOOK:
             the permission prompt for the matched command. Opt-in only.
   off       never touch Bash calls.
 
+A leading `cd <dir> &&` into another repo is kept outside the routed command,
+so the run lands in that repo's store (sessions started in a folder of repos).
 Skipped: commands already using compost, pipes or redirections (the output
 is already being limited), backgrounded commands, help/version/collect-only
 runs, and any command containing the opt-out marker `# raw`.
-Contract: prints nothing (allow untouched) unless it routes the call; any
-error lets the call through untouched.
+Contract: prints nothing (allow untouched) unless it routes the call. Errors
+are not swallowed: a crash exits 1 with its traceback on stderr, which Claude
+Code shows as a non-blocking hook error (the Bash call still runs).
 """
 
 from __future__ import annotations
@@ -75,7 +78,33 @@ def matches(command: str) -> bool:
     return hit
 
 
-def routed(command: str, bin_path: str) -> str:
+_LEADING_CD = re.compile(r"""^\s*cd\s+('[^']*'|"[^"]*"|[^\s;&|]+)\s*&&\s*(.+)$""", re.S)
+
+
+def git_root(start: Path):
+    """Nearest ancestor containing .git, or None (filesystem walk: no `git` spawn)."""
+    for cand in (start, *start.parents):
+        if (cand / ".git").exists():
+            return cand
+    return None
+
+
+def routed(command: str, bin_path: str, cwd: str = "") -> str:
+    """The compost command to run instead. A leading `cd <dir> &&` into
+    another repo (a session started in a folder of repos) stays outside, so
+    compost runs in that repo and keeps its runs in that repo's store; the
+    explicit --store keeps the printed handles working from anywhere."""
+    m = _LEADING_CD.match(command)
+    if m and cwd:
+        try:
+            target = (Path(cwd) / os.path.expanduser(shlex.split(m.group(1))[0])).resolve()
+        except (ValueError, IndexError):  # unparsable `cd` argument: don't move it
+            target = None
+        root = git_root(target) if target is not None and target.is_dir() else None
+        if root is not None and root != git_root(Path(cwd).resolve()):
+            store = shlex.quote(str(root / ".compost"))
+            return (f"cd {m.group(1)} && {shlex.quote(bin_path)} --store {store} "
+                    f"run -- bash -c {shlex.quote(m.group(2).strip())}")
     return f"{shlex.quote(bin_path)} run -- bash -c {shlex.quote(command)}"
 
 
@@ -90,7 +119,7 @@ def mode_for(cwd: str) -> str:
         os.chdir(cwd)
         cfg = json.loads((find_repo_root() / ".compost" / "config.json").read_text())
         mode = cfg.get("hook") if isinstance(cfg, dict) else None
-    except (OSError, ValueError):
+    except FileNotFoundError:  # no config.json (or the cwd is gone): default mode
         mode = None
     finally:
         os.chdir(prev)
@@ -105,10 +134,11 @@ def decide(payload: dict, bin_path: str):
     command = tool_input.get("command")
     if not isinstance(command, str) or tool_input.get("run_in_background") or not matches(command):
         return None
-    mode = mode_for(payload.get("cwd") or os.getcwd())
+    cwd = payload.get("cwd") or os.getcwd()
+    mode = mode_for(cwd)
     if mode == "off":
         return None
-    new = routed(command, bin_path)
+    new = routed(command, bin_path, cwd)
     out = {"hookEventName": "PreToolUse"}
     if mode == "redirect":
         out["permissionDecision"] = "deny"
@@ -125,14 +155,11 @@ def decide(payload: dict, bin_path: str):
 
 
 def main() -> int:
-    try:
-        payload = json.loads(sys.stdin.read() or "{}")
-        bin_path = str(Path(__file__).resolve().parent.parent / "bin" / "compost")
-        answer = decide(payload, bin_path) if isinstance(payload, dict) else None
-        if answer:
-            print(json.dumps(answer))
-    except Exception:  # noqa: BLE001 -- never break the Bash tool
-        return 0
+    payload = json.loads(sys.stdin.read() or "{}")
+    bin_path = str(Path(__file__).resolve().parent.parent / "bin" / "compost")
+    answer = decide(payload, bin_path) if isinstance(payload, dict) else None
+    if answer:
+        print(json.dumps(answer))
     return 0
 
 

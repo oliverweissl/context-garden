@@ -29,7 +29,6 @@ DB_FILENAME = "index.sqlite"
 LEGACY_INDEX_FILENAME = "index.json"  # pre-v4 store; removed + rebuilt on sight
 INDEX_VERSION = 4  # bump when id/format semantics change, forces a rebuild
 PACKAGE_DECL_NAMES = {"pyproject.toml", "setup.cfg", "setup.py"}
-PARSERS = ("auto", "builtin", "tree-sitter")
 
 
 # ---------------------------------------------------------------- import resolution
@@ -271,7 +270,7 @@ def load_or_build_index(
         full = repo_root / rel
         try:
             st = full.stat()
-        except OSError:
+        except FileNotFoundError:  # deleted since discovery
             continue
         old = existing.get(rel)
         if old and old[1] == st.st_mtime and old[2] == st.st_size:

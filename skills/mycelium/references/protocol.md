@@ -16,7 +16,8 @@ order:
 The first failing rule denies the call. The denial reason is what the model
 reads, so it contains the fix (a template, the earlier agent's
 description, or the matching notes). Allowed calls are logged to
-`spawns.jsonl`. The hook fails open: any error allows the call.
+`spawns.jsonl`. A hook error (e.g. a corrupt `notes.json`) exits 1 with its
+traceback: Claude Code shows it as a non-blocking error and the call runs.
 
 `bin/mycelium hook subagent-stop` (SubagentStop) reads the finished
 agent's final reply (`last_assistant_message`, so background agents are

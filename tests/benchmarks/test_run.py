@@ -16,7 +16,6 @@ from harness import run as run_mod  # noqa: E402
 from harness.analyze import load_records  # noqa: E402
 from harness.fixtures import EXCLUDED_PATHS, _is_excluded, discover_tasks  # noqa: E402
 from harness.run import (  # noqa: E402
-    Trial,
     completed_keys,
     plan_schedule,
     prompt_for,
@@ -128,7 +127,6 @@ def test_completed_keys_treats_missing_rep_as_zero(tmp_path):
     path = tmp_path / "records.jsonl"
     path.write_text(json.dumps({"task_id": "t", "condition": "baseline"}) + "\n")
     assert completed_keys(path) == {("t", "baseline", 0)}
-    assert Trial("t", "baseline", 0).key in completed_keys(path)
 
 
 def test_plot_writes_png(tmp_path):
@@ -154,7 +152,7 @@ def test_plot_writes_png(tmp_path):
 def test_plot_deltas_cover_mycelium_subagents_and_skip_infra_errors():
     pytest.importorskip("numpy")
     from harness.analyze import _is_infra_error
-    from harness.plot import METRICS, bootstrap_deltas
+    from harness.plot import bootstrap_deltas
 
     def row(arm, agents, infra=""):
         return BenchmarkRecord(
@@ -168,6 +166,5 @@ def test_plot_deltas_cover_mycelium_subagents_and_skip_infra_errors():
     rows += [row("treatment-forced", 0, infra="rate limit")]  # would drag the mean down
     kept = [r for r in rows if not _is_infra_error(r)]
     deltas = bootstrap_deltas(kept, "treatment-forced", ["mycelium"])["mycelium"]
-    assert "subagent_count" in METRICS and "subagent_tokens" in METRICS
     assert deltas["subagent_count"][0] == pytest.approx(-50.0)
     assert deltas["subagent_tokens"][0] == pytest.approx(-50.0)

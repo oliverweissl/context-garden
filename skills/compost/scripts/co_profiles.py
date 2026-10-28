@@ -48,10 +48,6 @@ def _explicit_marker(i: int, line: str) -> dict | None:
     return {"line": i, "message": line.strip(), "severity": severity}
 
 
-def scan_explicit_markers(lines) -> list[dict]:
-    return [e for e in (_explicit_marker(i, l) for i, l in enumerate(lines, 1)) if e]
-
-
 class _Parser:
     def __init__(self, exit_code: int = 0):
         self.exit_code = exit_code
@@ -62,19 +58,6 @@ class _Parser:
 
     def finish(self) -> dict:
         return {"events": self.events, "numerical_summary": None}
-
-
-def _run(cls, lines, exit_code: int) -> dict:
-    p = cls(exit_code)
-    artifacts = set()
-    for i, line in enumerate(lines, start=1):
-        p.feed(i, line)
-        m = _ARTIFACT_RE.search(line)
-        if m:
-            artifacts.add(m.group(1))
-    out = p.finish()
-    out["artifacts"] = sorted(artifacts)
-    return out
 
 
 # ---------------------------------------------------------------- detection
@@ -129,13 +112,6 @@ class ProfileDetector:
         if "numerical_solver" in s:
             return "numerical_solver"
         return "generic"
-
-
-def detect_profile(command: str, text: str) -> str:
-    d = ProfileDetector()
-    for line in text.splitlines():
-        d.feed(line)
-    return d.result(command)
 
 
 # ---------------------------------------------------------------- generic
@@ -406,10 +382,6 @@ class BuildScanner(_Parser):
 
     def finish(self):
         return {"events": self.gcc.events + self.linker, "numerical_summary": None}
-
-
-def scan_build_diagnostics(lines) -> list[dict]:
-    return _run(BuildScanner, lines, 0)["events"]
 
 
 # ---------------------------------------------------------------- cmake

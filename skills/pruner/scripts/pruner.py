@@ -43,7 +43,8 @@ def _store_dir(repo_root: Path, explicit: str | None) -> Path:
 
 def _git_exclude_store(repo_root: Path) -> None:
     """Add `.pruner/` to .git/info/exclude so the default store doesn't
-    show up as untracked. Best-effort: silently does nothing on failure."""
+    show up as untracked. Does nothing without git, or when the user's
+    exclude file is not UTF-8."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--git-path", "info/exclude"],
@@ -61,7 +62,7 @@ def _git_exclude_store(repo_root: Path) -> None:
         exclude.parent.mkdir(parents=True, exist_ok=True)
         sep = "" if not existing or existing.endswith("\n") else "\n"
         exclude.write_text(f"{existing}{sep}{STORE_DIRNAME}/\n")
-    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+    except (FileNotFoundError, subprocess.TimeoutExpired, UnicodeDecodeError):
         return
 
 
@@ -175,7 +176,10 @@ def cmd_select(args, repo_root: Path, store_dir: Path) -> int:
 
     external_graph = None
     if args.graph:
-        external_graph = json.loads(Path(args.graph).read_text())
+        try:
+            external_graph = json.loads(Path(args.graph).read_text())
+        except json.JSONDecodeError as e:
+            raise ValueError(f"--graph {args.graph} is not valid JSON: {e}") from None
 
     result = select(index, repo_root, args.task, args.budget, changed, error_text, external_graph)
     slice_id = create_slice(store_dir, repo_root, result)
@@ -361,7 +365,9 @@ def main(argv=None) -> int:
     store_existed = store_dir.exists()
     try:
         return handlers[args.cmd](args, repo_root, store_dir)
-    except (OSError, ValueError) as e:
+    except json.JSONDecodeError:
+        raise  # a corrupt slice file of our own: show the traceback
+    except (FileNotFoundError, ValueError) as e:  # bad path / slice id / range from the user
         print(f"error: {e}", file=sys.stderr)
         return 1
     finally:

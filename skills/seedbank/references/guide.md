@@ -3,11 +3,12 @@
 ## Automatic observation (Claude Code hook)
 
 The context-garden plugin's `hooks/hooks.json` runs `bin/seedbank hook`
-asynchronously after every `Read`, `Grep` and `Glob` (silent, always exits
-0, only inside a git repo). If you copied just this skill, add to
+asynchronously after every `Read`, `Grep`, `Glob` and `Bash` (silent; records
+into the git repo holding the touched path; a crash shows as a non-blocking
+hook error with its traceback, it never blocks the tool call). If you copied just this skill, add to
 `.claude/settings.json` (or `~/.claude/settings.json`):
 ```json
-{"hooks": {"PostToolUse": [{"matcher": "Read|Grep|Glob",
+{"hooks": {"PostToolUse": [{"matcher": "Read|Grep|Glob|Bash",
   "hooks": [{"type": "command", "command": "<this-skill-dir>/bin/seedbank hook",
   "async": true, "timeout": 5}]}]}}
 ```

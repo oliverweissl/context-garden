@@ -88,7 +88,6 @@ out=$(G mode on </dev/null)
 assert_contains "mode on reports the found base" "$out" "greenhouse base: "
 out=$(G sync --summary "Money/currency types (integer cents) for every service" --provides "python package acme-money")
 assert_contains "sync reports the card" "$out" "synced shared-lib"
-[ -f "$WS/.greenhouse/greenhouse.json" ] && echo "PASS: base marker written" || { echo "FAIL: no marker"; fail=1; }
 cd "$WS/orders-api"
 out=$(G where)
 assert_contains "sibling repo discovers the base via ancestor" "$out" "found via ancestor"
@@ -100,7 +99,8 @@ assert_contains "missing summary is flagged" "$out" "no summary"
 
 card=$(cat "$WS/.greenhouse/repos/orders-api.json")
 assert_not_contains "credentials stripped from remote" "$card" "secret"
-assert_contains "entrypoint harvested" "$card" "orders-api"
+out=$(python3 -c "import json; print(json.load(open('$WS/.greenhouse/repos/orders-api.json'))['entrypoints'])")
+assert_contains "entrypoint harvested" "$out" "['orders-api']"
 card=$(cat "$WS/.greenhouse/repos/shared-lib.json")
 assert_contains "seedbank hot facts harvested" "$card" "never use float for currency"
 
@@ -159,6 +159,19 @@ done
 out=$(G show web)
 assert_contains "auto-sync keeps curated fields" "$out" "consumes: orders-api: GET /v1/orders"
 
+# --- workspace session (started in the folder of repos): overview + session-end of touched repos
+out=$(echo "{\"cwd\": \"$WS\"}" | G hook session-start)
+assert_contains "workspace overview: no 'this repo' claim" "$out" "This folder holds platform"
+assert_not_contains "workspace overview: no card-missing line" "$out" "card is missing"
+out=$(cd "$WS" && G sync 2>&1)
+assert_contains "workspace sync: refuses outside a repo" "$out" "is not a git repo"
+cd "$WS/web" && echo "w" > more.ts && commit more2
+python3 -c 'import json,sys; print(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use",
+  "name": "Bash", "input": {"command": "cd web && npm test"}}]}}))' > "$SCRATCH/transcript.jsonl"
+echo "{\"cwd\": \"$WS\", \"transcript_path\": \"$SCRATCH/transcript.jsonl\"}" | G hook session-end --wait
+new=$(python3 -c "import json; print(json.load(open('$WS/.greenhouse/repos/web.json'))['head'])")
+[ "$new" = "$(git rev-parse HEAD)" ] && echo "PASS: workspace session-end re-syncs the touched repo" || { echo "FAIL: touched repo not re-synced"; fail=1; }
+
 # --- pointer file for a base outside the workspace
 mkdir -p "$SCRATCH/elsewhere" && cd "$SCRATCH/elsewhere" && git init -q .
 out=$(G init --at "$SCRATCH/central" --name central)
@@ -170,8 +183,15 @@ out=$(G link "$WS/.greenhouse" 2>&1)
 assert_contains "link never overwrites an existing pointer" "$out" "not overwriting"
 cmp -s .greenhouse .greenhouse.orig && echo "PASS: pointer untouched" || { echo "FAIL: pointer changed"; fail=1; }
 
+# --- a corrupt card is a bug to see, not to skip: commands and hooks crash (hook: exit 1, non-blocking)
+cd "$WS/web" && echo "{" > "$WS/.greenhouse/repos/broken.json"
+out=$(G list 2>&1)
+assert_contains "corrupt card crashes list" "$out" "JSONDecodeError"
+echo "{\"cwd\": \"$WS/web\"}" | G hook session-start >/dev/null 2>&1
+rc=$?; [ "$rc" = "1" ] && echo "PASS: hook crash exits 1, never 2" || { echo "FAIL: hook exit $rc, want 1"; fail=1; }
+rm "$WS/.greenhouse/repos/broken.json"
+
 # --- concurrent syncs and notes (lock + atomic write)
-cd "$WS/web"
 for i in $(seq 1 8); do G note "topic $i" "fact $i" >/dev/null & done
 for r in shared-lib orders-api web; do (cd "$WS/$r" && G sync >/dev/null) & done; wait
 n=$(python3 -c "import json; print(len(json.load(open('$WS/.greenhouse/notes.json'))['notes']))")

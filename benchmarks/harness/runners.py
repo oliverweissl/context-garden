@@ -73,7 +73,7 @@ def _tool_use_path(block: dict[str, Any]) -> str | None:
 def _is_under(path_str: str, root: Path) -> bool:
     try:
         return Path(path_str).resolve().is_relative_to(root)
-    except (OSError, ValueError):
+    except ValueError:  # model-written path, e.g. with a NUL byte
         return False
 
 
@@ -85,11 +85,7 @@ def _subagent_usage(transcript: Path) -> tuple[int, int]:
     for path in sorted((transcript.parent / transcript.stem / "subagents").glob("agent-*.jsonl")):
         count += 1
         seen: set[str] = set()
-        try:
-            lines = path.read_text().splitlines()
-        except OSError:
-            continue
-        for line in lines:
+        for line in path.read_text().splitlines():
             try:
                 msg = json.loads(line).get("message")
             except json.JSONDecodeError:
@@ -174,7 +170,7 @@ def _skill_tokens_from_transcript(transcript: Path, workdir: Path) -> tuple[int,
                                 invoked.append(name)
                             if tool_use_is_skill.get(tool_id) and not block.get("is_error"):
                                 pending_skill_result = True
-    except OSError:
+    except FileNotFoundError:
         return 0, []
     return total, invoked
 

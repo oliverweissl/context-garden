@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from my_gate import evaluate, format_notes  # noqa: E402
-from my_store import Store  # noqa: E402
+from my_store import Store, split_by_repo, workspace_of, workspace_stores  # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 # Absolute wrapper path so printed handles run as-is (mycelium is not on PATH).
@@ -38,6 +38,18 @@ def cmd_brief(store: Store, args) -> int:
 
 
 def cmd_note(store: Store, args) -> int:
+    ws = workspace_of(Path.cwd())
+    if ws is not None:  # workspace: one note per repo holding the paths
+        missing = [p for p in args.paths if not (ws / p).exists()]
+        by_repo = split_by_repo(args.paths, ws) if not missing else {}
+        if missing or not by_repo:
+            print(f"mycelium: no such path(s) in a repo under {ws}: "
+                  f"{', '.join(missing or args.paths)}", file=sys.stderr)
+            return 2
+        for root, rel in by_repo.items():
+            note = Store(root).add_note(args.topic, args.text, rel, kind=args.kind)
+            print(f"{root.name}: {note['id']} {note['topic']} ({len(note['paths'])} path(s) hashed)")
+        return 0
     missing = [p for p in args.paths if not (store.repo_root / p).exists()]
     if missing:
         print(f"mycelium: no such path(s) under {store.repo_root}: {', '.join(missing)}", file=sys.stderr)
@@ -125,9 +137,17 @@ def parse_notes(text: str) -> list:
 
 def record_agent_notes(store: Store, text: str) -> list:
     """Record each well-formed note whose files exist; the rest are skipped
-    (a finding without a file to hash could never be marked stale)."""
+    (a finding without a file to hash could never be marked stale). In a
+    workspace each note is filed in the repo(s) holding its files."""
     recorded = []
+    ws = workspace_of(store.repo_root)
     for topic, finding, paths in parse_notes(text):
+        if ws is not None:
+            for root, rel in split_by_repo(paths, ws).items():
+                real = [p for p in rel if (root / p).is_file()]
+                if real:
+                    recorded.append(Store(root).add_note(topic, finding, real)["id"])
+            continue
         real = [p for p in paths if (store.repo_root / p).is_file()]
         if real:
             recorded.append(store.add_note(topic, finding, real)["id"])
@@ -135,45 +155,46 @@ def record_agent_notes(store: Store, text: str) -> list:
 
 
 def cmd_hook(store: Store, args) -> int:
-    """Claude Code hook entry. Fails open: any error allows the tool call."""
-    try:
-        payload = json.loads(sys.stdin.read() or "{}")
-        if args.event == "subagent-stop":
-            # Runs in the parent's harness, under the store lock: still "only
-            # the parent writes notes", without the parent spending a turn on it.
-            if payload.get("cwd"):
-                os.chdir(payload["cwd"])
-                store = Store()
-            record_agent_notes(store, payload.get("last_assistant_message") or "")
-            return 0
-        if payload.get("tool_name") not in ("Agent", "Task"):
-            return 0
-        if payload.get("cwd"):  # resolve the store from the session's dir, not the hook's
+    """Claude Code hook entry. Prints nothing on no-op paths; an error raises
+    (exit 1, a non-blocking hook error the user sees) and never denies the call."""
+    payload = json.loads(sys.stdin.read() or "{}")
+    if args.event == "subagent-stop":
+        # Runs in the parent's harness, under the store lock: still "only
+        # the parent writes notes", without the parent spending a turn on it.
+        if payload.get("cwd"):
             os.chdir(payload["cwd"])
             store = Store()
-        mode = store.config()["gate"]
-        if mode == "off":
-            return 0
-        session = payload.get("session_id") or "unknown"
-        tool_input = payload.get("tool_input") or {}
-        if args.event == "post-agent":
-            print(_hook_output("PostToolUse", context=(
-                "mycelium: the agent's `Notes:` lines were recorded automatically. Record any "
-                "other durable fact it found (where something lives, how it works) once: "
-                f"`{BIN} note \"<topic>\" \"<finding>\" <file>...`."
-            )))
-            return 0
-        with store.lock():
-            verdict, message = evaluate(store, session, tool_input, BIN)
-            if verdict == "allow":
-                store.log_spawn(session, tool_input.get("description", ""), tool_input.get("prompt", ""))
-        if verdict == "deny":
-            if mode == "warn":
-                print(_hook_output("PreToolUse", context=message))
-            else:
-                print(_hook_output("PreToolUse", deny=message))
-    except Exception:  # never break the Agent tool
+        record_agent_notes(store, payload.get("last_assistant_message") or "")
         return 0
+    if payload.get("tool_name") not in ("Agent", "Task"):
+        return 0
+    if payload.get("cwd"):  # resolve the store from the session's dir, not the hook's
+        os.chdir(payload["cwd"])
+        store = Store()
+    session = payload.get("session_id") or "unknown"
+    tool_input = payload.get("tool_input") or {}
+    ws = workspace_of(store.repo_root)
+    if ws is not None and args.event == "pre-agent":
+        store = workspace_stores(ws, f"{tool_input.get('description', '')}\n{tool_input.get('prompt', '')}")
+    mode = store.config()["gate"]
+    if mode == "off":
+        return 0
+    if args.event == "post-agent":
+        print(_hook_output("PostToolUse", context=(
+            "mycelium: the agent's `Notes:` lines were recorded automatically. Record any "
+            "other durable fact it found (where something lives, how it works) once: "
+            f"`{BIN} note \"<topic>\" \"<finding>\" <file>...`."
+        )))
+        return 0
+    with store.lock():
+        verdict, message = evaluate(store, session, tool_input, BIN)
+        if verdict == "allow":
+            store.log_spawn(session, tool_input.get("description", ""), tool_input.get("prompt", ""))
+    if verdict == "deny":
+        if mode == "warn":
+            print(_hook_output("PreToolUse", context=message))
+        else:
+            print(_hook_output("PreToolUse", deny=message))
     return 0
 
 
@@ -209,7 +230,16 @@ def main(argv=None) -> int:
         "brief": cmd_brief, "note": cmd_note, "list": cmd_list, "verify": cmd_verify,
         "drop": cmd_drop, "install-agents": cmd_install_agents, "hook": cmd_hook,
     }
-    return handlers[args.cmd](Store(), args)
+    store = Store()
+    ws = workspace_of(store.repo_root)
+    if ws is not None:  # a folder of repos: read the repos' stores, not its own
+        if args.cmd in ("verify", "drop"):
+            print("mycelium: note ids are per repo; run this from inside the repo "
+                  f"(cd <repo> && {BIN} {args.cmd} {args.note_id})", file=sys.stderr)
+            return 2
+        if args.cmd in ("brief", "list"):
+            store = workspace_stores(ws, getattr(args, "query", ""))
+    return handlers[args.cmd](store, args)
 
 
 if __name__ == "__main__":
