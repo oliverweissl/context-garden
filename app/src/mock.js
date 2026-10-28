@@ -71,6 +71,13 @@ const handlers = {
   ],
   list_profiles: () => [{ id: "claude-work", name: "work", agent: "claude", dir: "~/.claude-work", icon: "★", color: "#f0b43c" }],
   profile_plugin_version: () => "0.3.1",
+  profile_plugin_outdated: () => true,
+  account_plugins: () => [
+    { id: "context-garden@context-garden", version: "0.4.2", latest: null, stamp: "a" },
+    { id: "ase@ase", version: "1.0.0", latest: "1.1.0", stamp: "b" },
+  ],
+  update_account_plugin: () => null,
+  terminal_locations: ({ panes }) => Object.fromEntries(panes.map((p) => [p.key, "ledger"])),
   terminal_spawn: ({ onEvent }) => {
     setTimeout(() => onEvent.onmessage({ event: "output", data: btoa("mock terminal $ ") }), 50);
     return 1;
