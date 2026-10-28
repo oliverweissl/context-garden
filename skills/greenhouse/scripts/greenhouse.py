@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shlex
@@ -262,75 +263,115 @@ def cmd_forget(args, repo_root) -> int:
 
 # ------------------------------------------------------------------ retrieval
 
-def _score(query: set, text: str) -> int:
-    return len(query & words(text))
+NOTES_SHARE = 3  # notes get at most 1/NOTES_SHARE of the budget: repos come first
+OBSOLETE_WEIGHT = 0.25  # an obsolete repo must match ~4x better to outrank a live one
+MIN_ITEM_SCORE = 1.5  # a fact/finding needs about one rare word in common with the task
+MIN_RELATIVE_SCORE = 0.3  # a repo/note scoring under 30% of the best match is noise
+_OBSOLETE = re.compile(r"\b(obsolete|deprecated|archived|legacy|unmaintained)\b", re.I)
+_SLUG_TOKEN = re.compile(r"[a-z0-9][a-z0-9_.-]*")
+
+
+def _is_obsolete(card: dict) -> bool:
+    return bool(_OBSOLETE.search(f"{card['slug']} {summary_of(card)}"))
+
+
+def _card_text(card: dict) -> str:
+    cur = card.get("curated") or {}
+    return " ".join([card["slug"], summary_of(card), *card.get("packages", []),
+                     *cur.get("provides", []), *cur.get("consumes", [])])
+
+
+def _weights(docs: list) -> dict:
+    """Inverse document frequency per word: a word in every card or note
+    ('app', the platform name) weighs ~0, a word in one ('keycloak') the most."""
+    df = {}
+    for doc in docs:
+        for w in words(doc):
+            df[w] = df.get(w, 0) + 1
+    n = len(docs)
+    return {w: math.log((n + 1) / (k + 0.5)) for w, k in df.items()}
+
+
+def _score(query: set, text: str, weights: dict) -> float:
+    return sum(weights.get(w, 0.0) for w in query & words(text))
 
 
 def brief(base: Base, repo_root: Path, task: str, budget: int) -> str:
     cards = base.cards()
-    me = repo_slug(repo_root)
-    q = words(task)
+    notes_all = base.notes()
+    in_repo = (repo_root / ".git").exists()
+    me = repo_slug(repo_root) if in_repo else None
+    q = words(task) - words(base.meta().get("name", ""))
+    named = set(_SLUG_TOKEN.findall(task.lower()))
     uses, used_by = neighbours(base, me, cards)
     linked = {x.split(" ", 1)[0] for x in uses + used_by}
+    weights = _weights([_card_text(c) for c in cards] + [f"{n['topic']} {n['text']}" for n in notes_all]
+                       + [t for c in cards for t in c.get("facts", []) + c.get("findings", [])])
 
     out = [f"Greenhouse {base.meta().get('name', '')} ({base.root}): {len(cards)} repo(s)."]
     mine = next((c for c in cards if c["slug"] == me), None)
-    if mine is None:
+    if in_repo and mine is None:
         out.append(f"This repo ({me}) has no card yet: run {BIN} sync at the end of the task.")
-    elif mine.get("head") != head_of(repo_root):
+    elif in_repo and mine.get("head") != head_of(repo_root):
         out.append(f"This repo's card is older than HEAD: run {BIN} sync at the end of the task.")
     if uses or used_by:
         out.append(f"This repo uses: {', '.join(uses) or '-'}; used by: {', '.join(used_by) or '-'}")
 
     notes = []
-    for n in base.notes():
-        s = _score(q, f"{n['topic']} {n['text']} {' '.join(n.get('repos', []))}")
+    for n in notes_all:
+        s = _score(q, f"{n['topic']} {n['text']} {' '.join(n.get('repos', []))}", weights)
         if me in n.get("repos", []):
             s += 1
         if s:
             notes.append((s, n))
     notes.sort(key=lambda x: -x[0])
+    if notes:
+        notes = [x for x in notes if x[0] >= notes[0][0] * MIN_RELATIVE_SCORE]
 
     repos = []
     for c in cards:
         if c["slug"] == me:
             continue
-        cur = c.get("curated") or {}
-        head = _score(q, " ".join([c["slug"], summary_of(c), *c.get("packages", []),
-                                   *cur.get("provides", []), *cur.get("consumes", [])]))
-        items = sorted(((_score(q, t), t) for t in c.get("facts", []) + c.get("findings", [])),
+        head = _score(q, _card_text(c), weights) + (10 if c["slug"] in named else 0)
+        items = sorted(((_score(q, t, weights), t) for t in c.get("facts", []) + c.get("findings", [])),
                        key=lambda x: -x[0])
-        items = [t for s, t in items if s >= 2 or (s >= 1 and len(q) <= 3)][:3]
+        items = [t for s, t in items if s >= MIN_ITEM_SCORE][:3]
         bonus = 2 if c["slug"] in linked else 0
         if head + bonus or items:
-            repos.append((head * 2 + bonus + len(items), c, items))
+            score = head * 2 + bonus + len(items)
+            repos.append((score * OBSOLETE_WEIGHT if _is_obsolete(c) else score, c, items))
     repos.sort(key=lambda x: -x[0])
+    if repos:  # drop the long tail that only shares a common word with the task
+        repos = [r for r in repos if r[0] >= repos[0][0] * MIN_RELATIVE_SCORE]
 
     used = estimate_tokens("\n".join(out))
-    if notes:
-        out.append("Platform notes:")
-        for _, n in notes:
-            line = f"- [{n['id']}] {n['topic']}: {n['text']}"
-            if used + estimate_tokens(line) > budget:
-                break
-            out.append(line)
-            used += estimate_tokens(line)
-    shown = []
-    if repos:
-        out.append("Related repos:")
-        for _, c, items in repos:
-            stale = " (STALE card)" if card_state(base, c) == "stale" else ""
-            block = [f"- {c['slug']}{stale}: {summary_of(c) or '(no summary)'}"
-                     + (f" [checkout {c['local_path']}]" if c.get("local_path") else "")]
-            block += [f"  - {t}" for t in items]
-            cost = estimate_tokens("\n".join(block))
-            if used + cost > budget:
-                break
-            out += block
-            used += cost
-            shown.append(c["slug"])
-    if not notes and not repos:
-        out.append("Nothing in the base matches this task.")
+    reserve = budget // NOTES_SHARE if notes else 0
+    shown, block_out = [], []
+    for _, c, items in repos:
+        stale = " (STALE card)" if card_state(base, c) == "stale" else ""
+        block = [f"- {c['slug']}{stale}: {summary_of(c) or '(no summary)'}"
+                 + (f" [checkout {c['local_path']}]" if c.get("local_path") else "")]
+        block += [f"  - {t}" for t in items]
+        cost = estimate_tokens("\n".join(block))
+        if used + cost > budget - reserve:
+            break
+        block_out += block
+        used += cost
+        shown.append(c["slug"])
+    if block_out:
+        out += ["Related repos:", *block_out]
+    note_out = []
+    for _, n in notes:
+        line = f"- [{n['id']}] {n['topic']}: {n['text']}"
+        if used + estimate_tokens(line) > budget:
+            break
+        note_out.append(line)
+        used += estimate_tokens(line)
+    if note_out:
+        out += ["Platform notes:", *note_out]
+    if not block_out and not note_out:
+        out.append("Nothing in the base matches this task." if not notes and not repos else
+                   f"Matches did not fit the budget: raise --budget (now {budget}).")
     if shown:
         out.append(f"Full card: {BIN} show <slug>. Read another repo's files only if a card points there.")
     return "\n".join(out)
@@ -342,9 +383,6 @@ def cmd_brief(args, repo_root) -> int:
         return _no_base(how)
     print(brief(base, repo_root, args.task, args.budget))
     return 0
-
-
-_OBSOLETE = re.compile(r"\b(obsolete|deprecated|archived|legacy|unmaintained)\b", re.I)
 
 
 def session_overview(base: Base, repo_root: Path) -> str:
@@ -360,7 +398,7 @@ def session_overview(base: Base, repo_root: Path) -> str:
         lines.append(f"This repo uses: {', '.join(uses) or '-'}; used by: {', '.join(used_by) or '-'}")
     # Obsolete repos last: an alphabetical preview otherwise fills up with them.
     others = sorted((c for c in cards if c["slug"] != me),
-                    key=lambda c: bool(_OBSOLETE.search(f"{c['slug']} {summary_of(c)}")))
+                    key=_is_obsolete)
     used = estimate_tokens("\n".join(lines))
     for c in others:
         line = f"- {c['slug']}: {(summary_of(c) or '(no summary)')[:110]}"
