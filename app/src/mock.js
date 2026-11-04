@@ -41,7 +41,13 @@ const handlers = {
     groups: [{ input: "https://gitlab.com/acme/payments", provider: "gitlab", repos: 6 }],
     warnings: ["https://github.com/acme-old: gh: Not Found (HTTP 404)"], repo_inputs: [], group_inputs: ["x"],
   }),
-  retry_repos: ({ id }) => gardens.find((g) => g.id === id),
+  // Fails again right away, reporting before the reply like a quick real failure.
+  retry_repos: ({ id }) => {
+    const g = gardens.find((x) => x.id === id);
+    g.repos.forEach((repo, index) => repo.status === "failed" && emit("garden-progress", { garden: id, index, repo }));
+    emit("garden-ready", id);
+    return g;
+  },
   forget_missing_repos: ({ id }) => gardens.find((g) => g.id === id),
   add_to_garden: ({ id }) => gardens.find((g) => g.id === id),
   recommend_skills: () => ({ preset: "platform", reason: "6 repositories: greenhouse shares what each repo provides.", modes: gardens[0].skills, presets }),
@@ -83,6 +89,14 @@ const handlers = {
     return 1;
   },
 };
+
+const listeners = new Map();
+const emit = (name, payload) => (listeners.get(name) || []).forEach((cb) => cb({ payload }));
+
+export async function mockListen(name, cb) {
+  listeners.set(name, [...(listeners.get(name) || []), cb]);
+  return () => listeners.set(name, listeners.get(name).filter((x) => x !== cb));
+}
 
 export function mockInvoke(cmd, args) {
   const fn = handlers[cmd];

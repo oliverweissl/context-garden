@@ -6,7 +6,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 const inTauri = "__TAURI_INTERNALS__" in window;
 const mock = !inTauri && import.meta.env.DEV ? await import("./mock.js") : null;
 const invoke = mock ? mock.mockInvoke : tauriInvoke;
-const listen = mock ? async () => () => {} : tauriListen;
+const listen = mock ? mock.mockListen : tauriListen;
 
 export const api = {
   defaultRoot: () => invoke("default_root"),
