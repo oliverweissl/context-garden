@@ -32,6 +32,13 @@ impl Repo {
     pub fn ready(&self) -> bool {
         matches!(self.status.as_str(), "cloned" | "linked" | "local")
     }
+
+    /// Its folder still holds the repository. A deleted repo can leave a
+    /// folder behind with nothing but the `.claude` settings the app wrote.
+    pub fn on_disk(&self) -> bool {
+        std::fs::read_dir(&self.path)
+            .is_ok_and(|mut entries| entries.any(|e| e.is_ok_and(|e| e.file_name() != ".claude")))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

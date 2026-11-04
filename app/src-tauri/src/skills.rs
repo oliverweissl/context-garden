@@ -146,9 +146,10 @@ fn garden_plugins(garden: &Garden) -> BTreeMap<String, bool> {
 }
 
 /// Terminals start in the garden root or a repo; both carry the settings.
+/// Deleted repos are skipped, so their folder is not created again.
 fn folders(garden: &Garden) -> Vec<(String, std::path::PathBuf)> {
     let mut out = vec![("garden root".to_string(), expand_tilde(&garden.root))];
-    out.extend(garden.repos.iter().filter(|r| r.ready()).map(|r| (r.name.clone(), Path::new(&r.path).to_path_buf())));
+    out.extend(garden.repos.iter().filter(|r| r.ready() && r.on_disk()).map(|r| (r.name.clone(), Path::new(&r.path).to_path_buf())));
     out
 }
 
@@ -225,6 +226,7 @@ mod tests {
         let (good, broken) = (tmp.join("good"), tmp.join("broken"));
         for dir in [&good, &broken] {
             std::fs::create_dir_all(dir.join(".claude")).unwrap();
+            std::fs::write(dir.join("README.md"), "").unwrap();
         }
         std::fs::write(good.join(".claude/settings.local.json"), r#"{"model": "x"}"#).unwrap();
         std::fs::write(broken.join(".claude/settings.local.json"), "{oops").unwrap();

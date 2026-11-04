@@ -81,7 +81,7 @@ fn seedbank_facts(repo: &Path) -> usize {
 
 fn repo_stats(repo: &crate::store::Repo) -> RepoStats {
     let path = Path::new(&repo.path);
-    let present = path.is_dir();
+    let present = repo.on_disk();
     let mut s = RepoStats {
         name: repo.name.clone(),
         path: repo.path.clone(),
@@ -91,7 +91,7 @@ fn repo_stats(repo: &crate::store::Repo) -> RepoStats {
     };
     if !present {
         if repo.ready() {
-            s.status = "missing".into(); // was on disk, folder deleted since
+            s.status = "missing".into(); // was on disk, deleted since
         }
         return s;
     }
@@ -356,6 +356,14 @@ mod tests {
         };
         assert_eq!(super::repo_stats(&repo("cloned")).status, "missing");
         assert_eq!(super::repo_stats(&repo("pending")).status, "pending"); // never was on disk
+        // Only the app's own settings left behind: still deleted.
+        let dir = std::env::temp_dir().join(format!("cg-leftover-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(".claude")).unwrap();
+        let leftover = crate::store::Repo { path: dir.to_string_lossy().into(), ..repo("cloned") };
+        assert_eq!(super::repo_stats(&leftover).status, "missing");
+        std::fs::write(dir.join("README.md"), "").unwrap();
+        assert_ne!(super::repo_stats(&leftover).status, "missing");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
