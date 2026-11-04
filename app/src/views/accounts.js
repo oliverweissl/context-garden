@@ -12,7 +12,7 @@ const COLORS = ["#46d872", "#5bb0ff", "#a68cff", "#f0b43c", "#ff7a8f", "#ee8f4f"
 
 const CG = "context-garden@context-garden";
 
-/** Accounts settings: the app's accounts, the agents' default logins, their plugins. Returns a cleanup. */
+/** Accounts settings: the app's accounts and their plugins. Returns a cleanup. */
 export async function accountsPanel(app) {
   const agents = (await api.agents()).filter((a) => a.profiles);
   const list = h("div", { class: "grid" });
@@ -44,13 +44,13 @@ export async function accountsPanel(app) {
   }
 
   /**
-   * Plugins of an account (or a default login): each with its version and an
+   * Plugins of an account: each with its version and an
    * update button; context-garden is offered for install when missing.
    */
   function pluginsBlock(p) {
     if (!["claude", "codex"].includes(p.agent)) return null;
     const block = h("div", { class: "plugin-list small" }, h("span", { class: "faint" }, "Reading plugins…"));
-    const profile = p.default ? null : p.id;
+    const profile = p.id;
     const busy = async (btn, label, work, done) => {
       btn.disabled = true;
       btn.textContent = label;
@@ -70,7 +70,7 @@ export async function accountsPanel(app) {
         return block.replaceChildren(h("span", { class: "bad" }, errText(e)));
       }
       // Offline or GitHub unreachable: just no update hint.
-      const cgBehind = profile && list.some((x) => x.id === CG) ? await api.pluginOutdated(profile).catch(() => false) : false;
+      const cgBehind = list.some((x) => x.id === CG) ? await api.pluginOutdated(profile).catch(() => false) : false;
       const rows = list.map((x) => {
         const newer = x.latest || (x.id === CG && cgBehind);
         const name = x.id.endsWith(`@${x.id.split("@")[0]}`) ? x.id.split("@")[0] : x.id;
@@ -86,7 +86,7 @@ export async function accountsPanel(app) {
               `${name} updated for ${p.name}; restart its terminals to load it`),
           }, newer ? "Update" : "Check"));
       });
-      if (!list.some((x) => x.id === CG) && profile) {
+      if (!list.some((x) => x.id === CG)) {
         rows.unshift(h("div", { class: "plugin-line" },
           h("span", { class: "warn" }, "No context-garden skills in this account"),
           h("span", { class: "grow" }),
@@ -116,14 +116,6 @@ export async function accountsPanel(app) {
           onclick: async () => { await api.removeProfile(p.id); draw(); },
         }, "Remove"),
         h("button", { class: "btn", onclick: () => login(p) }, "Sign in")))));
-    // The logins the agents use without an app account.
-    for (const a of agents.filter((x) => x.found)) {
-      const p = { default: true, id: `default:${a.id}`, name: `${a.label} (default login)`, agent: a.id, icon: "", color: "" };
-      list.append(h("div", { class: "card" },
-        h("div", { class: "row between" }, h("h3", {}, p.name), h("span", { class: "chip" }, a.label)),
-        h("div", { class: "faint small" }, "Terminals without an account use this login."),
-        pluginsBlock(p)));
-    }
   }
 
   const choice = { icon: ICONS[0], color: COLORS[0] };

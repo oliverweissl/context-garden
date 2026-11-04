@@ -228,7 +228,7 @@ fn retry_repos(app: AppHandle, id: String, paths: Vec<String>) -> Result<Garden,
 #[tauri::command]
 fn forget_missing_repos(store: State<Store>, id: String) -> Result<Garden, String> {
     store.update_garden(&id, |g| {
-        g.repos.retain(|r| !r.ready() || Path::new(&r.path).is_dir());
+        g.repos.retain(|r| !r.ready() || r.on_disk());
         Ok(g.clone())
     })
 }

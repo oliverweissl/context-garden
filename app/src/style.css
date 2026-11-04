@@ -60,8 +60,8 @@ a { color: var(--accent); text-decoration: none; }
 .navlink:hover { color: var(--text); }
 
 main { flex: 1; overflow: auto; padding: 0 24px 32px; }
-/* The garden page scrolls: the numbers on top, then terminals as tall as the window. */
-main.full { display: flex; flex-direction: column; padding-bottom: 12px; }
+/* The garden page fits the window: the numbers on top, terminals take the rest; only terminals scroll. */
+main.full { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
 
 .hero { padding: 36px 0 20px; }
 .kicker { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); }
@@ -141,7 +141,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .warn { color: var(--warn, #c98500); }
 
 /* garden view */
-.dash { flex: none; }
+/* On a short window the numbers scroll in place; terminals keep at least half. */
+.dash { flex: 0 1 auto; min-height: 0; overflow: auto; }
 .garden-head { display: flex; align-items: center; gap: 12px; padding: 18px 0 12px; flex-wrap: wrap; }
 .title { margin: 0; font-size: 30px; text-transform: uppercase; }
 .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 12px; }
@@ -168,7 +169,7 @@ th { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: 
 td { max-width: 420px; }
 
 /* terminals */
-.workspace { flex: 1 0 auto; display: flex; flex-direction: column; min-height: calc(100vh - 70px); gap: 10px; }
+.workspace { flex: 1; display: flex; flex-direction: column; min-height: 50%; gap: 10px; }
 .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .empty { border: 1px dashed var(--line-2); border-radius: var(--radius); padding: 40px; text-align: center; }
 .panes { flex: 1; min-height: 0; display: flex; }

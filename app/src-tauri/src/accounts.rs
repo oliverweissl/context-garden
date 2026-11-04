@@ -139,6 +139,13 @@ pub fn update(agent: &str, dir: &Path, plugin: &str) -> Result<(), String> {
             let was_on = claude_enabled(dir, plugin);
             run_env("claude", &["plugin", "marketplace", "update", marketplace], None, &env)?;
             run_env("claude", &["plugin", "update", plugin, "--scope", "user"], None, &env)?;
+            // `plugin update` goes by version: newer commits under the same
+            // version (context-garden on main) need a fresh install.
+            let head = claude_marketplace_root(dir, marketplace).and_then(|r| git(&["rev-parse", "HEAD"], &r));
+            if head.is_some() && head != installed_commit("claude", dir, plugin) {
+                run_env("claude", &["plugin", "uninstall", plugin, "--scope", "user", "--keep-data"], None, &env)?;
+                run_env("claude", &["plugin", "install", plugin, "--scope", "user"], None, &env)?;
+            }
             if !was_on {
                 // Already off is fine; the update must not leave it on everywhere.
                 let _ = run_env("claude", &["plugin", "disable", plugin, "--scope", "user"], None, &env);
