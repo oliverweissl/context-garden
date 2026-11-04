@@ -3,7 +3,7 @@ import { h, toast, errText } from "../ui.js";
 
 /** On disk and usable. */
 export const READY = new Set(["cloned", "linked", "local"]);
-const ACTIVE = new Set(["pending", "cloning"]);
+export const ACTIVE = new Set(["pending", "cloning"]);
 
 const PLAN_LABEL = {
   pending: "to clone", cloning: "cloning…", cloned: "cloned", linked: "linked", local: "already on disk", failed: "failed",
@@ -51,6 +51,13 @@ export function planList(repos) {
   }));
 }
 
+/** The most common failure reason, so a retry that fails again says why. */
+function failedWhy(repos) {
+  const count = new Map();
+  for (const r of repos) if (r.status === "failed") count.set(r.error || "unknown error", (count.get(r.error || "unknown error") || 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1])[0][0];
+}
+
 /** Keep what the user looks at in place while rows above it come and go. */
 function keepScroll(scroller, mutate) {
   if (!scroller || !scroller.scrollTop) return mutate();
@@ -66,8 +73,9 @@ function keepScroll(scroller, mutate) {
  * with its own bar. Repos still to do are listed; finished ones fold into the
  * group's count, and a group with nothing left collapses to one line. Failures
  * stay listed with their reason and can be retried. Rows update in place.
+ * With `onHide`, a finished board with failures offers to hide itself.
  */
-export function cloneBoard(garden, { onReady } = {}) {
+export function cloneBoard(garden, { onReady, onHide } = {}) {
   let repos = garden.repos;
   const sections = new Map();
   const rows = new Map(); // index -> { li, where }
@@ -75,18 +83,27 @@ export function cloneBoard(garden, { onReady } = {}) {
   const total = bar();
   const counts = h("span", { class: "muted small" });
   const retryAll = h("button", { class: "btn", hidden: true, onclick: () => retry([]) }, "Retry failed");
+  const hide = h("button", { class: "btn ghost", hidden: true, onclick: () => onHide?.() }, "Hide");
   const body = h("div", { class: "cl" });
   const el = h("div", { class: "card" },
-    h("div", { class: "row between" }, title, h("div", { class: "row" }, counts, retryAll)),
+    h("div", { class: "row between" }, title, h("div", { class: "row" }, counts, retryAll, hide)),
     total.el,
     body);
 
+  let retrying = 0; // repos sent back to the queue, to tell if they fail again
   async function retry(paths) {
+    // Mark them pending here, before the call: a quick failure reports over
+    // events before the call returns, and its reply must not undo that.
+    const again = repos.map((r) => (r.status === "failed" && (!paths.length || paths.includes(r.path))
+      ? { ...r, status: "pending", error: null } : r));
+    retrying = again.filter((r, i) => r !== repos[i]).length;
+    setRepos(again);
     try {
-      const g = await api.retry(garden.id, paths);
-      setRepos(g.repos);
+      await api.retry(garden.id, paths);
     } catch (e) {
+      retrying = 0;
       toast(errText(e), "error");
+      setRepos((await api.garden(garden.id).catch(() => ({ repos }))).repos);
     }
   }
 
@@ -170,6 +187,7 @@ export function cloneBoard(garden, { onReady } = {}) {
       counts.textContent = `${done}/${n} in${failed ? ` · ${failed} failed` : ""}`;
       title.textContent = active ? `Fetching ${n - active} of ${n}…` : failed ? `Done, ${failed} failed` : "All repositories are in";
       retryAll.hidden = !failed;
+      hide.hidden = !onHide || !!active || !failed;
       retryAll.disabled = !!active;
       for (const s of sections.values()) s.retry.disabled = !!active;
       el.querySelectorAll(".cl-failed .icon").forEach((b) => (b.disabled = !!active));
@@ -195,6 +213,9 @@ export function cloneBoard(garden, { onReady } = {}) {
       if (payload !== garden.id) return;
       const g = await api.garden(garden.id);
       setRepos(g.repos);
+      const failed = g.repos.filter((r) => r.status === "failed").length;
+      if (retrying && failed) toast(`${failed} ${failed === 1 ? "repository" : "repositories"} failed again: ${failedWhy(g.repos)}`, "error");
+      retrying = 0;
       onReady?.(g);
     });
     // The run may have ended before we subscribed.

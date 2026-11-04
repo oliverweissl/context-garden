@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { h, toast, errText, setCrumbs, tile, fmt, languageBar, tokenDonut, modal, SKILL_COLORS } from "../ui.js";
-import { cloneBoard, READY } from "./cloning.js";
+import { cloneBoard, READY, ACTIVE } from "./cloning.js";
 import { planCard, SOURCES_HINT, LINK_HELP } from "./plant.js";
 import { skillPicker, pluginPanel } from "./skills.js";
 import { terminalArea } from "../terminals.js";
@@ -97,22 +97,28 @@ export async function renderGarden(app, id) {
     .map(([s]) => h("span", { class: "chip", style: `--c:${SKILL_COLORS[s]}` }, s));
   const dots = h("div", { class: "chips" }, skillDots());
 
-  /** Clone progress, shown while repos are being fetched or some failed. */
+  /** Clone progress while repos are fetched; afterwards failures fold into one line. */
   async function showBoard() {
     board?.dispose();
     board = cloneBoard(garden, {
       onReady: (g) => {
         garden.repos = g.repos;
-        if (g.repos.every((r) => READY.has(r.status))) {
-          board?.dispose();
-          board = null;
-          boardSlot.replaceChildren();
-        }
+        if (g.repos.every((r) => READY.has(r.status))) hideBoard();
         refresh();
       },
+      onHide: () => hideBoard(),
     });
     boardSlot.replaceChildren(board.el);
     await board.watch();
+  }
+
+  function hideBoard() {
+    board?.dispose();
+    board = null;
+    const failed = garden.repos.filter((r) => r.status === "failed").length;
+    boardSlot.replaceChildren(failed ? h("div", { class: "card row between" },
+      h("span", { class: "small bad" }, `${failed} ${failed === 1 ? "repository" : "repositories"} could not be fetched.`),
+      h("button", { class: "btn", onclick: () => showBoard() }, "Show and retry")) : "");
   }
 
   const addPanel = (close) => {
@@ -200,6 +206,7 @@ export async function renderGarden(app, id) {
   const terms = await terminalArea(garden);
   app.append(h("div", { class: "dash" }, head, tiles, missingSlot, h("div", { class: "dash-meta" }, langs, refreshBtn), boardSlot), terms.el);
   refresh();
-  if (!garden.repos.every((r) => READY.has(r.status))) showBoard();
+  if (garden.repos.some((r) => ACTIVE.has(r.status))) showBoard();
+  else hideBoard();
   return () => { board?.dispose(); terms.dispose(); };
 }
