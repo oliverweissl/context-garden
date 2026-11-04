@@ -18,7 +18,7 @@ Two options. Both give you the same six skills; the app adds one window around t
 |---|---|---|
 | For | multi-repo platforms, several agents and accounts | any Claude Code setup |
 | You get | gardens of repos, skills per garden, agent terminals, dashboard | the six skills, hooks and agents |
-| Needs | `git`; Claude Code and/or Codex; `gh` / `glab` for orgs and groups | Claude Code |
+| Needs | `git`; Claude Code and/or Codex; logged-in `gh` / `glab` for orgs and groups; Rust only to build from source | Claude Code |
 
 ### Option 1: Full app (ContextGarden)
 
@@ -32,15 +32,36 @@ code-signed yet, so the first start needs one extra step:
 - **Windows:** SmartScreen, then "More info", then "Run anyway".
 - **Linux:** `sudo apt install ./ContextGarden_*.deb`, or `chmod +x` the `.AppImage` and run it.
 
-**From source.** Needs Rust ([rustup](https://rustup.rs)), Node 18+ and the
-[Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (WebView2 on
-Windows, `webkit2gtk` on Linux):
+**From source.** Needs Rust, Node 18+ and the
+[Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (Xcode Command Line
+Tools on macOS, WebView2 on Windows, `webkit2gtk` on Linux). Rust is not optional, the app's
+backend is Rust:
+```bash
+# Rust (https://rustup.rs); on Windows: winget install Rustlang.Rustup
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+xcode-select --install   # macOS only, if not installed yet
+```
+Then build the installer and install it like a release:
 ```bash
 git clone https://github.com/oliverweissl/context-garden && cd context-garden/app
 npm install
-npm run tauri dev      # run it
-npm run tauri build    # or build the installer: src-tauri/target/release/bundle/
+npm run tauri build    # installer in src-tauri/target/release/bundle/
 ```
+Use the installed app, not `npm run tauri dev`: the dev build is for working on the app
+itself and some features work less well in it.
+
+**Command-line tools.** The app drives your own CLIs, so install them first:
+
+- `git`, and Claude Code and/or Codex.
+- **GitHub orgs:** `gh` (`brew install gh`, `winget install GitHub.cli`, or your package
+  manager), then `gh auth login`.
+- **GitLab groups:** `glab` (`brew install glab`, `winget install glab.glab`, or your
+  package manager), then `glab auth login`. It asks for a
+  [personal access token](https://gitlab.com/-/user_settings/personal_access_tokens) with
+  the `api` and `write_repository` scopes. For self-hosted GitLab:
+  `glab auth login --hostname gitlab.example.com`.
+
+Single repo URLs and local folders need neither `gh` nor `glab`.
 
 **Then:** add your accounts (optional; the app signs in through the agent CLI and installs the
 skills into each), start a garden from repos, folders, GitLab groups or GitHub orgs, take the
