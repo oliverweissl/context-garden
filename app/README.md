@@ -17,8 +17,12 @@ code-signed yet, so the first start needs one extra step:
   `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
 - **Windows:** SmartScreen, then "More info", then "Run anyway".
 
-The app needs `git` and Claude Code and/or Codex on your PATH; for groups and orgs also a
-logged-in `glab` / `gh`. When a newer release is out, a "Version … available" button
+The app needs `git` and Claude Code and/or Codex on your PATH. For GitHub orgs it also
+needs `gh` (`brew install gh` / `winget install GitHub.cli`, then `gh auth login`); for
+GitLab groups `glab` (`brew install glab` / `winget install glab.glab`, then
+`glab auth login` with a personal access token that has the `api` and `write_repository`
+scopes; add `--hostname gitlab.example.com` for self-hosted GitLab). Single repo URLs and
+local folders need neither. When a newer release is out, a "Version … available" button
 appears next to Settings.
 
 ## Use it
@@ -37,15 +41,18 @@ appears next to Settings.
 
 ## Build from source
 
-Needs Rust (`rustup`), Node 18+, and the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
-for your OS (WebView2 on Windows, `webkit2gtk` on Linux).
+Needs Rust, Node 18+, and the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
+for your OS (Xcode Command Line Tools on macOS, WebView2 on Windows, `webkit2gtk` on Linux):
 
 ```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Windows: winget install Rustlang.Rustup
 cd app
 npm install
-npm run tauri dev      # run from source
 npm run tauri build    # installer for this OS in src-tauri/target/release/bundle/
 ```
+
+Install the bundle and use that. `npm run tauri dev` is for working on the app itself;
+some features work less well in the dev build.
 
 `npm run dev` alone serves the UI in a normal browser with fake data (`src/mock.js`),
 handy for UI work; it is never part of a build.
