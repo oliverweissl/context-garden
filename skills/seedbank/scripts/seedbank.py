@@ -183,6 +183,9 @@ def cmd_observe_run(args, store: Store) -> int:
     except subprocess.TimeoutExpired as e:  # subprocess.run kills the child on timeout
         timed_out = True
         raw, returncode = (e.stdout or b""), 124
+    except OSError as e:  # missing / non-executable command: log it as a failed run
+        raw = f"{cmd_list[0]}: {e.strerror or e}\n".encode()
+        returncode = 126 if isinstance(e, PermissionError) else 127
     text = raw.decode(errors="replace")
     cost = estimate_tokens(text)
     failure_cost = 0 if returncode == 0 else FAILURE_COST_RUN

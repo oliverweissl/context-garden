@@ -279,6 +279,17 @@ else
   fail=1
 fi
 
+# --- observe run with a missing command records a failure, no traceback -----
+nf_out=$(CC observe run -- no-such-tool-xyz --flag 2>&1)
+rc=$?
+nf_kept=$(python3 -c "import json,sys; print(any(json.loads(l).get('key')=='run:no-such-tool-xyz --flag' and json.loads(l).get('exit_code')==127 for l in open(sys.argv[1]) if l.strip()))" .seedbank/observations.jsonl)
+if [ "$rc" -eq 127 ] && grep -q "FAILED (exit 127)" <<<"$nf_out" && ! grep -q "Traceback" <<<"$nf_out" && [ "$nf_kept" = "True" ]; then
+  echo "PASS: observe run missing command: recorded as failed (exit 127)"
+else
+  echo "FAIL: observe run missing command (rc=$rc, recorded=$nf_kept): $nf_out"
+  fail=1
+fi
+
 # --- scoring fixtures (separate store so rankings are isolated) -------------
 SC() { CC --store "$SCRATCH/score_store" "$@"; }
 val() { SC candidates --all --json | python3 -c "import json,sys; print([c['value'] for c in json.load(sys.stdin) if c['key']==sys.argv[1]][0])" "$1"; }
