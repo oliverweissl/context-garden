@@ -29,7 +29,7 @@ export async function renderHome(app) {
 
   app.append(
     h("section", { class: "hero" },
-      h("p", { class: "kicker" }, "v0.4"),
+      h("p", { class: "kicker" }, `v${__APP_VERSION__}`),
       h("h1", {}, "Your Gardens")),
     h("div", { class: "grid" },
       ...cards,
