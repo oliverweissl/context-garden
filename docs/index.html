@@ -677,7 +677,7 @@ footer { border-top: 1px solid var(--line); font-size: 0.74rem; text-transform: 
   </svg>
   <canvas id="pollen" aria-hidden="true"></canvas>
   <div class="intro-inner">
-    <p class="kicker"><b>v0.4</b> &nbsp;·&nbsp; For multi-repo platforms and agent swarms</p>
+    <p class="kicker"><b id="version">v0.5</b> &nbsp;·&nbsp; For multi-repo platforms and agent swarms</p>
     <h1 class="title"><span class="w1">Context.</span> <span class="w2">Cultivated.</span></h1>
     <p class="intro-lede">Keep a <b>whole platform</b> in your agents' heads. Six offline Skills for Claude Code share what every repo and every agent already knows, and trim what each one reads.</p>
   </div>
@@ -1271,6 +1271,12 @@ footer { border-top: 1px solid var(--line); font-size: 0.74rem; text-transform: 
 </footer>
 
 <script>
+// The kicker's version follows the plugin manifest on main (falls back to the text above).
+fetch("https://raw.githubusercontent.com/oliverweissl/context-garden/main/.claude-plugin/plugin.json")
+  .then((r) => (r.ok ? r.json() : null))
+  .then((m) => { if (m && /^\d+\.\d+/.test(m.version || "")) document.getElementById("version").textContent = "v" + m.version; })
+  .catch(() => {});
+
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
