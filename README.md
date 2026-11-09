@@ -155,6 +155,17 @@ when an agent brief names no repo.
 | greenhouse | session start: platform overview, or ask where the base is; session end: card sync if the base opted in | `envoy` reads another repo's checkout |
 | weeder | | `weeder` runs the whole slimming workflow |
 
+## Checklist mod
+
+`mods/checklist` is a separate, optional Claude Code mod (function hooks), installed from the
+same marketplace: `/plugin install checklist@context-garden`. When an answer ends with a
+checklist for you (`- [ ]` items, or 3+ numbered steps introduced by a line such as "please
+do these by hand:"), it opens a pane: tick each task and add a comment under it, then
+**Send to agent** submits the results as your next prompt, or **Ask about this** closes the
+pane and puts a reference to the list in your prompt box so you can type a question. A narrow
+terminal shows a band above the prompt with **Open** instead; `/checklist` reopens the last
+list. Checks: `claude plugin validate mods/checklist`, `claude plugin test mods/checklist`.
+
 ## Development
 
 ```bash

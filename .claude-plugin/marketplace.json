@@ -10,6 +10,11 @@
       "name": "context-garden",
       "source": ".",
       "description": "Installs compost, pruner, seedbank, mycelium, greenhouse, and weeder."
+    },
+    {
+      "name": "checklist",
+      "source": "./mods/checklist",
+      "description": "Claude Code mod: a checklist the agent hands you opens in a pane with checkboxes and per-task comments; send the results back or ask about the list."
     }
   ]
 }

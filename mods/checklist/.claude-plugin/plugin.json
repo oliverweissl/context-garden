@@ -1,0 +1,6 @@
+{
+  "name": "checklist",
+  "version": "0.1.0",
+  "description": "Turns a checklist the agent hands you into a pane: tick tasks, comment each, send the result back or ask about it.",
+  "types": "./types/index.d.ts"
+}
