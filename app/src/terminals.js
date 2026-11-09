@@ -282,7 +282,7 @@ class Workspace {
     if (!agents.length) return;
     const refs = agents.map((p) => ({
       key: p.opts.key, agent: p.opts.agent || null, profile: p.opts.profile || null,
-      session: p.opts.session || null, cwd: p.opts.cwd, started: p.started,
+      session: p.opts.session || null, cwd: p.opts.worktree || p.opts.cwd, started: p.started,
     }));
     api.terminalLocations(this.gardenId, refs)
       .then((at) => agents.forEach((p) => p.showLocation(at[p.opts.key])))
@@ -355,7 +355,7 @@ const inside = (r, e) => e.clientX >= r.left && e.clientX <= r.right && e.client
 
 /** What to save about a pane to start it again. */
 const record = (o) => ({
-  key: o.key, title: o.title, cwd: o.cwd, cwd_label: o.cwdLabel || "",
+  key: o.key, title: o.title, cwd: o.cwd, cwd_label: o.cwdLabel || "", worktree: o.worktree || null,
   agent: o.agent || null, profile: o.profile || null, session: o.session || null, flags: o.flags || [],
 });
 
@@ -467,7 +467,7 @@ class Pane {
       this.status,
       opts.account ? badge(opts.account) : null,
       h("b", {}, opts.title),
-      h("span", { class: "faint small ellipsis", title: "Started in" }, opts.cwdLabel),
+      this.where = h("span", { class: "faint small ellipsis", title: "Started in" }, opts.cwdLabel),
       this.location,
       h("span", { class: "grow" }),
       this.checklistChip,
@@ -620,12 +620,17 @@ class Pane {
       };
       const exit = (code) => this.exited(code);
       this.started = now();
-      this.id = this.opts.login
-        ? await api.login({ profile: this.opts.login, ...size }, out, exit)
-        : await api.spawn(
-          { garden: this.ws.gardenId, cwd: this.opts.cwd, agent: this.opts.agent, profile: this.opts.profile,
-            session: this.opts.session, resume: !!this.opts.resume, flags: this.opts.flags, ...size },
+      if (this.opts.login) {
+        this.id = await api.login({ profile: this.opts.login, ...size }, out, exit);
+      } else {
+        const { id, worktree } = await api.spawn(
+          { garden: this.ws.gardenId, cwd: this.opts.cwd, worktree: this.opts.worktree, agent: this.opts.agent,
+            profile: this.opts.profile, session: this.opts.session, resume: !!this.opts.resume,
+            flags: this.opts.flags, ...size },
           out, exit);
+        this.id = id;
+        this.showWorktree(worktree);
+      }
       this.term.focus();
       if (this.agent && this.ws.gardenId) {
         api.accountPlugins(this.opts.agent, this.opts.profile)
@@ -652,6 +657,17 @@ class Pane {
       return was ? `${name} ${was.version} → ${x.version}` : `${name} ${x.version} (new)`;
     });
     this.mark({ stale: changed.length ? `Runs older plugins than installed: ${changed.join(", ")}. Close and resume to load them.` : "" });
+  }
+
+  /** Its own git worktree (see worktrees.rs), remembered so a resume reopens it. */
+  showWorktree(path) {
+    if ((path || null) !== (this.opts.worktree || null)) {
+      this.opts.worktree = path || null;
+      this.ws.persist();
+    }
+    if (!path) return;
+    this.where.textContent = `${this.opts.cwdLabel} ⎇ ${path.split(/[\\/]/).pop()}`;
+    this.where.title = `Works in its own worktree: ${path}`;
   }
 
   showLocation(label) {
@@ -697,6 +713,12 @@ class Pane {
     if (this.id != null) api.kill(this.id);
     this.term.dispose();
     this.ws.remove(this);
+    const { worktree, cwd } = this.opts;
+    if (worktree && this.ws.gardenId) {
+      api.releaseWorktree(this.ws.gardenId, cwd, worktree)
+        .then((why) => why && toast(`Kept ${worktree} (${why})`))
+        .catch((e) => toast(errText(e), "error"));
+    }
   }
 }
 
@@ -793,7 +815,13 @@ const workspaces = new Map();
 /** Toolbar + panes for a garden. Returns the element; terminals survive re-render. */
 export async function terminalArea(garden) {
   let ws = workspaces.get(garden.id);
-  if (!ws) workspaces.set(garden.id, (ws = new Workspace(garden.id, garden.terminals || [])));
+  if (!ws) {
+    workspaces.set(garden.id, (ws = new Workspace(garden.id, garden.terminals || [])));
+    // Once per app run: clear out agent worktrees nothing uses; name those kept for their work.
+    api.sweepWorktrees(garden.id).then((kept) => {
+      if (kept.length) toast(`Agent worktrees kept (unsaved work): ${kept.map(([p, why]) => `${p} (${why})`).join("; ")}`);
+    }).catch(() => {});
+  }
 
   const [agents, profiles] = await Promise.all([api.agents(), api.profiles()]);
   const what = h("select", {},
@@ -860,6 +888,7 @@ export async function terminalArea(garden) {
   // Resuming: everything that was open at the last quit, or one recent pane.
   const fromRecord = (r) => ({
     key: r.key, session: r.session, resume: true, title: r.title, cwd: r.cwd, cwdLabel: r.cwd_label,
+    worktree: r.worktree,
     agent: r.agent, profile: r.profile, account: r.profile ? profiles.find((p) => p.id === r.profile) : null,
     flags: r.flags || [],
   });

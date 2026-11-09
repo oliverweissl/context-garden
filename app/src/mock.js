@@ -116,8 +116,12 @@ const handlers = {
     const text = agent || profile ? MOCK_AGENT : "mock terminal $ ";
     const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(text)));
     setTimeout(() => onEvent.onmessage({ event: "output", data: b64 }), 50);
-    return 1;
+    return { id: 1, worktree: null };
   },
+  worktree_release: () => null,
+  worktree_sweep: () => [],
+  get_settings: () => ({ worktrees: true }),
+  set_settings: () => null,
 };
 
 const listeners = new Map();
