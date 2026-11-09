@@ -223,6 +223,29 @@ fn retry_repos(app: AppHandle, id: String, paths: Vec<String>) -> Result<Garden,
     })
 }
 
+/// List the groups the garden was built from again: repos new in them (add
+/// them with `add_to_garden`) and repos that left them (`gone`).
+#[tauri::command]
+async fn resync_groups(store: State<'_, Store>, id: String) -> Result<sources::Resync, String> {
+    let g = store.garden(&id)?;
+    sources::resync(&g.root, g.layout == "flat", &g.protocol, &g.group_inputs, &g.repos)
+}
+
+/// Drop the repos at `paths` from the garden. Files on disk are never touched.
+#[tauri::command]
+fn forget_repos(app: AppHandle, id: String, paths: Vec<String>) -> Result<Garden, String> {
+    // Clone progress is reported by index into the repo list; keep it stable.
+    let cloning = app.state::<Cloning>();
+    let busy = cloning.0.lock().unwrap();
+    if busy.contains(&id) {
+        return Err("still cloning this garden; try again when it is done".into());
+    }
+    app.state::<Store>().update_garden(&id, |g| {
+        g.repos.retain(|r| !paths.contains(&r.path));
+        Ok(g.clone())
+    })
+}
+
 /// Drop repos whose folder was deleted from disk. Repos still being fetched
 /// (or that failed) are kept: they were never on disk.
 #[tauri::command]
@@ -893,6 +916,8 @@ pub fn run() {
             install_profile_plugin,
             forget_garden,
             forget_missing_repos,
+            forget_repos,
+            resync_groups,
             rename_garden,
             recommend_skills,
             apply_skills,

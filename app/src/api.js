@@ -20,6 +20,10 @@ export const api = {
   retry: (id, paths = []) => invoke("retry_repos", { id, paths }),
   forget: (id) => invoke("forget_garden", { id }),
   forgetMissing: (id) => invoke("forget_missing_repos", { id }),
+  /** List the garden's groups again: a plan of new repos plus `gone`, repos that left their group. */
+  resyncGroups: (id) => invoke("resync_groups", { id }),
+  /** Drop repos from the garden by path; files on disk stay. */
+  forgetRepos: (id, paths) => invoke("forget_repos", { id, paths }),
   rename: (id, name) => invoke("rename_garden", { id, name }),
   recommend: (id) => invoke("recommend_skills", { id }),
   applySkills: (id, modes) => invoke("apply_skills", { id, modes }),

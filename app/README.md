@@ -35,7 +35,9 @@ appears next to Settings.
    line), Find repositories, Plant garden. Failed clones can be retried.
 3. **Settings → Skills:** take the recommended preset or set each skill on / manual / off.
    External plugins (any Claude Code plugin marketplace) can be added for this garden only.
-   **Repositories** lists the garden's repos and adds more.
+   **Repositories** lists the garden's repos and adds more; **Resync groups** lists the
+   garden's groups again, clones repos new in them and offers to remove repos that left
+   (from the garden only, never from disk).
 4. **Terminals:** pick an agent or account and a folder from the tree, Open. Panes tile the
    area and can be resumed later (↺ Recent).
 

@@ -28,6 +28,26 @@ pub struct Plan {
     pub group_inputs: Vec<String>,
 }
 
+/// What a group resync found: new repos to add (planned like `Plan`) and repos
+/// of the garden that are no longer in their group.
+#[derive(Serialize)]
+pub struct Resync {
+    #[serde(flatten)]
+    pub plan: Plan,
+    pub gone: Vec<Repo>,
+}
+
+/// Which groups `plan` listed successfully and every repo in them, known or not.
+#[derive(Default)]
+struct Listing {
+    /// `Repo::group` values of the listed groups.
+    groups: HashSet<String>,
+    /// `repo_key` of every repo the listed groups hold.
+    keys: HashSet<String>,
+    /// Repos the garden already has.
+    skipped: usize,
+}
+
 #[derive(Debug, PartialEq)]
 enum Kind {
     Repo,
@@ -253,10 +273,6 @@ fn repo_key(r: &Repo) -> String {
 /// Plan the repos for `inputs`. `existing` are the repos already in the garden
 /// when adding to one: those are skipped and their folders count as taken.
 pub fn plan(root: &str, flat: bool, protocol: &str, inputs: &[String], existing: &[Repo]) -> Result<Plan, String> {
-    let root = expand_tilde(root);
-    let root_real = root.canonicalize().unwrap_or_else(|_| root.clone());
-    let mut repos: Vec<Repo> = Vec::new();
-    let mut groups = Vec::new();
     let mut warnings = Vec::new();
     let (mut repo_inputs, mut group_inputs) = (Vec::new(), Vec::new());
     for input in inputs.iter().map(|s| s.trim()).filter(|s| !s.is_empty()) {
@@ -265,6 +281,59 @@ pub fn plan(root: &str, flat: bool, protocol: &str, inputs: &[String], existing:
             Kind::Group => group_inputs.push(input.to_string()),
         }
     }
+    let (mut plan, listing) = plan_classified(root, flat, protocol, repo_inputs, group_inputs, existing, warnings);
+    if listing.skipped > 0 {
+        plan.warnings.push(format!("{} already in this garden, skipped", listing.skipped));
+    }
+    Ok(plan)
+}
+
+/// List the garden's group inputs again: repos new in a group are planned like
+/// `plan` does, repos of the garden a listed group no longer holds are `gone`.
+/// A group that cannot be listed (CLI missing, no access) is a warning and
+/// none of its repos count as gone.
+pub fn resync(root: &str, flat: bool, protocol: &str, group_inputs: &[String], existing: &[Repo]) -> Result<Resync, String> {
+    let mut warnings = Vec::new();
+    // Folder groups go through the folder path of `plan`, remote ones are
+    // listed without classifying again (no `glab` lookup, never a single repo).
+    let (mut folders, mut remotes) = (Vec::new(), Vec::new());
+    for input in group_inputs.iter().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        if expand_tilde(input).is_dir() {
+            folders.push(input.to_string());
+        } else if parse_remote(input).or_else(|| parse_remote(&format!("https://{input}"))).is_some() {
+            remotes.push(input.to_string());
+        } else {
+            warnings.push(format!("{input}: folder not found, skipped"));
+        }
+    }
+    let (mut plan, listing) = plan_classified(root, flat, protocol, folders, remotes, existing, warnings);
+    // A folder group that turned into a single repo is not a group any more.
+    plan.repos.retain(|r| r.group.is_some());
+    plan.repo_inputs.clear();
+    let gone = existing
+        .iter()
+        .filter(|r| r.group.as_ref().is_some_and(|g| listing.groups.contains(g)))
+        .filter(|r| !listing.keys.contains(&repo_key(r)))
+        .cloned()
+        .collect();
+    Ok(Resync { plan, gone })
+}
+
+/// `plan` for inputs already told apart into repos / folders and groups.
+fn plan_classified(
+    root: &str,
+    flat: bool,
+    protocol: &str,
+    mut repo_inputs: Vec<String>,
+    mut group_inputs: Vec<String>,
+    existing: &[Repo],
+    mut warnings: Vec<String>,
+) -> (Plan, Listing) {
+    let root = expand_tilde(root);
+    let root_real = root.canonicalize().unwrap_or_else(|_| root.clone());
+    let mut repos: Vec<Repo> = Vec::new();
+    let mut groups = Vec::new();
+    let mut listing = Listing::default();
     let known: HashSet<String> = existing.iter().map(repo_key).collect();
     let mut skipped = 0;
     // (repo index, preferred destination, fallback name) for collision handling.
@@ -288,6 +357,10 @@ pub fn plan(root: &str, flat: bool, protocol: &str, inputs: &[String], existing:
         if local.is_dir() {
             let real = local.canonicalize().unwrap_or(local);
             let inside = if real.join(".git").exists() { vec![] } else { repos_in(&real) };
+            if !real.join(".git").exists() {
+                listing.groups.insert(input.clone());
+                listing.keys.extend(inside.iter().map(|r| r.to_string_lossy().to_string()));
+            }
             if inside.is_empty() {
                 if !real.join(".git").exists() {
                     warnings.push(format!("{input}: not a git repository (added anyway)"));
@@ -376,6 +449,7 @@ pub fn plan(root: &str, flat: bool, protocol: &str, inputs: &[String], existing:
             provider: if github { "github" } else { "gitlab" }.into(),
             repos: listed.len(),
         });
+        listing.groups.insert(path.clone());
         for r in listed {
             let url = if protocol == "https" { &r.https } else { &r.ssh };
             let dest = if flat { r.name.clone() } else { r.nested.clone() };
@@ -388,12 +462,11 @@ pub fn plan(root: &str, flat: bool, protocol: &str, inputs: &[String], existing:
                 status: "pending".into(),
                 error: None,
             };
+            listing.keys.insert(repo_key(&repo));
             push(&mut repos, repo, Some((dest, r.full_path.replace('/', "-"))));
         }
     }
-    if skipped > 0 {
-        warnings.push(format!("{skipped} already in this garden, skipped"));
-    }
+    listing.skipped = skipped;
 
     // Same destination twice (flat layout, a repo also inside a group, or a
     // folder the garden already has): the later ones take their fallback name.
@@ -418,7 +491,7 @@ pub fn plan(root: &str, flat: bool, protocol: &str, inputs: &[String], existing:
 
     let mut unique = HashSet::new();
     repos.retain(|r| unique.insert(r.path.clone()));
-    Ok(Plan { repos, groups, warnings, repo_inputs, group_inputs })
+    (Plan { repos, groups, warnings, repo_inputs, group_inputs }, listing)
 }
 
 #[cfg(unix)]
@@ -578,5 +651,61 @@ mod clone_tests {
         let again = plan(garden.to_str().unwrap(), false, "ssh", &inputs, &have).unwrap();
         assert!(again.repos.is_empty());
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn resync_finds_new_and_gone_repos_of_a_group() {
+        let tmp = std::env::temp_dir().join(format!("cg-resync-{}", std::process::id()));
+        for name in ["a", "b"] {
+            std::fs::create_dir_all(tmp.join("code").join(name).join(".git")).unwrap();
+        }
+        let garden = tmp.join("garden");
+        let root = garden.to_str().unwrap();
+        let groups = vec![tmp.join("code").to_string_lossy().to_string()];
+        let mut have = plan(root, false, "ssh", &groups, &[]).unwrap().repos;
+        for r in &mut have {
+            r.status = "linked".into();
+        }
+        // A single repo outside any group never counts as gone.
+        have.push(Repo {
+            name: "solo".into(),
+            path: garden.join("solo").to_string_lossy().into(),
+            url: Some("https://github.com/acme/solo.git".into()),
+            source: None,
+            group: None,
+            status: "cloned".into(),
+            error: None,
+        });
+
+        let same = resync(root, false, "ssh", &groups, &have).unwrap();
+        assert!(same.plan.repos.is_empty() && same.gone.is_empty());
+        assert!(same.plan.warnings.is_empty());
+
+        std::fs::remove_dir_all(tmp.join("code/b")).unwrap();
+        std::fs::create_dir_all(tmp.join("code/c/.git")).unwrap();
+        let mut inputs = groups.clone();
+        inputs.push(tmp.join("vanished").to_string_lossy().to_string());
+        let r = resync(root, false, "ssh", &inputs, &have).unwrap();
+        assert_eq!(r.plan.repos.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["c"]);
+        assert_eq!(r.gone.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["b"]);
+        assert_eq!(r.plan.warnings.len(), 1, "{:?}", r.plan.warnings);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn resync_keeps_repos_of_a_group_it_cannot_list() {
+        let have = vec![Repo {
+            name: "api".into(),
+            path: "/g/acme/api".into(),
+            url: Some("git@nowhere.invalid:acme/api.git".into()),
+            source: None,
+            group: Some("acme".into()),
+            status: "cloned".into(),
+            error: None,
+        }];
+        // Fails to list (no CLI, or no such host): a warning, nothing gone.
+        let r = resync("/g", false, "ssh", &["https://nowhere.invalid/acme".to_string()], &have).unwrap();
+        assert!(r.gone.is_empty() && r.plan.repos.is_empty());
+        assert_eq!(r.plan.warnings.len(), 1);
     }
 }
