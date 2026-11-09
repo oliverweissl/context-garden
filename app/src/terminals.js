@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { api } from "./api.js";
 import { h, toast, errText, badge, modal } from "./ui.js";
+import { detectChecklist, carryOver, formatResults, formatReference } from "./checklist.js";
 
 const THEME = {
   background: "#040604", foreground: "#d9f2dc", cursor: "#46d872", cursorAccent: "#040604",
@@ -253,12 +254,14 @@ class Workspace {
 
   /** Drop one saved pane from the list. */
   forget(key) {
+    dropChecklist(key);
     this.saved = this.saved.filter((r) => r.key !== key);
     this.persist();
   }
 
   /** Drop closed panes from the list. Their conversations stay in the agent's own history. */
   forgetClosed() {
+    this.saved.filter((r) => !r.open).forEach((r) => dropChecklist(r.key));
     this.saved = this.saved.filter((r) => r.open);
     this.persist();
   }
@@ -396,6 +399,39 @@ const OUT_OF_CREDITS = /(?:usage|session|weekly|5-hour) limit (?:reached|hit)|hi
 // Escape sequences become spaces: TUIs move the cursor between the words of one message.
 const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
 
+/**
+ * Checklists an agent gave the user, per pane key (survives resume): the
+ * current one with its checks and comments, and the hashes already seen so
+ * the same list never pops up twice.
+ */
+const CHECKLIST_KEY = (key) => `cg.checklist.${key}`;
+const AUTO_OPEN_KEY = "cg.checklist.autoOpen";
+function loadChecklist(key) {
+  try { return { seen: [], current: null, ...JSON.parse(localStorage.getItem(CHECKLIST_KEY(key)) || "{}") }; } catch { return { seen: [], current: null }; }
+}
+function saveChecklist(key, data) {
+  try { localStorage.setItem(CHECKLIST_KEY(key), JSON.stringify(data)); } catch { /* private mode */ }
+}
+function dropChecklist(key) {
+  try { localStorage.removeItem(CHECKLIST_KEY(key)); } catch { /* private mode */ }
+}
+const autoOpen = () => { try { return localStorage.getItem(AUTO_OPEN_KEY) === "1"; } catch { return false; } };
+
+/** Settings → Terminals: whether a detected checklist opens by itself or waits behind a chip. */
+export function checklistSettings() {
+  const box = h("input", {
+    type: "checkbox", checked: autoOpen(),
+    onchange: (e) => { try { localStorage.setItem(AUTO_OPEN_KEY, e.target.checked ? "1" : "0"); } catch { /* private mode */ } },
+  });
+  return h("div", { class: "card skills" },
+    h("h3", {}, "Checklists"),
+    h("p", { class: "muted small" },
+      "When an agent lists steps for you to do (\"please do these: 1. … 2. … 3. …\"), its terminal header shows ",
+      "a checklist chip. The checklist lets you tick steps, comment on each, and send the result back to the agent ",
+      "or ask it about the list."),
+    h("label", { class: "check" }, box, "Open detected checklists automatically"));
+}
+
 class Pane {
   constructor(ws, opts) {
     this.ws = ws;
@@ -408,6 +444,9 @@ class Pane {
     this.state = { live: true, stale: "", noCredits: false };
     this.recent = "";
     this.decoder = new TextDecoder();
+    this.lastInput = 0;
+    this.checklist = this.agent ? loadChecklist(opts.key) : { seen: [], current: null };
+    this.checklistChip = h("button", { class: "chip toggle checklist-chip", hidden: true, onclick: () => this.openChecklist() });
     this.term = new Terminal({
       theme: THEME, fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
       fontSize: 13, cursorBlink: true, allowProposedApi: false, scrollback: 5000,
@@ -431,17 +470,131 @@ class Pane {
       h("span", { class: "faint small ellipsis", title: "Started in" }, opts.cwdLabel),
       this.location,
       h("span", { class: "grow" }),
+      this.checklistChip,
       h("button", { class: "icon", title: "Maximize", onclick: () => this.toggleMax() }, "⤢"),
       h("button", { class: "icon", title: "Close", onclick: () => this.close() }, "×")),
       body);
     this.term.open(body);
     this.term.onData((d) => {
       if (this.id == null) return;
+      this.lastInput = Date.now();
       if (d.includes("\r") && this.state.noCredits) this.mark({ noCredits: false });
       if (d.includes("\r")) this.recent = "";
       api.write(this.id, d).catch(() => {});
     });
     this.term.onResize(({ cols, rows }) => this.id != null && api.resize(this.id, cols, rows).catch(() => {}));
+    this.drawChecklistChip();
+  }
+
+  /** Look for a checklist once output has been quiet for a second (agents animate a spinner while busy). */
+  waitForChecklist() {
+    clearTimeout(this.checklistTimer);
+    this.checklistTimer = setTimeout(() => this.findChecklist(), 1000);
+  }
+
+  findChecklist() {
+    if (Date.now() - this.lastInput < 1500) return this.waitForChecklist(); // the user is typing
+    const found = detectChecklist(this.renderedLines(120));
+    if (!found || this.checklist.seen.includes(found.hash)) return;
+    this.checklist.seen = [...this.checklist.seen, found.hash].slice(-50);
+    this.checklist.current = { ...carryOver(this.checklist.current, found), fresh: true };
+    saveChecklist(this.opts.key, this.checklist);
+    this.drawChecklistChip();
+    if (autoOpen() && this.el.isConnected && !document.querySelector("dialog[open]")) this.openChecklist();
+  }
+
+  /** The last `n` rows as rendered (escape codes and redraws already applied), soft wraps joined. */
+  renderedLines(n) {
+    const buf = this.term.buffer.active;
+    const out = [];
+    for (let y = Math.max(0, buf.length - n); y < buf.length; y++) {
+      const line = buf.getLine(y);
+      if (!line) continue;
+      const text = line.translateToString(true);
+      if (line.isWrapped && out.length) out[out.length - 1] += text;
+      else out.push(text);
+    }
+    return out;
+  }
+
+  drawChecklistChip() {
+    const c = this.checklist.current;
+    this.checklistChip.hidden = !c;
+    if (!c) return;
+    const done = c.checks.filter(Boolean).length;
+    this.checklistChip.textContent = c.fresh ? "☑ Checklist detected — open" : `☑ Checklist ${done}/${c.items.length}`;
+    this.checklistChip.classList.toggle("on", !!c.fresh);
+    this.checklistChip.title = `${c.title}: tick the steps, comment, send the result to the agent`;
+  }
+
+  /**
+   * The checklist popup: a checkbox and a comment per step. "Send to agent"
+   * pastes the results and presses Enter; "Ask about this" pastes a reference
+   * to the list and leaves the cursor in the terminal for the question.
+   */
+  openChecklist() {
+    const c = this.checklist.current;
+    if (!c || this.checklistModal) return;
+    c.fresh = false;
+    const progress = h("span", { class: "faint small cl-progress" });
+    const save = () => {
+      saveChecklist(this.opts.key, this.checklist);
+      this.drawChecklistChip();
+      progress.textContent = `${c.checks.filter(Boolean).length}/${c.items.length} done`;
+    };
+    const items = c.items.map((it, i) => {
+      const id = `cl-${this.opts.key}-${i}`;
+      const row = h("li", { class: `cl-item${c.checks[i] ? " done" : ""}` });
+      const box = h("input", {
+        type: "checkbox", id, checked: !!c.checks[i],
+        onchange: (e) => { c.checks[i] = e.target.checked; row.classList.toggle("done", e.target.checked); save(); },
+      });
+      const note = h("textarea", {
+        rows: 1, class: "cl-note", placeholder: "Comment (optional)", "aria-label": `Comment on step ${i + 1}`,
+        oninput: (e) => { c.comments[i] = e.target.value; save(); },
+      });
+      note.value = c.comments[i] || "";
+      row.append(h("label", { class: "cl-task", for: id }, box, h("span", { class: "cl-n" }, `${i + 1}.`), h("span", {}, it.text)), note);
+      return row;
+    });
+    const live = () => {
+      if (this.id != null) return true;
+      toast("This terminal is not running any more", "error");
+      return false;
+    };
+    const send = () => {
+      if (!live()) return;
+      m.close();
+      this.term.paste(formatResults(c)); // bracketed paste when the agent asked for it
+      const id = this.id;
+      setTimeout(() => api.write(id, "\r").catch(() => {}), 150);
+      this.term.focus();
+    };
+    const ask = () => {
+      if (!live()) return;
+      m.close();
+      this.term.paste(formatReference(c));
+      this.term.focus();
+    };
+    const content = h("div", { class: "checklist" },
+      h("p", { class: "muted small" }, c.title, " · from ", this.opts.title),
+      h("ol", { class: "cl-list" }, items),
+      h("div", { class: "row cl-actions" },
+        h("button", {
+          class: "btn ghost", title: "Hide this checklist (it will not come back)",
+          onclick: () => { this.checklist.current = null; save(); m.close(); },
+        }, "Dismiss"),
+        progress,
+        h("span", { class: "grow" }),
+        h("button", { class: "btn", title: "Back to the terminal with the list pasted, to ask the agent about it", onclick: ask }, "Ask about this"),
+        h("button", { class: "btn primary", title: "Paste the results into the terminal and press Enter (Ctrl/Cmd+Enter)", onclick: send }, "Send to agent")));
+    content.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
+    });
+    const m = modal("Checklist", content, { onClose: () => { this.checklistModal = null; } });
+    this.checklistModal = m;
+    save();
+    m.el.querySelector(".cl-item input")?.focus();
   }
 
   /** Shift+Enter is a line break (Ctrl+J, which Claude Code and Codex read as one); copy and paste. */
@@ -460,7 +613,10 @@ class Pane {
       const size = { cols: this.term.cols, rows: this.term.rows };
       const out = (bytes) => {
         this.term.write(bytes);
-        if (this.agent) this.scan(this.decoder.decode(bytes, { stream: true }));
+        if (this.agent) {
+          this.scan(this.decoder.decode(bytes, { stream: true }));
+          this.waitForChecklist();
+        }
       };
       const exit = (code) => this.exited(code);
       this.started = now();
@@ -536,6 +692,8 @@ class Pane {
   }
 
   close() {
+    clearTimeout(this.checklistTimer);
+    this.checklistModal?.close();
     if (this.id != null) api.kill(this.id);
     this.term.dispose();
     this.ws.remove(this);

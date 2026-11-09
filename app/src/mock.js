@@ -28,6 +28,19 @@ const presets = [
   { name: "platform", description: "Several repos that call each other", on: ["greenhouse", "seedbank", "pruner", "compost"] },
 ];
 
+const MOCK_AGENT = [
+  "⏺ The webhook handler is in place. Before I wire it up, please do these steps yourself:",
+  "",
+  "  1. Create a signing secret in the payment provider's dashboard",
+  "  2. Add it to .env as WEBHOOK_SECRET",
+  "  3. Run the migration: npm run db:migrate",
+  "  4. Restart the dev server",
+  "",
+  "  Tell me when you're done.",
+  "",
+  "> ",
+].join("\r\n");
+
 const handlers = {
   terminal_previews: () => ({}),
   default_root: () => "/Users/me/gardens",
@@ -98,8 +111,11 @@ const handlers = {
   ],
   update_account_plugin: () => null,
   terminal_locations: ({ panes }) => Object.fromEntries(panes.map((p) => [p.key, "ledger"])),
-  terminal_spawn: ({ onEvent }) => {
-    setTimeout(() => onEvent.onmessage({ event: "output", data: btoa("mock terminal $ ") }), 50);
+  terminal_spawn: ({ onEvent, agent, profile }) => {
+    // Agents print steps for the user, so the checklist chip shows up (checklist.js).
+    const text = agent || profile ? MOCK_AGENT : "mock terminal $ ";
+    const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+    setTimeout(() => onEvent.onmessage({ event: "output", data: b64 }), 50);
     return 1;
   },
 };

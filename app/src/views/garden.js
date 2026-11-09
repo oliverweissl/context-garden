@@ -3,7 +3,7 @@ import { h, toast, errText, setCrumbs, tile, fmt, languageBar, tokenDonut, modal
 import { cloneBoard, READY, ACTIVE } from "./cloning.js";
 import { planCard, SOURCES_HINT, LINK_HELP } from "./plant.js";
 import { skillPicker, pluginPanel } from "./skills.js";
-import { terminalArea } from "../terminals.js";
+import { terminalArea, checklistSettings } from "../terminals.js";
 import { gardenArt } from "../art.js";
 import { setPageSettings } from "./settings.js";
 
@@ -253,6 +253,7 @@ export async function renderGarden(app, id) {
       refresh();
     }) },
     { name: "External plugins", build: () => pluginPanel(garden) },
+    { name: "Terminals", build: () => checklistSettings() },
     { name: "Garden", build: () => h("div", { class: "card skills" },
       h("h3", {}, garden.name),
       h("div", { class: "faint small mono" }, garden.root),
