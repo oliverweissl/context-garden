@@ -49,6 +49,20 @@ const handlers = {
     return g;
   },
   forget_missing_repos: ({ id }) => gardens.find((g) => g.id === id),
+  resync_groups: ({ id }) => {
+    const g = gardens.find((x) => x.id === id);
+    return {
+      repos: [{ name: "payouts", path: `${g.root}/payments/payouts`, group: "acme/payments", status: "pending" }],
+      groups: [{ input: "https://gitlab.com/acme/payments", provider: "gitlab", repos: 6 }],
+      warnings: [], repo_inputs: [], group_inputs: g.group_inputs,
+      gone: g.repos.filter((r) => r.name === "fraud"),
+    };
+  },
+  forget_repos: ({ id, paths }) => {
+    const g = gardens.find((x) => x.id === id);
+    g.repos = g.repos.filter((r) => !paths.includes(r.path));
+    return g;
+  },
   add_to_garden: ({ id }) => gardens.find((g) => g.id === id),
   recommend_skills: () => ({ preset: "platform", reason: "6 repositories: greenhouse shares what each repo provides.", modes: gardens[0].skills, presets }),
   apply_skills: () => [],

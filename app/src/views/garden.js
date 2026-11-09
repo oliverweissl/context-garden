@@ -161,16 +161,86 @@ export async function renderGarden(app, id) {
       preview);
   };
 
-  /** The repository table, with adding more in the same popup. */
+  /** List the garden's groups again: offer new repos to clone and repos that left to forget. */
+  const resyncPanel = async (slot, close) => {
+    slot.replaceChildren(h("div", { class: "card faint small" }, "Listing groups again…"));
+    let res;
+    try {
+      res = await api.resyncGroups(id);
+    } catch (e) {
+      toast(errText(e), "error");
+      slot.replaceChildren();
+      return;
+    }
+    const again = () => resyncPanel(slot, close);
+    const parts = [];
+    if (res.repos.length) {
+      const add = h("button", { class: "btn primary" }, `Add ${res.repos.length}`);
+      add.onclick = async () => {
+        add.disabled = true;
+        try {
+          garden = await api.addToGarden(id, res);
+          close();
+          await showBoard();
+        } catch (e) {
+          toast(errText(e), "error");
+          add.disabled = false;
+        }
+      };
+      parts.push(planCard(res, again), h("div", { class: "row end" }, add));
+    } else {
+      parts.push(h("div", { class: "card" },
+        h("div", { class: "small" }, `No new repositories in ${res.groups.length} ${res.groups.length === 1 ? "group" : "groups"}.`),
+        res.warnings.length
+          ? h("div", { class: "row between" },
+            h("div", {}, res.warnings.map((w) => h("div", { class: "small warn" }, w))),
+            h("button", { class: "btn", onclick: again }, "Look up again"))
+          : null));
+    }
+    if (res.gone.length) {
+      const goneCard = h("div", { class: "card" });
+      const forget = h("button", { class: "btn" }, "Remove from garden");
+      forget.onclick = async () => {
+        forget.disabled = true;
+        try {
+          garden = await api.forgetRepos(id, res.gone.map((r) => r.path));
+          goneCard.replaceChildren(h("div", { class: "small" }, `Removed ${res.gone.length} from the garden; their folders are still on disk.`));
+          refresh();
+        } catch (e) {
+          toast(errText(e), "error");
+          forget.disabled = false;
+        }
+      };
+      goneCard.append(
+        h("div", { class: "row between" },
+          h("span", { class: "small" }, `${res.gone.length} ${res.gone.length === 1 ? "repository is" : "repositories are"} no longer in ${res.gone.length === 1 ? "its group" : "their groups"}. Folders on disk are not touched.`),
+          forget),
+        h("ul", { class: "repo-list" }, res.gone.map((r) => h("li", {},
+          h("span", { class: "mono ellipsis" }, r.path), h("span", { class: "small faint" }, r.group)))));
+      parts.push(goneCard);
+    }
+    slot.replaceChildren(...parts);
+  };
+
+  /** The repository table, with adding more and resyncing groups in the same popup. */
   const openRepos = () => {
     const addSlot = h("div");
     const addBtn = h("button", { class: "btn primary" }, "+ Add repositories or groups");
+    const resyncBtn = garden.group_inputs.length
+      ? h("button", { class: "btn", title: "List the groups this garden was built from again" }, "Resync groups")
+      : null;
     const m = modal(`${garden.repos.length} repositories`, h("div", { class: "repos-pop" },
-      h("div", { class: "row end" }, addBtn), addSlot, repoTable), { wide: true });
+      h("div", { class: "row end" }, resyncBtn, addBtn), addSlot, repoTable), { wide: true });
     addBtn.onclick = () => {
       addBtn.hidden = true;
+      if (resyncBtn) resyncBtn.hidden = false;
       addSlot.replaceChildren(h("div", { class: "card add-inline" }, addPanel(m.close)));
       addSlot.querySelector("textarea")?.focus();
+    };
+    if (resyncBtn) resyncBtn.onclick = () => {
+      resyncBtn.hidden = true;
+      addBtn.hidden = false;
+      resyncPanel(addSlot, m.close);
     };
   };
 
