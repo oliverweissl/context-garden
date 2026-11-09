@@ -7,7 +7,8 @@ reads the stores of the repos an agent's brief names (`StoreSet`).
 Layout:
   notes.json    {"version": 1, "notes": [note, ...]}  -- durable findings (commit it)
   spawns.jsonl  one line per gated Agent call, for duplicate detection (local)
-  config.json   optional {"gate": "enforce"|"warn"|"off", "duplicate_threshold": 0.6}
+  config.json   optional {"gate": "enforce"|"warn"|"off", "duplicate_threshold": 0.6,
+                "budget_level": "low"|"medium"|"high"|"extreme", "budgets": {type: calls}}
   .lock         flock target; every read-modify-write holds it
   .gitignore    created once (never overwritten): ignores spawns.jsonl, .lock, *.tmp
 
@@ -188,6 +189,17 @@ class Store:
         if env in ("enforce", "warn", "off"):
             cfg["gate"] = env
         return cfg
+
+    def set_config(self, key: str, value) -> None:
+        self.ensure()
+        with self.lock():
+            path = self.root / "config.json"
+            try:
+                cfg = json.loads(path.read_text())
+            except FileNotFoundError:
+                cfg = {}
+            cfg[key] = value
+            atomic_write_text(path, json.dumps(cfg, indent=2) + "\n")
 
     # ------------------------------------------------------------ notes
 

@@ -117,7 +117,7 @@ def test_mycelium_gate_is_silent_unless_on(repo):
                           "tool_input": {"description": "d", "prompt": "look around"}})
     assert _bin("mycelium", "hook", "pre-agent", repo=repo, stdin=payload).stdout == ""  # default off
     _bin("mycelium", "mode", "on", repo=repo)
-    assert "deny" in _bin("mycelium", "hook", "pre-agent", repo=repo, stdin=payload).stdout
+    assert "updatedInput" in _bin("mycelium", "hook", "pre-agent", repo=repo, stdin=payload).stdout
     _bin("mycelium", "mode", "manual", repo=repo)
     assert _bin("mycelium", "hook", "pre-agent", repo=repo, stdin=payload).stdout == ""
 
