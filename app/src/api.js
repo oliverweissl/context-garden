@@ -56,9 +56,10 @@ export const api = {
   on: listen,
 
   /** Start a terminal; onOutput gets Uint8Array chunks, onExit the exit code. */
-  spawn: ({ garden, cwd, agent, profile, session, resume, flags, cols, rows }, onOutput, onExit) =>
+  /** Resolves to { id, worktree }: worktree is the agent worktree it runs in, or null. */
+  spawn: ({ garden, cwd, worktree, agent, profile, session, resume, flags, cols, rows }, onOutput, onExit) =>
     pty("terminal_spawn", {
-      garden, cwd, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume,
+      garden, cwd, worktree: worktree || null, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume,
       flags: flags || [], cols, rows,
     }, onOutput, onExit),
   /** First prompt of each saved Claude terminal, by key. */
@@ -72,6 +73,12 @@ export const api = {
   write: (id, data) => invoke("terminal_write", { id, data }),
   resize: (id, cols, rows) => invoke("terminal_resize", { id, cols, rows }),
   kill: (id) => invoke("terminal_kill", { id }),
+  /** Remove a closed agent's worktree unless it holds work: resolves to why it was kept, or null. */
+  releaseWorktree: (garden, cwd, worktree) => invoke("worktree_release", { garden, cwd, worktree }),
+  /** Remove unused, clean agent worktrees of a garden: [[path, why kept], …] for the rest. */
+  sweepWorktrees: (garden) => invoke("worktree_sweep", { garden }),
+  settings: () => invoke("get_settings"),
+  saveSettings: (settings) => invoke("set_settings", { settings }),
 };
 
 function pty(cmd, args, onOutput, onExit) {

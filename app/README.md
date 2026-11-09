@@ -89,6 +89,13 @@ handy for UI work; it is never part of a build.
   Terminals keep running while you look at another garden. Agents start through your
   login shell so PATH and npm shims match a normal terminal. Panes get `CONTEXT_GARDEN`
   and, if the garden has one, `GREENHOUSE_BASE`.
+- **Agent worktrees.** An agent terminal opened on a repo works in its own git worktree,
+  `<garden>/.worktrees/<repo>/<agent>-<account>-<id>` on branch `cg/<agent>-<account>-<id>`,
+  so agents on one repo never share a working tree (Settings → Terminals turns it off).
+  Closing the terminal removes the worktree and its branch unless it has uncommitted
+  changes or commits on no other branch, remote or tag; those stay and are named. Opening a
+  garden prunes stale worktrees and removes clean ones no saved terminal uses. Resuming
+  reopens the same worktree. Group folders and non-git folders run in place.
 - **Accounts.** Several subscriptions per agent: each account is its own config folder
   (`CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex) with a name, icon and
   color shown on its terminals. Log in once inside a terminal of that account; the CLI

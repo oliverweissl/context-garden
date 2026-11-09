@@ -9,6 +9,7 @@ mod stats;
 mod store;
 mod updates;
 mod util;
+mod worktrees;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
@@ -19,7 +20,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
 use pty::{Launch, PtyEvent, Ptys};
 use skills::PLUGIN;
-use store::{Garden, GardenPlugin, Profile, Repo, SavedTerminal, Store};
+use store::{Garden, GardenPlugin, Profile, Repo, SavedTerminal, Settings, Store};
 use util::{expand_tilde, home_dir, now_secs, run_env, slugify, which};
 
 /// (id, label, binary, env var that selects its config dir / account).
@@ -705,13 +706,22 @@ fn agent_command(
     cmd
 }
 
+#[derive(Serialize)]
+struct Spawned {
+    id: u32,
+    /// The agent worktree the terminal runs in, if any.
+    worktree: Option<String>,
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn terminal_spawn(
     store: State<Store>,
     ptys: State<Ptys>,
+    session_worktrees: State<worktrees::Session>,
     garden: String,
     cwd: String,
+    worktree: Option<String>,
     agent: Option<String>,
     profile: Option<String>,
     session: Option<String>,
@@ -720,15 +730,11 @@ fn terminal_spawn(
     cols: u16,
     rows: u16,
     on_event: Channel<PtyEvent>,
-) -> Result<u32, String> {
+) -> Result<Spawned, String> {
     let g = store.garden(&garden)?;
     let allowed = spawn_folders(&g).contains(&cwd);
     if !allowed || !Path::new(&cwd).is_dir() {
         return Err(format!("{cwd} is not a folder of this garden"));
-    }
-    // Claude reads skill modes and the plugin switch from the folder it starts in.
-    if let Err(e) = skills::ensure_folder(&g, Path::new(&cwd)) {
-        eprintln!("skills for {cwd}: {e}");
     }
     let session = session.filter(|s| !s.is_empty());
     if session.as_deref().is_some_and(|s| !valid_session(s)) {
@@ -746,6 +752,8 @@ fn terminal_spawn(
         env.push(("GREENHOUSE_BASE".into(), base.to_string_lossy().into()));
     }
     let mut command = None;
+    // (agent, account name) of an agent terminal, which names its worktree branch.
+    let mut who: Option<(String, Option<String>)> = None;
     if let Some(profile_id) = profile.filter(|p| !p.is_empty()) {
         let p = store
             .profiles()?
@@ -755,14 +763,114 @@ fn terminal_spawn(
         let (_, _, bin, var) = AGENTS.iter().find(|a| a.0 == p.agent).ok_or("unknown agent")?;
         env.push((var.unwrap().to_string(), p.dir.clone()));
         command = Some(agent_command(&p.agent, bin, &expand_tilde(&p.dir), session.as_deref(), resume, &flags));
+        who = Some((p.agent.clone(), Some(p.name.clone())));
     } else if let Some(agent) = agent.filter(|a| !a.is_empty()) {
         let (_, _, bin, _) = AGENTS.iter().find(|a| a.0 == agent).ok_or("unknown agent")?;
         let config = std::env::var_os("CLAUDE_CONFIG_DIR")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| home_dir().join(".claude"));
         command = Some(agent_command(&agent, bin, &config, session.as_deref(), resume, &flags));
+        who = Some((agent, None));
     }
-    ptys.spawn(Launch { command, cwd, env, cols, rows }, on_event)
+    let worktree = agent_worktree(&store, &session_worktrees, &g, &cwd, worktree, who, resume)?;
+    let cwd = worktree.clone().unwrap_or(cwd);
+    // Claude reads skill modes and the plugin switch from the folder it starts in.
+    if let Err(e) = skills::ensure_folder(&g, Path::new(&cwd)) {
+        eprintln!("skills for {cwd}: {e}");
+    }
+    let id = ptys.spawn(Launch { command, cwd, env, cols, rows }, on_event)?;
+    Ok(Spawned { id, worktree })
+}
+
+/// The worktree an agent terminal on a repo runs in: its saved one (set up
+/// again if it was removed), or a new one unless worktrees are off or this
+/// resumes a terminal that ran in the repo itself. None = run in `cwd`;
+/// folders that are not a git repo, and git failures, fall back to that.
+fn agent_worktree(
+    store: &Store,
+    session: &worktrees::Session,
+    g: &Garden,
+    cwd: &str,
+    saved: Option<String>,
+    who: Option<(String, Option<String>)>,
+    resume: bool,
+) -> Result<Option<String>, String> {
+    let Some((agent, account)) = who else { return Ok(None) };
+    let Some(repo) = g.repos.iter().find(|r| r.ready() && r.path == cwd) else { return Ok(None) };
+    let root = Path::new(&g.root);
+    let repo_path = Path::new(&repo.path);
+    let mut live = session.0.lock().unwrap();
+    let path = match saved.filter(|s| !s.is_empty()) {
+        Some(s) => {
+            let path = std::path::PathBuf::from(&s);
+            if !worktrees::owned(root, &path) {
+                return Err(format!("{s} is not a worktree of this garden"));
+            }
+            worktrees::reopen(repo_path, &path).map(|_| path)
+        }
+        None if resume || !store.settings()?.worktrees || !worktrees::is_repo_top(repo_path) => return Ok(None),
+        None => worktrees::create(repo_path, root, &repo.name, &agent, account.as_deref()),
+    };
+    match path {
+        Ok(path) => {
+            live.insert(path.canonicalize().unwrap_or_else(|_| path.clone()));
+            Ok(Some(path.to_string_lossy().into()))
+        }
+        Err(e) => {
+            eprintln!("worktree for {cwd}: {e}");
+            Ok(None)
+        }
+    }
+}
+
+/// After an agent terminal closed: remove its worktree and branch unless that
+/// would lose work. Returns why it was kept, if it was.
+#[tauri::command]
+async fn worktree_release(
+    store: State<'_, Store>,
+    session: State<'_, worktrees::Session>,
+    garden: String,
+    cwd: String,
+    worktree: String,
+) -> Result<Option<String>, String> {
+    let g = store.garden(&garden)?;
+    let path = std::path::PathBuf::from(&worktree);
+    if !worktrees::owned(Path::new(&g.root), &path) || !g.repos.iter().any(|r| r.path == cwd) {
+        return Err(format!("{worktree} is not a worktree of this garden"));
+    }
+    // Give the agent a moment to exit before looking at what it left.
+    std::thread::sleep(std::time::Duration::from_millis(800));
+    let mut live = session.0.lock().unwrap();
+    live.remove(&path.canonicalize().unwrap_or_else(|_| path.clone()));
+    worktrees::release(Path::new(&cwd), &path)
+}
+
+/// Prune the garden's worktree records and remove agent worktrees that no
+/// terminal uses and that hold no unsaved work. Returns those kept: [path, why].
+#[tauri::command]
+async fn worktree_sweep(
+    store: State<'_, Store>,
+    session: State<'_, worktrees::Session>,
+    garden: String,
+) -> Result<Vec<(String, String)>, String> {
+    let g = store.garden(&garden)?;
+    let saved = g
+        .terminals
+        .iter()
+        .filter_map(|t| t.worktree.as_deref())
+        .filter_map(|p| Path::new(p).canonicalize().ok())
+        .collect();
+    Ok(worktrees::sweep(&g, &session, &saved))
+}
+
+#[tauri::command]
+fn get_settings(store: State<Store>) -> Result<Settings, String> {
+    store.settings()
+}
+
+#[tauri::command]
+fn set_settings(store: State<Store>, settings: Settings) -> Result<(), String> {
+    store.set_settings(&settings)
 }
 
 /// Where terminals may start: the garden root, its repos, and the folders
@@ -816,6 +924,13 @@ fn terminal_locations(store: State<Store>, id: String, panes: Vec<PaneRef>) -> R
 /// A path as the garden names it: its repo, else its folder under the root,
 /// else the path itself.
 fn garden_label(g: &Garden, path: &Path) -> Option<String> {
+    // Inside an agent worktree (`.worktrees/<repo>/<leaf>/…`): name its repo.
+    if let Ok(rel) = path.strip_prefix(Path::new(&g.root).join(worktrees::DIR)) {
+        let slug = rel.components().next().map(|c| c.as_os_str().to_string_lossy().to_string());
+        if let Some(r) = g.repos.iter().find(|r| Some(worktrees::slug(&r.name)) == slug) {
+            return Some(r.name.clone());
+        }
+    }
     let repo = g
         .repos
         .iter()
@@ -890,6 +1005,7 @@ pub fn run() {
         })
         .manage(Ptys::default())
         .manage(Cloning::default())
+        .manage(worktrees::Session::default())
         .invoke_handler(tauri::generate_handler![
             add_garden_plugins,
             app_update,
@@ -931,6 +1047,10 @@ pub fn run() {
             terminal_write,
             terminal_resize,
             terminal_kill,
+            worktree_release,
+            worktree_sweep,
+            get_settings,
+            set_settings,
         ])
         .build(tauri::generate_context!())
         .expect("failed to start ContextGarden");

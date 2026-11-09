@@ -94,6 +94,9 @@ pub struct SavedTerminal {
     /// Startup flags the agent was launched with, e.g. ["--chrome"].
     #[serde(default)]
     pub flags: Vec<String>,
+    /// Agent worktree the pane works in (under `<garden>/.worktrees`), if any.
+    #[serde(default)]
+    pub worktree: Option<String>,
     /// Still open when the app last saw it.
     #[serde(default)]
     pub open: bool,
@@ -114,6 +117,24 @@ pub struct Profile {
     pub icon: String,
     #[serde(default)]
     pub color: String,
+}
+
+/// App-wide settings (settings.json).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Settings {
+    /// Agent terminals on a repo work in their own git worktree.
+    #[serde(default = "yes")]
+    pub worktrees: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings { worktrees: true }
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -192,6 +213,17 @@ impl Store {
                 .ok_or_else(|| format!("no garden '{id}'"))?;
             f(g)
         })
+    }
+
+    pub fn settings(&self) -> Result<Settings, String> {
+        let _g = self.lock.lock().unwrap();
+        read_json(&self.dir.join("settings.json"))
+    }
+
+    pub fn set_settings(&self, settings: &Settings) -> Result<(), String> {
+        let _g = self.lock.lock().unwrap();
+        let text = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+        atomic_write(&self.dir.join("settings.json"), &(text + "\n"))
     }
 
     pub fn profiles(&self) -> Result<Vec<Profile>, String> {
