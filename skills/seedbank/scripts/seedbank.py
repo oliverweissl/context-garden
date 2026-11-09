@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import cg_fingerprint
 import sb_compile
 from sb_conflicts import conflicts
 from sb_scoring import (
@@ -32,6 +33,7 @@ from sb_store import (
     FAILURE_COST_RUN,
     SEARCH_DEFAULT_COST,
     Store,
+    atomic_write_text,
     estimate_tokens,
     find_repo_root,
     find_store_root,
@@ -752,6 +754,16 @@ def cmd_import(args, store: Store) -> int:
     except FileNotFoundError:
         print(f"error: no such file: {args.file}", file=sys.stderr)
         return 1
+    bundle = _parse_bundle(text)
+    if bundle is not None:
+        if bundle.get("format") != BUNDLE_FORMAT:
+            print(
+                f"error: {args.file} is a {bundle.get('format')!r} bundle, not a seedbank export "
+                f"(greenhouse bundles go to `greenhouse import`)",
+                file=sys.stderr,
+            )
+            return 1
+        return import_bundle(bundle, store, args.file, force=args.force)
     keystats = store.load_keystats()
     known_reps = {
         " ".join(f["representation"].split()) for f in store.load_facts()["facts"].values()
@@ -814,6 +826,151 @@ def cmd_import(args, store: Store) -> int:
     print(
         f"imported {count} candidate bullet(s) from {args.file} (review with `seedbank candidates`, then promote)"
     )
+    return 0
+
+
+# ---------------------------------------------------------------- export / bundle import
+
+BUNDLE_FORMAT = "seedbank-facts"
+BUNDLE_VERSION = 1
+# fact fields that travel; counters, ids and staleness are local to a store
+_BUNDLE_FIELDS = ("key", "representation", "scope", "tier", "protected", "confidence",
+                  "sources", "source_hashes", "promoted_at")
+
+
+def _portable_source(src: str) -> bool:
+    """Repo-relative sources travel; absolute/outside paths are local to one machine."""
+    return bool(src) and not Path(src).is_absolute() and not src.startswith("..")
+
+
+def cmd_export(args, store: Store) -> int:
+    facts = store.load_facts()["facts"]
+    out = []
+    for fid in sorted(facts):
+        f = facts[fid]
+        if f.get("stale"):  # not served locally, so not handed to others either
+            continue
+        item = {k: f[k] for k in _BUNDLE_FIELDS if k in f}
+        item["sources"] = [s for s in f.get("sources", []) if _portable_source(s)]
+        item["source_hashes"] = {
+            s: h for s, h in (f.get("source_hashes") or {}).items() if s in item["sources"]
+        }
+        out.append(item)
+    bundle = {
+        "format": BUNDLE_FORMAT,
+        "version": BUNDLE_VERSION,
+        "exported_at": now(),
+        "fingerprint": cg_fingerprint.fingerprint(store.repo_root),
+        "facts": out,
+    }
+    text = json.dumps(bundle, indent=2) + "\n"
+    if not args.out:
+        sys.stdout.write(text)
+        return 0
+    atomic_write_text(Path(args.out), text)
+    print(
+        f"exported {len(out)} fact(s) to {args.out} "
+        f"[{cg_fingerprint.describe(bundle['fingerprint'])}]"
+    )
+    if cg_fingerprint.is_empty(bundle["fingerprint"]):
+        print("warning: no origin remote and no commits: importers will need --force", file=sys.stderr)
+    return 0
+
+
+def _parse_bundle(text: str) -> dict | None:
+    """A JSON object with a "format" key is an export bundle; anything else is markdown."""
+    if not text.lstrip().startswith("{"):
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) and "format" in data else None
+
+
+def import_bundle(bundle: dict, store: Store, path: str, force: bool) -> int:
+    """Add a bundle's facts to this store. Only when its fingerprint matches
+    this repo (or --force); existing facts are never replaced: duplicates and
+    facts contradicting an active one are skipped. Imported facts keep their
+    exported source hashes, so one whose source differs here goes stale at the
+    next compile/invalidate instead of being served unverified."""
+    if bundle.get("version", 0) > BUNDLE_VERSION:
+        print(f"error: bundle version {bundle.get('version')} is newer than this seedbank "
+              f"understands ({BUNDLE_VERSION})", file=sys.stderr)
+        return 1
+    theirs = bundle.get("fingerprint")
+    ours = cg_fingerprint.fingerprint(store.repo_root)
+    why = cg_fingerprint.match(theirs, ours)
+    if not why and not force:
+        print(
+            f"error: {path} was exported from a different project\n"
+            f"  bundle: {cg_fingerprint.describe(theirs)}\n"
+            f"  here:   {cg_fingerprint.describe(ours)}\n"
+            f"re-run with --force to import anyway",
+            file=sys.stderr,
+        )
+        return 1
+    facts = store.load_facts()
+    config = store.load_config()
+    budget = config["hot_budget"]
+    hot_total = sum(f["persistent_token_cost"] for f in _published_hot(facts))
+    known = {normalize_rep(f["representation"]) for f in facts["facts"].values()}
+    added, skipped = [], []
+    for item in bundle.get("facts", []):
+        rep = (item.get("representation") or "").strip()
+        if not rep:
+            continue
+        scope = safe_scope(item.get("scope"))
+        key = item.get("key") or declared_key("fact", rep)
+        if key in _active_fact_keys(facts) or normalize_rep(rep) in known:
+            skipped.append(f'already present: "{rep[:70]}"')
+            continue
+        clashes = conflicts(rep, scope, facts, skip_keys={key})
+        if clashes:
+            skipped.append(f'contradicts {clashes[0][0]}: "{rep[:70]}"')
+            continue
+        pcost = estimate_tokens(rep)
+        tier = "hot" if item.get("tier") == "hot" else "warm"
+        if tier == "hot" and hot_total + pcost > budget:
+            tier = "warm"  # never evict local facts to make room for imported ones
+        if tier == "hot":
+            hot_total += pcost
+        sources = [s for s in item.get("sources") or [] if _portable_source(s)]
+        hashes = item.get("source_hashes") or {}
+        fid = Store.gen_fact_id(facts)
+        facts["facts"][fid] = {
+            "id": fid,
+            "key": key,
+            "representation": rep,
+            "scope": scope,
+            "sources": sources,
+            "source_hashes": {s: hashes[s] for s in sources if s in hashes},
+            "access_count_at_promotion": 0,
+            "session_count_at_promotion": 0,
+            "retrieval_cost_at_promotion": 0,
+            "failure_cost_at_promotion": 0,
+            "confidence": float(item.get("confidence", 0.6)),
+            "stability": stability(0),
+            "persistent_token_cost": pcost,
+            "tier": tier,
+            "protected": bool(item.get("protected")),
+            "stale": False,
+            "stale_reason": None,
+            "promoted_at": now(),
+            "last_verified": now(),
+            "imported_from": {"file": Path(path).name, "exported_at": bundle.get("exported_at")},
+        }
+        known.add(normalize_rep(rep))
+        added.append(f'{fid} [{tier}] scope={scope}: "{rep[:70]}"')
+    store.save_facts(facts)
+    how = f"fingerprint matched by {why}" if why else "fingerprint MISMATCH, --force"
+    print(f"imported {len(added)} fact(s) from {path} ({how}); skipped {len(skipped)}")
+    for line in added:
+        print(f"  + {line}")
+    for line in skipped:
+        print(f"  = {line}")
+    if added:
+        print("run `seedbank compile` to publish them (facts whose sources differ here go stale)")
     return 0
 
 
@@ -931,7 +1088,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_import = sub.add_parser(
         "import", help="seed candidates from an existing AGENTS.md/CLAUDE.md-style file"
     )
-    p_import.add_argument("file")
+    p_import.add_argument("file", help="AGENTS.md-style file, or a JSON bundle from `seedbank export`")
+    p_import.add_argument(
+        "--force",
+        action="store_true",
+        help="bundle only: import even if its project fingerprint does not match this repo",
+    )
+
+    p_export = sub.add_parser(
+        "export", help="write active facts + this repo's fingerprint as a portable JSON bundle"
+    )
+    p_export.add_argument("--out", default=None, help="output file (default: stdout)")
 
     return p
 
@@ -972,6 +1139,7 @@ def _dispatch(args, store: Store, repo_root: Path) -> int:
         "status": cmd_status,
         "stats": cmd_stats,
         "import": cmd_import,
+        "export": cmd_export,
     }
     if args.cmd == "compile":
         return cmd_compile(args, store, repo_root)

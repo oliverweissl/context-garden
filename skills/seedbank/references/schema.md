@@ -98,3 +98,19 @@ future projection.
 `#`/`##` headings set the scope; each `- `/`* ` bullet becomes one
 `imported` candidate (deduplicated). Review with `candidates` and promote
 deliberately.
+
+## `seedbank export [--out FILE]` / `seedbank import <bundle.json> [--force]`
+
+`export` writes the non-stale facts (text, scope, tier, `--critical`,
+repo-relative sources + hashes) and the repo's fingerprint as JSON
+(stdout by default). Fingerprint: origin URL without scheme, user, port
+and `.git`, host lowercased, plus the root commit SHA(s); no local paths,
+and sources outside the repo are dropped.
+
+`import` of such a bundle refuses unless the fingerprint matches this repo
+(same remote or a shared root commit) or `--force` is given. Facts are
+added as promoted facts, never replacing one: a duplicate (same key or
+text) or a contradiction of an active fact is skipped, and a hot fact that
+would exceed the hot budget comes in warm. Exported source hashes are
+kept, so a fact whose source differs here goes stale at the next
+`compile`. Run `compile` afterwards.

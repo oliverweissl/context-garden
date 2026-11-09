@@ -432,6 +432,48 @@ assert_eq "store .gitignore: an existing one is never overwritten" "$(cat "$SCRA
 
 echo
 
+# --- export / import bundle: fingerprint-gated, merge without overwriting -----
+gitc() { git -c user.email=t@t -c user.name=t "$@"; }
+mkdir -p "$SCRATCH/exp/src" && cd "$SCRATCH/exp" && git init -q . \
+  && git remote add origin "https://bob:pw@GitHub.com:443/Acme/Exp.git" \
+  && echo "make all" > src/build.sh && gitc add -A && gitc commit -qm init
+CC observe fact "Build with make all" --scope build --source src/build.sh >/dev/null
+CC promote "$(dkey fact "Build with make all")" --tier hot >/dev/null
+CC observe fact "Use tabs for indentation" --scope style --source "$SCRATCH/outside.txt" >/dev/null
+CC promote "$(dkey fact "Use tabs for indentation")" --tier warm >/dev/null
+out=$(CC export --out "$SCRATCH/exp.json")
+assert_contains "export: reports fact count and fingerprint" "$out" "exported 2 fact(s)"
+bundle=$(cat "$SCRATCH/exp.json")
+assert_contains "export: remote normalized (no scheme/user/port/.git)" "$bundle" '"remote": "github.com/Acme/Exp"'
+assert_contains "export: root commit in fingerprint" "$bundle" "$(git rev-list --max-parents=0 HEAD)"
+assert_not_contains "export: no credentials" "$bundle" "pw@"
+assert_not_contains "export: no absolute source paths" "$bundle" "$SCRATCH"
+assert_contains "export: stdout without --out" "$(CC export)" '"format": "seedbank-facts"'
+
+git clone -q "$SCRATCH/exp" "$SCRATCH/exp2" && cd "$SCRATCH/exp2"
+CC observe fact "Never use tabs for indentation" --scope style >/dev/null
+CC promote "$(dkey fact "Never use tabs for indentation")" --tier warm >/dev/null
+out=$(CC import "$SCRATCH/exp.json")
+assert_contains "import: clone matches by root commit" "$out" "matched by root commit"
+assert_contains "import: fact added" "$out" "Build with make all"
+assert_contains "import: contradicting fact skipped, local one kept" "$out" "contradicts"
+out=$(CC import "$SCRATCH/exp.json")
+assert_contains "import again: no duplicates" "$out" "imported 0 fact(s)"
+echo "make everything" > src/build.sh
+out=$(CC compile 2>&1)
+assert_contains "import: fact whose source differs here goes stale" "$out" "1 newly stale"
+
+mkdir -p "$SCRATCH/unrelated" && cd "$SCRATCH/unrelated" && git init -q . && git remote add origin git@github.com:acme/other.git
+out=$(CC import "$SCRATCH/exp.json" 2>&1); rc=$?
+[ "$rc" = "1" ] && echo "PASS: import: other project refused" || { echo "FAIL: import into other project rc=$rc"; fail=1; }
+assert_contains "import: refusal names both fingerprints" "$out" "github.com/acme/other"
+out=$(CC import --force "$SCRATCH/exp.json")
+assert_contains "import --force: imports anyway" "$out" "imported 2 fact(s)"
+echo '{"format": "greenhouse-base", "cards": []}' > "$SCRATCH/gh.json"
+out=$(CC import "$SCRATCH/gh.json" 2>&1)
+assert_contains "import: rejects a greenhouse bundle" "$out" "greenhouse import"
+cd "$REPO"
+
 # --- Stop hook: once per session, only for this session's candidates
 stophook() {
   printf '{"session_id": "%s", "cwd": "%s", "stop_hook_active": %s}' "$1" "$REPO" "${2:-false}" \

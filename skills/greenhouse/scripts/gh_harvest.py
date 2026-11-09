@@ -11,6 +11,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from cg_fingerprint import fingerprint
 from gh_base import git, slugify
 
 try:
@@ -154,6 +155,7 @@ def harvest(repo_root: Path, base_root: Path) -> dict:
         "slug": repo_slug(repo_root),
         "name": repo_root.name,
         "remote": remote,
+        "fingerprint": fingerprint(repo_root),
         "local_path": os.path.relpath(repo_root, base_root),
         "head": git(["rev-parse", "HEAD"], repo_root),
         "branch": git(["rev-parse", "--abbrev-ref", "HEAD"], repo_root),

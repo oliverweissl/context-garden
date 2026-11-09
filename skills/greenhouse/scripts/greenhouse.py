@@ -19,9 +19,10 @@ import sys
 from pathlib import Path
 
 from gh_base import (
-    POINTER, Base, default_location, discover, estimate_tokens, find_repo_root, head_of,
+    POINTER, Base, atomic_write_text, default_location, discover, estimate_tokens, find_repo_root, head_of,
     slugify, summary_of, words,
 )
+import gh_bundle
 from gh_harvest import harvest, repo_slug
 
 # Shell-quoted: printed for the agent to run, and plugin paths may contain spaces.
@@ -258,6 +259,55 @@ def cmd_forget(args, repo_root) -> int:
         print(f"no card for {args.slug}", file=sys.stderr)
         return 1
     print(f"removed card {slugify(args.slug)}")
+    return 0
+
+
+def cmd_export(args, repo_root) -> int:
+    base, how = _open(args, repo_root)
+    if not base:
+        return _no_base(how)
+    try:
+        bundle = gh_bundle.export_bundle(base, args.repo)
+    except KeyError as e:
+        print(f"no card for {e.args[0]}; known: {', '.join(c['slug'] for c in base.cards()) or 'none'}",
+              file=sys.stderr)
+        return 1
+    text = json.dumps(bundle, indent=2) + "\n"
+    if not args.out:
+        sys.stdout.write(text)
+        return 0
+    atomic_write_text(Path(args.out).resolve(), text)
+    print(f"exported {len(bundle['cards'])} card(s), {len(bundle['notes'])} note(s) to {args.out}")
+    return 0
+
+
+def cmd_import(args, repo_root) -> int:
+    base, how = _open(args, repo_root)
+    if not base:
+        return _no_base(how)
+    try:
+        bundle = json.loads(Path(args.file).read_text())
+    except FileNotFoundError:
+        print(f"no such file: {args.file}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as e:
+        print(f"{args.file} is not JSON ({e})", file=sys.stderr)
+        return 1
+    if not isinstance(bundle, dict) or bundle.get("format") != gh_bundle.FORMAT:
+        fmt = bundle.get("format") if isinstance(bundle, dict) else None
+        print(f"{args.file} is not a greenhouse export (format {fmt!r}; seedbank bundles go to "
+              f"`seedbank import`)", file=sys.stderr)
+        return 1
+    if bundle.get("version", 0) > gh_bundle.VERSION:
+        print(f"bundle version {bundle['version']} is newer than this greenhouse understands",
+              file=sys.stderr)
+        return 1
+    report = gh_bundle.import_bundle(base, bundle, force=args.force)
+    print(f"imported into {base.root}: {len(report['added'])} added, {len(report['updated'])} updated, "
+          f"{len(report['skipped'])} skipped")
+    for mark, key in (("+", "added"), ("~", "updated"), ("=", "skipped")):
+        for line in report[key]:
+            print(f"  {mark} {line}")
     return 0
 
 
@@ -541,6 +591,14 @@ def main(argv=None) -> int:
     f = sub.add_parser("forget", help="remove a repo's card")
     f.add_argument("slug")
 
+    ex = sub.add_parser("export", help="write cards + notes as a portable JSON bundle (no local paths)")
+    ex.add_argument("--repo", action="append", help="only this repo's card and its notes (repeatable)")
+    ex.add_argument("--out", help="output file (default: stdout)")
+    im = sub.add_parser("import", help="merge an exported bundle into this base (never clobbers newer)")
+    im.add_argument("file")
+    im.add_argument("--force", action="store_true",
+                    help="replace newer cards/notes and local summaries with the bundle's")
+
     h = sub.add_parser("hook", help="Claude Code hook entry (reads the hook JSON on stdin)")
     h.add_argument("event", choices=["session-start", "session-end"])
     h.add_argument("--wait", action="store_true", help=argparse.SUPPRESS)
@@ -550,7 +608,7 @@ def main(argv=None) -> int:
         "where": cmd_where, "init": cmd_init, "link": cmd_link, "sync": cmd_sync,
         "brief": cmd_brief, "show": cmd_show, "list": cmd_list, "note": cmd_note,
         "drop": cmd_drop, "forget": cmd_forget, "hook": cmd_hook, "check": cmd_check,
-        "config": cmd_config,
+        "config": cmd_config, "export": cmd_export, "import": cmd_import,
     }[args.cmd]
     return handler(args, find_repo_root())
 
