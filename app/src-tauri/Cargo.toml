@@ -1,6 +1,6 @@
 [package]
 name = "context-garden-app"
-version = "0.4.2"
+version = "0.5.0"
 description = "ContextGarden desktop app: gardens of repos, skills and agent terminals"
 authors = ["Oliver Weißl"]
 license = "MIT"
