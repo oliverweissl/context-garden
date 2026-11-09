@@ -45,6 +45,8 @@ lives in `<git repo root>/.seedbank/`.
    session produced candidates; hand the curation to the `gardener` agent
    to keep it out of your context, or do step 3 yourself.
 4. Existing hand-written `AGENTS.md`/`CLAUDE.md`: `bin/seedbank import <path>`.
+5. Sharing facts: `bin/seedbank export --out f.json`; the recipient runs
+   `bin/seedbank import f.json` (refused unless the repo fingerprint matches).
 
 Hook setup, tiers, what to commit: `references/guide.md`.
 Full CLI: `references/schema.md`.

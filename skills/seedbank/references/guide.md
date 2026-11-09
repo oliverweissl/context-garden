@@ -55,8 +55,11 @@ Example mistake/fact logs:
 
 ## Import
 
-`import` seeds bullets as lower-confidence candidates; nothing is promoted
-until you review them.
+`import` of a markdown file seeds bullets as lower-confidence candidates;
+nothing is promoted until you review them. A JSON bundle from `export`
+(another clone's curated facts) is imported as facts, only into the same
+project (fingerprint match) and never over an existing fact; see
+`references/schema.md`.
 
 ## In the target repository
 

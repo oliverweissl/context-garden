@@ -98,3 +98,16 @@ Concurrent local writes are serialized with a lock; across machines, git
 merges cards cleanly because each repo writes only its own
 `repos/<slug>.json`. `INDEX.md` is regenerated on every write; on a merge
 conflict take either side and run any write command (e.g. `sync`).
+
+To hand part of the base to someone without sharing the folder:
+`export [--repo <slug>]... [--out FILE]` writes a JSON bundle of cards and
+notes (all, or the named repos' cards and the notes scoped to them).
+Bundles hold no local paths (`local_path` is dropped) and no credentials;
+each card carries a project fingerprint (normalized origin URL, root
+commit SHAs). `import FILE [--force]` merges a bundle into the current
+base: a card matches a local one by fingerprint, else by slug, and replaces
+it only when synced later; the local `local_path` is kept, curated lists
+are unioned and a local `summary` is kept. A note (by topic) replaces the
+local one only when updated later. `--force` lets the bundle win both
+ways. A same-slug card of a different project is never overwritten
+(`forget` it first).

@@ -44,4 +44,7 @@ repo is standalone (`bin/greenhouse mode off`). Then run their choice.
    `bin/greenhouse note "<topic>" "<fact>" [--repo <slug>]`.
    Repo-local facts belong in the repo (seedbank), not here.
 
+Handing cards/notes to another base: `bin/greenhouse export [--repo <slug>] --out f.json`,
+then `bin/greenhouse import f.json` there (never clobbers newer cards).
+
 Discovery, layout, hook setup, sharing the base: `references/guide.md`.

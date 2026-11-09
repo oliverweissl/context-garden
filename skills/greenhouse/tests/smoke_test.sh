@@ -216,5 +216,55 @@ n=$(python3 -c "import json; print(len(json.load(open('$WS/.greenhouse/notes.jso
 n=$(ls "$WS/.greenhouse/repos" | wc -l | tr -d ' ')
 [ "$n" = "3" ] && echo "PASS: 3 cards after concurrent syncs" || { echo "FAIL: $n cards"; fail=1; }
 
+# --- export / import: portable bundle, fingerprint-matched, never clobbers newer
+cd "$WS/orders-api"
+J() { python3 -c "import json,sys; b=json.load(open(sys.argv[1])); print($2)" "$1"; }
+G export --out "$SCRATCH/all.json" >/dev/null
+assert_contains "export: every card" "$(J "$SCRATCH/all.json" "sorted(c['slug'] for c in b['cards'])")" "'orders-api', 'shared-lib', 'web'"
+assert_not_contains "export: no local paths" "$(cat "$SCRATCH/all.json")" "local_path"
+assert_not_contains "export: no credentials" "$(cat "$SCRATCH/all.json")" "secret"
+assert_contains "export: cards carry a normalized fingerprint" "$(J "$SCRATCH/all.json" "b['cards'][0]['fingerprint']['remote']")" "git.example.com/acme/"
+G note "money" "amounts are cents" --repo shared-lib >/dev/null
+out=$(G export --repo shared-lib)
+assert_contains "export --repo: one card" "$(echo "$out" | python3 -c "import json,sys; b=json.load(sys.stdin); print([c['slug'] for c in b['cards']], [n['topic'] for n in b['notes']])")" "['shared-lib'] ['money']"
+out=$(G export --repo nope 2>&1); rc=$?
+[ "$rc" = "1" ] && echo "PASS: export --repo unknown fails" || { echo "FAIL: rc $rc"; fail=1; }
+OTHER="$SCRATCH/other-base"
+mkdir -p "$OTHER/repos" && echo '{"version": 1, "name": "other"}' > "$OTHER/greenhouse.json"
+GO() { G --base "$OTHER" "$@"; }
+out=$(GO import "$SCRATCH/all.json")
+assert_contains "import: cards added" "$out" "+ card web"
+assert_contains "import: notes added" "$out" "+ note API versioning"
+out=$(GO import "$SCRATCH/all.json")
+assert_contains "import again: nothing clobbered" "$out" "0 added, 0 updated, 3 skipped"
+python3 - "$OTHER/repos/orders-api.json" <<'PY'
+import json, sys
+p = sys.argv[1]; c = json.load(open(p))
+c["curated"] = {"summary": "their own words", "owners": ["team-b"]}; c["local_path"] = "../mine/orders-api"
+json.dump(c, open(p, "w"))
+PY
+G sync --summary "Orders REST API" --owner team-a >/dev/null
+G export --repo orders-api --out "$SCRATCH/orders.json" >/dev/null
+out=$(GO import "$SCRATCH/orders.json")
+assert_contains "import: newer card updates" "$out" "~ card orders-api"
+card=$(cat "$OTHER/repos/orders-api.json")
+assert_contains "import: local summary kept" "$card" "their own words"
+assert_contains "import: owners unioned" "$(J "$OTHER/repos/orders-api.json" "b['curated']['owners']")" "['team-b', 'team-a']"
+assert_contains "import: local checkout path kept" "$card" "../mine/orders-api"
+GO import --force "$SCRATCH/orders.json" >/dev/null
+assert_contains "import --force: bundle summary wins" "$(cat "$OTHER/repos/orders-api.json")" "Orders REST API"
+python3 - "$SCRATCH/orders.json" "$SCRATCH/clash.json" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))
+b["cards"][0]["fingerprint"] = {"remote": "elsewhere.org/x/orders-api", "root_commits": ["0" * 40]}
+b["cards"][0]["synced_at"] += 1000
+json.dump(b, open(sys.argv[2], "w"))
+PY
+out=$(GO import --force "$SCRATCH/clash.json")
+assert_contains "import: same slug, other project is never overwritten" "$out" "belongs to a different project"
+echo '{"format": "seedbank-facts", "facts": []}' > "$SCRATCH/sb.json"
+out=$(GO import "$SCRATCH/sb.json" 2>&1)
+assert_contains "import: rejects a seedbank bundle" "$out" "seedbank import"
+
 if [ "$fail" -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit "$fail"
