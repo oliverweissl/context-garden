@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "node --test src/checklist.test.js"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.0.0",

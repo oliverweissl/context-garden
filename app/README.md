@@ -80,6 +80,10 @@ handy for UI work; it is never part of a build.
   is a line break. An agent's header shows where it works now (`→ repo`, from its
   transcript); its dot turns yellow when its account got newer plugins than it started
   with (resume it to load them) and red when it reports a usage or credit limit.
+  When an agent lists steps for you ("please do these: 1. … 2. … 3. …"), a checklist chip
+  appears in its header: tick the steps, comment on each, then Send to agent (pasted and
+  submitted) or Ask about this (pasted with the list, you type the question). Settings →
+  Terminals can open it automatically.
   Terminals keep running while you look at another garden. Agents start through your
   login shell so PATH and npm shims match a normal terminal. Panes get `CONTEXT_GARDEN`
   and, if the garden has one, `GREENHOUSE_BASE`.
@@ -97,5 +101,6 @@ Removing a garden or account only forgets it; nothing on disk is deleted.
 ## Tests
 
 ```bash
+cd app && npm test                     # checklist detector (node --test)
 cd app/src-tauri && cargo test && cargo clippy --all-targets
 ```
