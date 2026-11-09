@@ -2,22 +2,46 @@
 
 ## Gate (PreToolUse hook on `Agent`)
 
-`bin/mycelium hook pre-agent` reads the hook JSON on stdin and checks, in
-order:
+`bin/mycelium hook pre-agent` reads the hook JSON on stdin. A denied call
+costs the parent a full resend of its brief, so the gate completes briefs
+(`updatedInput`, decision `allow`) instead of refusing them:
 
-1. **brief**: the prompt has `Task:`, `Why delegate:`, `Return:` and
-   `Budget:` lines (case-insensitive, optional `-`/`**`).
-2. **repeat**: the `Task:` line's content words overlap an agent already
-   allowed in this session by at least `duplicate_threshold` (Jaccard,
-   default 0.6). A `Not a duplicate:` line skips this check.
-3. **known**: notes sharing at least 2 content words (or a path) with the
-   prompt exist and the prompt has no `Known:` line.
+1. **brief**: a missing `Task:` line is taken from the description; missing
+   `Return:` and `Budget:` lines get defaults (the budget is the agent
+   type's default, scaled by the level).
+2. **known**: notes sharing at least 2 content words (or a path) with the
+   task are added as a `Known:` block when the brief has none.
+3. **route**: `general-purpose` (or no type) runs as a specialist when one
+   is installed: an edit (implement/fix/add/...) as `landscaper`, a
+   test/build run as `botanist`, anything else as `scout`. A
+   `Why general:` line keeps `general-purpose`.
+4. **repeat**: a `Task:` line whose content words overlap an agent already
+   allowed in this session by 90% or more is denied; from
+   `duplicate_threshold` (Jaccard, default 0.6) it passes with a one-line
+   hint. A `Not a duplicate:` line skips this check.
 
-The first failing rule denies the call. The denial reason is what the model
-reads, so it contains the fix (a template, the earlier agent's
-description, or the matching notes). Allowed calls are logged to
-`spawns.jsonl`. A hook error (e.g. a corrupt `notes.json`) exits 1 with its
-traceback: Claude Code shows it as a non-blocking error and the call runs.
+Allowed calls are logged to `spawns.jsonl`. A hook error (e.g. a corrupt
+`notes.json`) exits 1 with its traceback: Claude Code shows it as a
+non-blocking error and the call runs.
+
+## Budget (PreToolUse hook on every tool, subagents only)
+
+`bin/mycelium hook budget` counts each subagent's tool calls (Claude Code
+stamps `agent_id`/`agent_type` on them; main-thread calls carry neither and
+leave the wrapper without starting Python). The limit is the first number
+on the brief's `Budget:` line (read from the agent's own transcript), else
+the type's default x the level, clamped to 5-400 calls. Three calls before
+the limit the agent gets one wrap-up line; past it every call is denied
+with "reply now with what you have, marked partial". Counters live in
+`$TMPDIR/mycelium-budget/<session>/`, are dropped at SubagentStop and
+pruned after a day.
+
+Defaults (medium): scout 20, envoy 20, botanist 15, landscaper 40, Explore
+25, general-purpose 40, other 50. Levels: low x0.5, medium x1, high x2,
+extreme x4. The level comes from the plugin option `agent_budget`
+(`CLAUDE_PLUGIN_OPTION_AGENT_BUDGET`), then `MYCELIUM_BUDGET`, then
+`budget_level` in `.mycelium/config.json` (`bin/mycelium budget <level>`
+sets it); `budgets` there overrides per-type defaults.
 
 `bin/mycelium hook subagent-stop` (SubagentStop) reads the finished
 agent's final reply (`last_assistant_message`, so background agents are
@@ -28,10 +52,7 @@ Notes:
 ```
 `path:line` is reduced to the path; a line whose files don't exist is
 skipped (it could never go stale). Same topic replaces the old note, as
-with `note`.
-
-`bin/mycelium hook post-agent` (PostToolUse on `Agent`) adds a one-line
-reminder to record findings that were not in a `Notes:` block.
+with `note`. `hook post-agent` is a no-op kept for old settings.
 
 ## Agents
 
@@ -41,8 +62,10 @@ the plugin. A copied skill installs it with `bin/mycelium install-agents`.
 ## Modes
 
 `.mycelium/config.json`: `{"gate": "enforce" | "warn" | "off",
-"duplicate_threshold": 0.6}`. `MYCELIUM_GATE` overrides `gate`. `warn`
-allows the call and adds the denial text as context instead.
+"duplicate_threshold": 0.6, "budget_level": "medium", "budgets": {}}`.
+`MYCELIUM_GATE` overrides `gate`. `warn` changes nothing and says, as
+context, what `enforce` would complete or deny. `off` also turns off the
+budget.
 
 These tune the gate while the skill is on. The skill's own mode
 (`bin/mycelium mode on|manual|off`) decides whether the hooks run at all:
@@ -54,9 +77,9 @@ Add to `.claude/settings.json`:
 ```json
 {"hooks": {
   "PreToolUse":  [{"matcher": "Agent", "hooks": [{"type": "command",
-    "command": "<this-skill-dir>/bin/mycelium hook pre-agent", "timeout": 5}]}],
-  "PostToolUse": [{"matcher": "Agent", "hooks": [{"type": "command",
-    "command": "<this-skill-dir>/bin/mycelium hook post-agent", "timeout": 5}]}],
+    "command": "<this-skill-dir>/bin/mycelium hook pre-agent", "timeout": 5}]},
+                  {"hooks": [{"type": "command",
+    "command": "<this-skill-dir>/bin/mycelium hook budget", "timeout": 5}]}],
   "SubagentStop": [{"hooks": [{"type": "command",
     "command": "<this-skill-dir>/bin/mycelium hook subagent-stop", "timeout": 5}]}]
 }}
@@ -81,8 +104,10 @@ lives and how it connects, not the investigation story.
 
 ## Agents
 
-`bin/mycelium install-agents` copies `agents/scout.md` (read-only: Read,
-Grep, Glob; `model: haiku`; `maxTurns: 20`) to `<repo>/.claude/agents/`,
+`bin/mycelium install-agents` copies `agents/*.md` -- `scout` (read-only
+search, haiku, `maxTurns: 20`), `landscaper` (one bounded edit, `maxTurns:
+50`), `botanist` (runs checks, haiku, `maxTurns: 20`) -- to
+`<repo>/.claude/agents/`; `maxTurns` is a backstop behind the budget hook,
 never overwriting an existing file. Custom agent memory is stored per
 agent name, so it can't be shared between agent types; shared notes go
 through the parent's `Known:` line instead.

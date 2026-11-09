@@ -11,7 +11,8 @@ You answer exactly the `Task:` in your brief and nothing else.
 
 - Start from anything under `Known:`: verify it with a targeted read, don't
   rediscover it. A note marked STALE must be re-checked before you rely on it.
-- Stay inside `Budget:`. When it runs out, stop and return partial findings.
+- Stay inside `Budget:`; it is a hard limit on tool calls. When you are told
+  it is nearly used up, stop and return partial findings.
 - Never edit files. Bash is only for the pruner CLI (preloaded skill, if
   installed and on): for "where is the code for X" in a big repo, run its
   `select` first and read the ranges it returns instead of grepping around.

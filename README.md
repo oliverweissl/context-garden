@@ -89,7 +89,7 @@ cp -r skills/{skill} ~/.claude/skills/{skill}   # or the project's .claude/skill
 | 🌰 [`seedbank`](skills/seedbank) | Promotes repeatedly-rediscovered repo facts into a small, always-loaded `AGENTS.md`. |
 | ✂️ [`pruner`](skills/pruner) | Returns exact `file:start-end` ranges worth reading (Python + C/C++) instead of grep-exploring. |
 | ♻️ [`compost`](skills/compost) | Compacts huge compiler/test/CI/HPC output into clustered summaries. |
-| 🍄 [`mycelium`](skills/mycelium) | Gates subagent delegation (bounded brief, no duplicate investigations) and shares finding notes between agents. |
+| 🍄 [`mycelium`](skills/mycelium) | Keeps subagents cheap: completes briefs, routes general-purpose to specialists, enforces a hard per-agent tool budget (low/medium/high/extreme), and shares finding notes between agents. |
 | 🏡 [`greenhouse`](skills/greenhouse) | Shared memory across the repos of one platform: per-repo cards (provides, depends on, key facts) beside the repos. |
 | 🌾 [`weeder`](skills/weeder) | Shrinks a Skill's always-loaded token cost without losing instructions. |
 
@@ -151,7 +151,7 @@ when an agent brief names no repo.
 | compost | before Bash: a raw build/test command is denied with the compost command to run instead (`hook` in `.compost/config.json`: `redirect`, `ask`, `rewrite`, `off`) | |
 | pruner | on prompt submit: a pasted traceback/compiler error gets a slice as context | preloaded into `scout` |
 | seedbank | after Read/Grep/Glob and read-only Bash: record observations in the touched repo; at stop: once per session, ask to curate this session's candidates | `gardener` curates and promotes |
-| mycelium | before Agent: brief gate; when an agent stops: record its `Notes:` block | `scout` read-only search |
+| mycelium | before Agent: complete the brief, route general-purpose to a specialist; before each subagent tool call: hard tool budget; when an agent stops: record its `Notes:` block | `scout` read-only search, `landscaper` one bounded edit, `botanist` runs checks |
 | greenhouse | session start: platform overview, or ask where the base is; session end: card sync if the base opted in | `envoy` reads another repo's checkout |
 | weeder | | `weeder` runs the whole slimming workflow |
 

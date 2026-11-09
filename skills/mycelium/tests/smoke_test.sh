@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copies tests/fixtures/mini_repo to a scratch git repo and drives notes,
-# brief, the pre/post-agent hooks (all gate rules and modes), staleness,
+# brief, the pre-agent gate (all rules and modes), the per-agent budget hook,
+# budget levels, staleness,
 # install-agents and concurrent note writes. Offline.
 set -uo pipefail
 
@@ -8,7 +9,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH="$(mktemp -d)"
 REPO="$SCRATCH/mini_repo"
 cp -R "$DIR/tests/fixtures/mini_repo" "$REPO"
-trap 'rm -rf "$SCRATCH"' EXIT
+trap 'rm -rf "$SCRATCH" "${TMPDIR:-/tmp}/mycelium-budget/bs-$$"' EXIT
 cd "$REPO"
 git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm init
 unset MYCELIUM_GATE
@@ -43,29 +44,82 @@ out=$(M brief "database migration ordering")
 assert_contains "brief: unrelated task -> none relevant" "$out" "Known: none relevant"
 [ -f .mycelium/.gitignore ] && echo "PASS: store created its .gitignore" || { echo "FAIL: no .gitignore"; fail=1; }
 
-# --- gate rule 1: brief fields
+# --- gate rule 1: brief completed, not denied
 out=$(hook s1 "look around" "Explore the repo and tell me about auth")
-assert_contains "gate: missing fields -> deny" "$out" '"permissionDecision": "deny"'
-assert_contains "gate: names the missing fields" "$out" '`Task:`, `Why delegate:`, `Return:`, `Budget:`'
-assert_contains "gate: steers small work back to the main thread" "$out" "do it yourself"
+assert_not_contains "gate: incomplete brief is never denied" "$out" '"deny"'
+assert_contains "gate: incomplete brief is rewritten" "$out" '"updatedInput"'
+assert_contains "gate: Task taken from the description" "$out" 'Task: look around'
+assert_contains "gate: default Return added" "$out" 'Return: answer first'
+assert_contains "gate: default Budget for the type" "$out" 'Budget: 25 tool calls'
 
-# --- gate rule 3: known notes
-out=$(hook s1 "auth refresh" $'Task: explain the auth token refresh path\nWhy delegate: x\nReturn: file:line\nBudget: 5 reads')
-assert_contains "gate: matching notes without Known: -> deny with the note" "$out" "[n001] Auth token refresh"
-out=$(hook s1 "auth refresh" $'Task: explain the auth token refresh path\nWhy delegate: x\nKnown: n001 refresh_token in src/refresh.py\nReturn: file:line\nBudget: 5 reads')
-assert_not_contains "gate: full brief with Known: -> allow" "$out" "deny"
+# --- gate rule 2: known notes appended, not denied
+out=$(hook s2 "auth refresh" $'Task: explain the auth token refresh path\nReturn: file:line\nBudget: 5 reads')
+assert_contains "gate: matching notes added as Known" "$out" "[n001] Auth token refresh"
+assert_not_contains "gate: matching notes do not deny" "$out" '"deny"'
+out=$(hook s3 "auth refresh" $'Task: explain the auth token refresh path\nKnown: n001 refresh_token in src/refresh.py\nReturn: file:line\nBudget: 5 reads')
+[ -z "$out" ] && echo "PASS: gate: complete brief passes silently" || { echo "FAIL: complete brief printed $out"; fail=1; }
 
-# --- gate rule 2: duplicates
-out=$(hook s1 "auth refresh again" $'Task: explain the auth token refresh path again\nWhy delegate: x\nKnown: none relevant\nReturn: file:line\nBudget: 5 reads')
-assert_contains "gate: near-duplicate in same session -> deny" "$out" 'repeats agent \"auth refresh\"'
-out=$(hook s1 "auth refresh tests" $'Task: explain the auth token refresh path again\nNot a duplicate: now only the tests\nWhy delegate: x\nKnown: none relevant\nReturn: file:line\nBudget: 5 reads')
-assert_not_contains "gate: Not a duplicate: line -> allow" "$out" "deny"
-out=$(hook s2 "auth refresh" $'Task: explain the auth token refresh path\nWhy delegate: x\nKnown: n001\nReturn: file:line\nBudget: 5 reads')
-assert_not_contains "gate: duplicates are per session" "$out" "deny"
-out=$(hook s1 "webhooks" "$FULL")
-assert_not_contains "gate: unrelated full brief -> allow" "$out" "deny"
+# --- gate rule 4: duplicates
+out=$(hook s3 "auth refresh again" $'Task: explain the auth token refresh path\nKnown: none relevant\nReturn: file:line\nBudget: 5 reads')
+assert_contains "gate: identical repeat in same session -> deny" "$out" 'repeats agent \"auth refresh\"'
+out=$(hook s3 "auth refresh slow" $'Task: explain why the auth token refresh path is slow\nKnown: none relevant\nReturn: file:line\nBudget: 5 reads')
+assert_not_contains "gate: loose overlap is not denied" "$out" '"deny"'
+assert_contains "gate: loose overlap gets a hint" "$out" 'resembles agent'
+out=$(hook s3 "again" $'Task: explain the auth token refresh path\nNot a duplicate: other branch\nKnown: none relevant\nReturn: file:line\nBudget: 5 reads')
+assert_not_contains "gate: Not a duplicate: line -> allow" "$out" '"deny"'
+out=$(hook s4 "auth refresh" $'Task: explain the auth token refresh path\nKnown: none relevant\nReturn: file:line\nBudget: 5 reads')
+assert_not_contains "gate: duplicates are per session" "$out" '"deny"'
+
+# --- gate rule 3: general-purpose routed to a specialist
+gp() {
+  python3 -c 'import json,sys; print(json.dumps({"session_id": sys.argv[1], "cwd": sys.argv[3], "tool_name": "Agent",
+    "tool_input": {"description": "d", "prompt": sys.argv[2], "subagent_type": "general-purpose"}}))' \
+    "$1" "$2" "$REPO" | CLAUDE_PLUGIN_ROOT=/x M hook pre-agent
+}
+B=$'\nKnown: none relevant\nReturn: x\nBudget: 9'
+assert_contains "route: read-only task -> scout" "$(gp r1 "Task: where is the webhook retry configured$B")" '"subagent_type": "context-garden:scout"'
+assert_contains "route: edit task -> landscaper" "$(gp r2 "Task: fix the webhook retry off-by-one$B")" '"subagent_type": "context-garden:landscaper"'
+assert_contains "route: run task -> botanist" "$(gp r3 "Task: run the tests for payments$B")" '"subagent_type": "context-garden:botanist"'
+assert_not_contains "route: Why general: keeps it" "$(gp r4 $'Task: where is x\nWhy general: needs web'"$B")" 'subagent_type'
+out=$(python3 -c 'import json,sys; print(json.dumps({"session_id": "r5", "cwd": sys.argv[1], "tool_name": "Agent",
+  "tool_input": {"description": "d", "prompt": "Task: where is x\nKnown: none relevant\nReturn: x\nBudget: 9", "subagent_type": "general-purpose"}}))' "$REPO" \
+  | env -u CLAUDE_PLUGIN_ROOT HOME="$SCRATCH" "$DIR/bin/mycelium" hook pre-agent)
+[ -z "$out" ] && echo "PASS: route: no specialist installed -> untouched" || { echo "FAIL: routed without agents: $out"; fail=1; }
+
+# --- budget levels
+out=$(M budget)
+assert_contains "budget: default level medium" "$out" "budget level: medium"
+assert_contains "budget: landscaper default" "$out" "landscaper: 40 tool calls"
+M budget low >/dev/null
+assert_contains "budget: low halves defaults" "$(M budget)" "landscaper: 20 tool calls"
+assert_contains "budget: plugin option wins" "$(CLAUDE_PLUGIN_OPTION_AGENT_BUDGET=extreme M budget)" "landscaper: 160 tool calls"
+out=$(hook s5 "x" "Task: list the auth modules")
+assert_contains "budget: level scales the injected Budget line" "$out" 'Budget: 12 tool calls'
+M budget medium >/dev/null
+
+# --- hard budget per subagent
+TR="$SCRATCH/sess.jsonl"; mkdir -p "$SCRATCH/sess/subagents"
+python3 -c 'import json,sys; print(json.dumps({"type": "user", "message": {"role": "user", "content": "Task: t\nBudget: 6 tool calls"}}))' \
+  > "$SCRATCH/sess/subagents/agent-a1.jsonl"
+call() {
+  python3 -c 'import json,sys; print(json.dumps({"session_id": "bs-" + sys.argv[4], "cwd": sys.argv[1], "transcript_path": sys.argv[2],
+    "tool_name": "Read", "tool_input": {}, **({"agent_id": sys.argv[3], "agent_type": "general-purpose"} if sys.argv[3] else {})}))' \
+    "$REPO" "$TR" "$1" "$$" | M hook budget
+}
+out=$(call ""); [ -z "$out" ] && echo "PASS: budget: main-thread calls pass silently" || { echo "FAIL: main thread printed $out"; fail=1; }
+out=$(call a1; call a1); [ -z "$out" ] && echo "PASS: budget: early calls silent" || { echo "FAIL: early calls printed $out"; fail=1; }
+assert_contains "budget: wrap-up line 3 calls before the brief's limit" "$(call a1)" "3 tool calls left of 6"
+out=$(call a1; call a1; call a1)
+assert_not_contains "budget: calls up to the limit allowed" "$out" '"deny"'
+assert_contains "budget: past the limit -> deny with reply-now" "$(call a1)" "tool budget used up (6 calls)"
+python3 -c 'import json,sys; print(json.dumps({"session_id": "bs-" + sys.argv[2], "cwd": sys.argv[1], "agent_id": "a1", "last_assistant_message": ""}))' "$REPO" "$$" \
+  | M hook subagent-stop
+out=$(call a1); [ -z "$out" ] && echo "PASS: budget: counters dropped at SubagentStop" || { echo "FAIL: counter kept: $out"; fail=1; }
+for i in $(seq 1 47); do call a2 >/dev/null; done
+assert_contains "budget: no Budget line -> type default (40) applies" "$(call a2)" "used up (40 calls)"
+
 lines=$(wc -l < .mycelium/spawns.jsonl | tr -d ' ')
-[ "$lines" = "4" ] && echo "PASS: only allowed calls are logged (4)" || { echo "FAIL: spawns.jsonl has $lines lines, want 4"; fail=1; }
+[ "$lines" = "12" ] && echo "PASS: only allowed calls are logged (12)" || { echo "FAIL: spawns.jsonl has $lines lines, want 12"; fail=1; }
 
 # --- modes + hook errors
 out=$(MYCELIUM_GATE=warn hook s3 "x" "just look")
@@ -79,7 +133,7 @@ out=$(echo 'not json' | M hook pre-agent 2>/dev/null); rc=$?
 out=$(echo '{"tool_name": "Read", "tool_input": {}}' | M hook pre-agent)
 [ -z "$out" ] && echo "PASS: hook ignores non-Agent tools" || { echo "FAIL: non-Agent printed"; fail=1; }
 out=$(echo "{\"tool_name\": \"Agent\", \"cwd\": \"$REPO\", \"tool_input\": {}}" | M hook post-agent)
-assert_contains "post-agent: reminder to record findings" "$out" "bin/mycelium note"
+[ -z "$out" ] && echo "PASS: post-agent: no reminder (kept as a no-op)" || { echo "FAIL: post-agent printed $out"; fail=1; }
 
 # --- staleness
 echo "# changed" >> src/refresh.py

@@ -24,21 +24,30 @@ name files as `<repo>/<path>`: each note goes to the repo that holds the file.
 1. Delegate only a bounded task with a finish condition. Prefer one agent;
    run agents in parallel only for independent tasks.
 2. Check shared notes: `<this-skill-dir>/bin/mycelium brief "<task>"`.
-3. Write the brief with these lines (the plugin's gate hook denies an
-   Agent call that lacks them and tells you what's missing):
+3. Write the brief with these lines. The plugin's gate hook fills in a
+   missing `Task:` (from the description), `Return:` and `Budget:` and adds
+   matching notes as `Known:`, so a thin brief still runs once:
    ```
    Task: <one question or change, with a finish condition>
-   Why delegate: <why the main thread would be less efficient>
    Known: <relevant notes from `brief`, or "none relevant">
    Return: <findings with file:line, answer, unresolved questions>
-   Budget: <max searches/turns; on exhaustion return partial findings>
+   Budget: <N tool calls>
    ```
+   `Budget:` is a hard limit: the agent gets a wrap-up line 3 calls before
+   it, and every call past it is refused, so it replies with partial
+   findings instead of looping. Without one, the agent type's default
+   applies, scaled by the budget level (`bin/mycelium budget
+   low|medium|high|extreme`, or the plugin's `agent_budget` option).
 4. Never spawn a second agent for the same investigation: reuse the first
-   result or continue that agent. The gate denies near-duplicates unless a
-   `Not a duplicate: <how>` line explains the difference.
-5. For code search use a read-only agent (`scout`, installed by
-   `bin/mycelium install-agents`); use an editing agent only when it owns a
-   distinct change.
+   result or continue that agent. The gate denies a near-identical repeat
+   unless a `Not a duplicate: <how>` line explains the difference.
+5. Use a specialist, not `general-purpose` (the gate reroutes it unless the
+   brief has a `Why general: <reason>` line): `scout` reads and searches,
+   `landscaper` makes one bounded change, `botanist` runs builds and tests
+   and diagnoses failures. A copied skill installs them with
+   `bin/mycelium install-agents`.
+6. Don't check on a running background agent; wait for its completion
+   notice.
 
 **After an agent returns**
 

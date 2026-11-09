@@ -4,6 +4,16 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ "${1:-}" = "mode" ]; then
   shift; exec python3 "$DIR/scripts/cg_mode.py" mycelium "$@"
 fi
+if [ "${1:-}" = "hook" ] && [ "${2:-}" = "budget" ]; then
+  # Runs before every tool call: the main thread's calls carry no agent_id and
+  # leave here without starting Python.
+  payload=$(cat)
+  case "$payload" in *'"agent_id"'*) ;; *) exit 0 ;; esac
+  (cd "${CLAUDE_PROJECT_DIR:-$PWD}" && python3 "$DIR/scripts/cg_mode.py" mycelium --is-on)
+  case $? in 0) ;; 3) exit 0 ;; *) exit 1 ;; esac
+  printf '%s' "$payload" | python3 "$DIR/scripts/mycelium.py" "$@"
+  rc=$?; [ "$rc" -eq 2 ] && exit 1; exit "$rc"
+fi
 if [ "${1:-}" = "hook" ]; then
   # Claude Code hook. Not on: silent no-op. A crash exits 1 with its traceback on
   # stderr, which Claude Code shows as a non-blocking hook error.

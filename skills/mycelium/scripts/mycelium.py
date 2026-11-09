@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """mycelium: delegation gate + shared finding notes for subagents.
 
-Commands: brief, note, list, verify, drop, install-agents,
-hook pre-agent|post-agent|subagent-stop.
+Commands: brief, note, list, verify, drop, install-agents, budget,
+hook pre-agent|budget|subagent-stop (post-agent is a no-op kept for old settings).
 See references/protocol.md.
 """
 
@@ -19,7 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from my_gate import evaluate, format_notes  # noqa: E402
+import my_budget  # noqa: E402
+from my_gate import LEVELS, default_budget, evaluate, format_notes, level  # noqa: E402
 from my_store import Store, split_by_repo, workspace_of, workspace_stores  # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -100,11 +101,29 @@ def cmd_install_agents(store: Store, args) -> int:
     return 0
 
 
-def _hook_output(event: str, *, deny: str = "", context: str = "") -> str:
+def cmd_budget(store: Store, args) -> int:
+    """Show or set the budget level that scales agents' default tool budgets."""
+    cfg = store.config()
+    if args.level:
+        store.set_config("budget_level", args.level)
+        cfg["budget_level"] = args.level
+    lvl = level(cfg)
+    print(f"budget level: {lvl}"
+          + ("" if args.level or lvl == cfg.get("budget_level", "medium") else " (from the plugin option or MYCELIUM_BUDGET)"))
+    for t in ("scout", "botanist", "landscaper", "Explore", "general-purpose", "default"):
+        print(f"  {t}: {default_budget(t, cfg)} tool calls")
+    return 0
+
+
+def _hook_output(event: str, *, deny: str = "", context: str = "", update: dict | None = None) -> str:
     out = {"hookSpecificOutput": {"hookEventName": event}}
     if deny:
         out["hookSpecificOutput"]["permissionDecision"] = "deny"
         out["hookSpecificOutput"]["permissionDecisionReason"] = deny
+    elif update is not None:
+        out["hookSpecificOutput"]["permissionDecision"] = "allow"
+        out["hookSpecificOutput"]["permissionDecisionReason"] = "mycelium: brief completed"
+        out["hookSpecificOutput"]["updatedInput"] = update
     if context:
         out["hookSpecificOutput"]["additionalContext"] = context
     return json.dumps(out)
@@ -158,43 +177,48 @@ def cmd_hook(store: Store, args) -> int:
     """Claude Code hook entry. Prints nothing on no-op paths; an error raises
     (exit 1, a non-blocking hook error the user sees) and never denies the call."""
     payload = json.loads(sys.stdin.read() or "{}")
-    if args.event == "subagent-stop":
-        # Runs in the parent's harness, under the store lock: still "only
-        # the parent writes notes", without the parent spending a turn on it.
-        if payload.get("cwd"):
-            os.chdir(payload["cwd"])
-            store = Store()
-        record_agent_notes(store, payload.get("last_assistant_message") or "")
-        return 0
-    if payload.get("tool_name") not in ("Agent", "Task"):
-        return 0
+    if args.event == "post-agent":
+        return 0  # the reminder it printed is gone: SubagentStop records Notes: itself
     if payload.get("cwd"):  # resolve the store from the session's dir, not the hook's
         os.chdir(payload["cwd"])
         store = Store()
+    if args.event == "subagent-stop":
+        # Runs in the parent's harness, under the store lock: still "only
+        # the parent writes notes", without the parent spending a turn on it.
+        my_budget.forget(payload.get("session_id", ""), payload.get("agent_id", ""))
+        record_agent_notes(store, payload.get("last_assistant_message") or "")
+        return 0
+    if args.event == "budget":
+        answer = my_budget.decide(payload, store.config())
+        if answer:
+            print(json.dumps(answer))
+        return 0
+    if payload.get("tool_name") not in ("Agent", "Task"):
+        return 0
     session = payload.get("session_id") or "unknown"
     tool_input = payload.get("tool_input") or {}
     ws = workspace_of(store.repo_root)
-    if ws is not None and args.event == "pre-agent":
+    if ws is not None:
         store = workspace_stores(ws, f"{tool_input.get('description', '')}\n{tool_input.get('prompt', '')}")
     mode = store.config()["gate"]
     if mode == "off":
         return 0
-    if args.event == "post-agent":
-        print(_hook_output("PostToolUse", context=(
-            "mycelium: the agent's `Notes:` lines were recorded automatically. Record any "
-            "other durable fact it found (where something lives, how it works) once: "
-            f"`{BIN} note \"<topic>\" \"<finding>\" <file>...`."
-        )))
-        return 0
     with store.lock():
-        verdict, message = evaluate(store, session, tool_input, BIN)
-        if verdict == "allow":
-            store.log_spawn(session, tool_input.get("description", ""), tool_input.get("prompt", ""))
-    if verdict == "deny":
-        if mode == "warn":
-            print(_hook_output("PreToolUse", context=message))
-        else:
-            print(_hook_output("PreToolUse", deny=message))
+        result = evaluate(store, session, tool_input, BIN)
+        if "deny" not in result:
+            ran = result["input"] or tool_input
+            store.log_spawn(session, ran.get("description", ""), ran.get("prompt", ""))
+    if "deny" in result:
+        key = "context" if mode == "warn" else "deny"
+        print(_hook_output("PreToolUse", **{key: result["deny"]}))
+    elif mode == "warn":
+        # warn: say what enforce would change, change nothing.
+        what = "would complete the brief" if result["input"] else ""
+        text = "; ".join(t for t in (what, result["context"]) if t)
+        if text:
+            print(_hook_output("PreToolUse", context=f"mycelium: {text}"))
+    elif result["input"] or result["context"]:
+        print(_hook_output("PreToolUse", context=result["context"], update=result["input"]))
     return 0
 
 
@@ -222,13 +246,17 @@ def main(argv=None) -> int:
 
     sub.add_parser("install-agents", help="copy agent templates to <repo>/.claude/agents/ (never overwrites)")
 
+    bl = sub.add_parser("budget", help="show or set the level scaling agents' default tool budgets")
+    bl.add_argument("level", nargs="?", choices=sorted(LEVELS, key=LEVELS.get))
+
     h = sub.add_parser("hook", help="Claude Code hook entry (reads the hook JSON on stdin)")
-    h.add_argument("event", choices=["pre-agent", "post-agent", "subagent-stop"])
+    h.add_argument("event", choices=["pre-agent", "budget", "post-agent", "subagent-stop"])
 
     args = p.parse_args(argv)
     handlers = {
         "brief": cmd_brief, "note": cmd_note, "list": cmd_list, "verify": cmd_verify,
-        "drop": cmd_drop, "install-agents": cmd_install_agents, "hook": cmd_hook,
+        "drop": cmd_drop, "install-agents": cmd_install_agents, "budget": cmd_budget,
+        "hook": cmd_hook,
     }
     store = Store()
     ws = workspace_of(store.repo_root)

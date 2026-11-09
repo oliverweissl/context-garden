@@ -232,7 +232,7 @@ class TestMycelium:
         assert not (base / ".claude").exists()
         assert not (base / "skills" / "mycelium").exists()
 
-    def test_materialized_gate_hook_denies_a_vague_brief(self, tmp_path):
+    def test_materialized_gate_hook_completes_a_vague_brief(self, tmp_path):
         import json
 
         treat = tmp_path / "treatment"
@@ -248,8 +248,9 @@ class TestMycelium:
                  "CONTEXT_GARDEN_MODE_MYCELIUM": "on"},  # what the runner sets
         )
         out = json.loads(proc.stdout)["hookSpecificOutput"]
-        assert out["permissionDecision"] == "deny"
-        assert "`Task:`" in out["permissionDecisionReason"]
+        assert out["permissionDecision"] == "allow"
+        prompt = out["updatedInput"]["prompt"]
+        assert prompt.startswith("Task: look") and "\nBudget: " in prompt
 
     def test_overlay_scout_matches_skill_template(self):
         overlay = self.overlap.fixture_dir / "treatment_overlay" / ".claude" / "agents" / "scout.md"
