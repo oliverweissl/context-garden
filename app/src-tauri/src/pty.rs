@@ -138,6 +138,11 @@ impl Ptys {
             .map_err(|e| e.to_string())
     }
 
+    /// Still running (the exit poll drops finished sessions).
+    pub fn alive(&self, id: u32) -> bool {
+        self.sessions.lock().unwrap().contains_key(&id)
+    }
+
     pub fn kill(&self, id: u32) {
         if let Some(s) = self.sessions.lock().unwrap().get_mut(&id) {
             let _ = s.child.kill();

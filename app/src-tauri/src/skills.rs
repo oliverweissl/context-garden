@@ -252,6 +252,7 @@ mod tests {
             created_at: 0,
             terminals: Vec::new(),
             plugins: Vec::new(),
+            links: Vec::new(),
         };
         let errors = apply(&garden, &preset_modes("platform"));
         assert_eq!(errors.len(), 1, "{errors:?}");

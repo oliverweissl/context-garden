@@ -120,6 +120,9 @@ const handlers = {
   },
   worktree_release: () => null,
   worktree_sweep: () => [],
+  get_links: () => mockLinks,
+  set_links: ({ links }) => (mockLinks = links),
+  control_reply: () => null,
   get_settings: () => ({ worktrees: true }),
   set_settings: () => null,
 };
@@ -131,6 +134,8 @@ export async function mockListen(name, cb) {
   listeners.set(name, [...(listeners.get(name) || []), cb]);
   return () => listeners.set(name, listeners.get(name).filter((x) => x !== cb));
 }
+
+let mockLinks = [];
 
 export function mockInvoke(cmd, args) {
   const fn = handlers[cmd];
