@@ -145,6 +145,10 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .dash { flex: 0 1 auto; min-height: 0; overflow: auto; }
 .garden-head { display: flex; align-items: center; gap: 12px; padding: 18px 0 12px; flex-wrap: wrap; }
 .title { margin: 0; font-size: 30px; text-transform: uppercase; }
+.stats-head { margin-bottom: 8px; }
+.fold { background: transparent; border: 0; padding: 4px 0; cursor: pointer; font: 600 11px var(--body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.fold:hover { color: var(--text); }
+.token-toggle button { padding: 2px 9px; font-size: 11px; }
 .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 12px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; min-width: 0; }
 .tile-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
