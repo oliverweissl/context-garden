@@ -3,6 +3,7 @@
 mod accounts;
 mod plugins;
 mod pty;
+mod relocate;
 mod skills;
 mod sources;
 mod stats;
@@ -57,7 +58,22 @@ fn list_gardens(store: State<Store>) -> Result<Vec<Garden>, String> {
 
 #[tauri::command]
 fn get_garden(store: State<Store>, id: String) -> Result<Garden, String> {
+    relocate_moved(&store, &id)?;
     store.garden(&id)
+}
+
+/// Repos renamed or moved on disk since the garden last looked: follow them instead
+/// of reporting them deleted. Writes the garden only when something moved.
+fn relocate_moved(store: &Store, id: &str) -> Result<(), String> {
+    let mut g = store.garden(id)?;
+    if relocate::relocate(&mut g) == 0 {
+        return Ok(());
+    }
+    // Again under the store's lock, so a concurrent edit is never overwritten.
+    store.update_garden(id, |cur| {
+        relocate::relocate(cur);
+        Ok(())
+    })
 }
 
 /// Plan a new garden, or (with `garden`) more repos for an existing one, which
@@ -300,6 +316,7 @@ fn apply_skills(
 
 #[tauri::command]
 async fn garden_stats(store: State<'_, Store>, id: String) -> Result<stats::GardenStats, String> {
+    relocate_moved(&store, &id)?;
     let garden = store.garden(&id)?;
     let profiles = store.profiles()?;
     Ok(stats::collect(&garden, &profiles))

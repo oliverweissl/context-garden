@@ -251,6 +251,11 @@ fn link_status(target: &Path, source: &Path) -> (String, Option<String>) {
 
 /// Git repos inside a plain folder, up to 3 levels deep (not descending into repos).
 fn repos_in(dir: &Path) -> Vec<PathBuf> {
+    repos_in_depth(dir, 3)
+}
+
+/// Git repos under `dir`, looking `depth` folder levels down (hidden folders skipped).
+pub fn repos_in_depth(dir: &Path, depth: usize) -> Vec<PathBuf> {
     fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else { return };
         let mut dirs: Vec<PathBuf> = entries
@@ -268,7 +273,7 @@ fn repos_in(dir: &Path) -> Vec<PathBuf> {
         }
     }
     let mut out = Vec::new();
-    walk(dir, 3, &mut out);
+    walk(dir, depth, &mut out);
     out
 }
 
