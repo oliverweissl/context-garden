@@ -773,20 +773,26 @@ export async function loginTerminal(profile, container) {
  * folders, repos), with a filter. Exposes `value` (path) and `label`.
  */
 function folderPicker(garden) {
-  const rootNode = { name: "garden root", path: garden.root, kids: new Map(), repo: false };
-  const ready = garden.repos.filter((r) => ["cloned", "linked", "local"].includes(r.status));
-  const prefix = garden.root.replace(/\/+$/, "") + "/";
-  for (const r of ready) {
-    // Repos outside the root (linked folders) hang off the root by name.
-    const parts = r.path.startsWith(prefix) ? r.path.slice(prefix.length).split("/") : [r.name];
-    let node = rootNode;
-    parts.forEach((part, i) => {
-      const path = r.path.startsWith(prefix) ? prefix + parts.slice(0, i + 1).join("/") : r.path;
-      if (!node.kids.has(part)) node.kids.set(part, { name: part, path, kids: new Map(), repo: false });
-      node = node.kids.get(part);
-    });
-    Object.assign(node, { repo: true, label: r.name });
-  }
+  let rootNode;
+  let prefix;
+  // Built from the garden's repos; rebuilt from a fresh copy whenever the picker opens, so repos
+  // added or finished cloning since this page was drawn show up.
+  const build = (g) => {
+    rootNode = { name: "garden root", path: g.root, kids: new Map(), repo: false };
+    prefix = g.root.replace(/\/+$/, "") + "/";
+    for (const r of g.repos.filter((r) => ["cloned", "linked", "local"].includes(r.status))) {
+      // Repos outside the root (linked folders) hang off the root by name.
+      const parts = r.path.startsWith(prefix) ? r.path.slice(prefix.length).split("/") : [r.name];
+      let node = rootNode;
+      parts.forEach((part, i) => {
+        const path = r.path.startsWith(prefix) ? prefix + parts.slice(0, i + 1).join("/") : r.path;
+        if (!node.kids.has(part)) node.kids.set(part, { name: part, path, kids: new Map(), repo: false });
+        node = node.kids.get(part);
+      });
+      Object.assign(node, { repo: true, label: r.name });
+    }
+  };
+  build(garden);
   const labelOf = (n) => (n === rootNode ? "garden root" : n.label || n.path.slice(prefix.length));
   const picker = { value: garden.root, label: "garden root" };
   const button = h("button", { class: "btn picker-btn", title: "Folder the terminal starts in" });
@@ -834,6 +840,11 @@ function folderPicker(garden) {
     draw();
     filter.focus();
     document.addEventListener("pointerdown", outside);
+    api.garden(garden.id).then((g) => {
+      if (pop.hidden) return;
+      build(g);
+      draw();
+    }).catch(() => {});
   };
   filter.addEventListener("input", draw);
   filter.addEventListener("keydown", (e) => {
