@@ -1,7 +1,7 @@
 // node --test (npm test): the checklist detector and the text sent to the agent.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectChecklist, carryOver, formatResults, formatReference } from "./checklist.js";
+import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
 const claude = (s) => s.split("\n");
 
@@ -92,4 +92,16 @@ test("text for the agent", () => {
     "3. [x] Restart — comment: took a while / but fine",
     "Question: ",
   ].join("\n"));
+});
+
+test("removing or isolating one item keeps checks and comments aligned", () => {
+  const state = { items: [{ text: "a" }, { text: "b" }, { text: "c" }], checks: [true, false, true], comments: ["x", "y", "z"] };
+  const rest = removeItem(state, 1);
+  assert.deepEqual(rest.items.map((i) => i.text), ["a", "c"]);
+  assert.deepEqual(rest.checks, [true, true]);
+  assert.deepEqual(rest.comments, ["x", "z"]);
+  const one = onlyItem(state, 2);
+  assert.deepEqual(one.items.map((i) => i.text), ["c"]);
+  assert.equal(formatResults(one), "Checklist results (1/1 done):\n1. [x] c — comment: z");
+  assert.equal(state.items.length, 3); // inputs untouched
 });

@@ -390,6 +390,7 @@ th .sort .arrow { font-size: 8px; min-width: 8px; }
 .checklist-chip { flex: none; }
 .checklist-chip.on { animation: pop 220ms var(--spring); }
 .cl-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.cl-top { align-items: flex-start; gap: 6px; }
 .cl-item { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
 label.cl-task { flex-direction: row; align-items: flex-start; gap: 8px; cursor: pointer; }
 label.cl-task > span { color: var(--text); font-size: 14px; text-transform: none; letter-spacing: 0; }

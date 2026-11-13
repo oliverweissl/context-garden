@@ -83,9 +83,11 @@ handy for UI work; it is never part of a build.
   transcript); its dot turns yellow when its account got newer plugins than it started
   with (resume it to load them) and red when it reports a usage or credit limit.
   When an agent lists steps for you ("please do these: 1. … 2. … 3. …"), a checklist chip
-  appears in its header: tick the steps, comment on each, then Send to agent (pasted and
+  appears in its header: tick the steps, comment on each, then Send (one item, which removes it) or Send all (pasted and
   submitted) or Ask about this (pasted with the list, you type the question). Settings →
   Terminals can open it automatically.
+  ⧉ New window (Ctrl/Cmd+Shift+N) opens another independent window on the same page; a window's
+  terminals end when it closes. Avoid the same garden in two windows: both save its terminal list.
   Terminals keep running while you look at another garden. Agents start through your
   login shell so PATH and npm shims match a normal terminal. Panes get `CONTEXT_GARDEN`
   and, if the garden has one, `GREENHOUSE_BASE`.

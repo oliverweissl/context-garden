@@ -157,3 +157,14 @@ export function formatResults(state) {
 export function formatReference(state) {
   return [`Re checklist (${doneCount(state)}/${state.items.length} done):`, ...lines(state, false), "Question: "].join("\n");
 }
+
+/** The state without item `i`, or with only item `i` (`keep`): items, checks and comments stay aligned. */
+export function removeItem(state, i) {
+  const gone = (_, j) => j !== i;
+  return { ...state, items: state.items.filter(gone), checks: state.checks.filter(gone), comments: state.comments.filter(gone) };
+}
+
+export function onlyItem(state, i) {
+  const at = (arr) => [arr[i]];
+  return { ...state, items: at(state.items), checks: at(state.checks), comments: at(state.comments) };
+}

@@ -2,7 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { api } from "./api.js";
 import { h, toast, errText, badge, modal } from "./ui.js";
-import { detectChecklist, carryOver, formatResults, formatReference } from "./checklist.js";
+import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
 const THEME = {
   background: "#040604", foreground: "#d9f2dc", cursor: "#46d872", cursorAccent: "#040604",
@@ -537,38 +537,65 @@ class Pane {
     if (!c || this.checklistModal) return;
     c.fresh = false;
     const progress = h("span", { class: "faint small cl-progress" });
+    const list = h("ol", { class: "cl-list" });
     const save = () => {
       saveChecklist(this.opts.key, this.checklist);
       this.drawChecklistChip();
       progress.textContent = `${c.checks.filter(Boolean).length}/${c.items.length} done`;
     };
-    const items = c.items.map((it, i) => {
-      const id = `cl-${this.opts.key}-${i}`;
-      const row = h("li", { class: `cl-item${c.checks[i] ? " done" : ""}` });
-      const box = h("input", {
-        type: "checkbox", id, checked: !!c.checks[i],
-        onchange: (e) => { c.checks[i] = e.target.checked; row.classList.toggle("done", e.target.checked); save(); },
-      });
-      const note = h("textarea", {
-        rows: 1, class: "cl-note", placeholder: "Comment (optional)", "aria-label": `Comment on step ${i + 1}`,
-        oninput: (e) => { c.comments[i] = e.target.value; save(); },
-      });
-      note.value = c.comments[i] || "";
-      row.append(h("label", { class: "cl-task", for: id }, box, h("span", { class: "cl-n" }, `${i + 1}.`), h("span", {}, it.text)), note);
-      return row;
-    });
     const live = () => {
       if (this.id != null) return true;
       toast("This terminal is not running any more", "error");
       return false;
     };
+    /** Drop item `i` (removed or sent); the checklist is gone when none are left. */
+    const drop = (i) => {
+      Object.assign(c, removeItem(c, i));
+      if (!c.items.length) {
+        this.checklist.current = null;
+        save();
+        m.close();
+        return;
+      }
+      draw();
+    };
+    // Ticking only records progress; nothing reaches the agent until a Send button is pressed.
+    const draw = () => {
+      list.replaceChildren(...c.items.map((it, i) => {
+        const id = `cl-${this.opts.key}-${i}`;
+        const row = h("li", { class: `cl-item${c.checks[i] ? " done" : ""}` });
+        const box = h("input", {
+          type: "checkbox", id, checked: !!c.checks[i],
+          onchange: (e) => { c.checks[i] = e.target.checked; row.classList.toggle("done", e.target.checked); save(); },
+        });
+        const note = h("textarea", {
+          rows: 1, class: "cl-note", placeholder: "Comment (optional)", "aria-label": `Comment on step ${i + 1}`,
+          oninput: (e) => { c.comments[i] = e.target.value; save(); },
+        });
+        note.value = c.comments[i] || "";
+        row.append(
+          h("div", { class: "row cl-top" },
+            h("label", { class: "cl-task grow", for: id }, box, h("span", { class: "cl-n" }, `${i + 1}.`), h("span", {}, it.text)),
+            h("button", {
+              class: "btn ghost small-btn", title: "Send only this item to the agent and remove it from the list",
+              onclick: () => {
+                if (!live()) return;
+                this.send(formatResults(onlyItem(c, i)));
+                drop(i);
+              },
+            }, "Send"),
+            h("button", { class: "icon", title: "Remove this item from the list", "aria-label": `Remove step ${i + 1}`, onclick: () => drop(i) }, "×")),
+          note);
+        return row;
+      }));
+      save();
+    };
     const send = () => {
       if (!live()) return;
       m.close();
-      this.term.paste(formatResults(c)); // bracketed paste when the agent asked for it
-      const id = this.id;
-      setTimeout(() => api.write(id, "\r").catch(() => {}), 150);
-      this.term.focus();
+      this.send(formatResults(c));
+      this.checklist.current = null; // finalized: sent items leave the list
+      save();
     };
     const ask = () => {
       if (!live()) return;
@@ -578,7 +605,7 @@ class Pane {
     };
     const content = h("div", { class: "checklist" },
       h("p", { class: "muted small" }, c.title, " · from ", this.opts.title),
-      h("ol", { class: "cl-list" }, items),
+      list,
       h("div", { class: "row cl-actions" },
         h("button", {
           class: "btn ghost", title: "Hide this checklist (it will not come back)",
@@ -587,14 +614,22 @@ class Pane {
         progress,
         h("span", { class: "grow" }),
         h("button", { class: "btn", title: "Back to the terminal with the list pasted, to ask the agent about it", onclick: ask }, "Ask about this"),
-        h("button", { class: "btn primary", title: "Paste the results into the terminal and press Enter (Ctrl/Cmd+Enter)", onclick: send }, "Send to agent")));
+        h("button", { class: "btn primary", title: "Paste all remaining items into the terminal, press Enter, and clear the list (Ctrl/Cmd+Enter)", onclick: send }, "Send all")));
     content.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
     });
     const m = modal("Checklist", content, { onClose: () => { this.checklistModal = null; } });
     this.checklistModal = m;
-    save();
+    draw();
     m.el.querySelector(".cl-item input")?.focus();
+  }
+
+  /** Type `text` into the agent (bracketed paste when it asked for it) and press Enter. */
+  send(text) {
+    this.term.paste(text);
+    const id = this.id;
+    setTimeout(() => api.write(id, "\r").catch(() => {}), 150);
+    this.term.focus();
   }
 
   /** Shift+Enter is a line break (Ctrl+J, which Claude Code and Codex read as one); copy and paste. */
