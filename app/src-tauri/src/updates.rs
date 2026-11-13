@@ -87,8 +87,9 @@ pub fn open_repo_page(url: &str) -> Result<(), String> {
     } else {
         ("xdg-open", vec![url])
     };
-    std::process::Command::new(program)
-        .args(args)
+    let mut cmd = std::process::Command::new(program);
+    crate::util::no_window(&mut cmd);
+    cmd.args(args)
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("could not open the browser: {e}"))

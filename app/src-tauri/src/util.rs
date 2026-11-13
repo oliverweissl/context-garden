@@ -5,6 +5,20 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Keep a child process from opening its own console window. Without this every
+/// `git`/`gh`/`claude` call of the GUI app flashes a terminal on Windows.
+#[cfg(windows)]
+pub fn no_window(cmd: &mut Command) -> &mut Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW)
+}
+
+#[cfg(not(windows))]
+pub fn no_window(cmd: &mut Command) -> &mut Command {
+    cmd
+}
+
 static LOGIN_PATH: OnceLock<Option<String>> = OnceLock::new();
 
 /// PATH as the user's login shell sees it. Apps started from Finder / a desktop
@@ -97,6 +111,7 @@ pub fn run_env(program: &str, args: &[&str], cwd: Option<&Path>, env: &[(&str, &
     } else {
         Command::new(program)
     };
+    no_window(&mut cmd);
     cmd.envs(env.iter().copied());
     cmd.args(args)
         .stdin(Stdio::null())
@@ -213,7 +228,9 @@ pub fn clipboard_write(text: &str) -> Result<(), String> {
         .iter()
         .find(|(p, _)| which(p).is_some())
         .ok_or("no clipboard tool found (install wl-clipboard or xclip)")?;
-    let mut child = Command::new(program)
+    let mut cmd = Command::new(program);
+    no_window(&mut cmd);
+    let mut child = cmd
         .args(*args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -234,7 +251,9 @@ pub fn clipboard_read() -> Result<String, String> {
         .iter()
         .find(|(p, _)| which(p).is_some())
         .ok_or("no clipboard tool found (install wl-clipboard or xclip)")?;
-    let out = Command::new(program)
+    let mut cmd = Command::new(program);
+    no_window(&mut cmd);
+    let out = cmd
         .args(*args)
         .stdin(Stdio::null())
         .stderr(Stdio::null())
