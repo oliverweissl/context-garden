@@ -1,0 +1,58 @@
+task_id: mycelium-forced-delegation
+component: mycelium
+level: repo
+skill_relevance: [mycelium]
+description: >
+  The prompt REQUIRES three subagents (Agent tool), one per section. Sections
+  A and B both dig through skills/mycelium/scripts, and section C reads the
+  greenhouse store, which shares the lock/atomic-write pattern with A. So
+  unguided subagents re-read the same files and each re-derive the same
+  pattern, which is the repeated work this benchmark measures.
+notes: >
+  The existing mycelium tasks only say "use subagents if that is efficient",
+  and agents never delegate (0 subagents in every v0.2.0 run), so mycelium's
+  gate had nothing to act on. Here delegation is mandatory in both arms, so
+  subagents_spawned and total tokens INCLUDING subagents are comparable.
+  Baseline: same prompt, no skill and no hooks. Treatment: the skill plus
+  the Agent gate and the scout agent (shared overlay with the other mycelium
+  tasks). Expect: equal pass rate; treatment spawns fewer or better-briefed
+  subagents and uses fewer total tokens. If the gate only denies and the
+  agent retries the same spawns, tokens can go UP; that is a finding too.
+  Answers are facts of this repository at the tested commit; update the
+  expected values if the code changes.
+base_ref: worktree
+treatment_mode: skill_available
+treatment_overlay: ../mycelium-overlapping-investigation/treatment_overlay
+prompt: |
+  This is a three-part investigation of this repository. You MUST delegate:
+  spawn exactly one subagent per section with the Agent tool, then combine
+  their answers yourself. Do not answer a section without its subagent.
+  Write exactly these lines to FINDINGS.txt at the repository root (values
+  only, no explanation):
+
+  Section A (mycelium store, skills/mycelium/scripts):
+  GATE_DEFAULT: <the default value of the "gate" config option>
+  DUPLICATE_THRESHOLD: <the default duplicate_threshold>
+  ATOMIC_WRITE: <the os function the store uses to make file writes atomic>
+
+  Section B (mycelium gate, skills/mycelium/scripts):
+  MIN_BUDGET: <the smallest tool-call budget the gate allows>
+  MAX_BUDGET: <the largest tool-call budget the gate allows>
+  GENERAL_PURPOSE_BUDGET: <the default hard budget in tool calls for the general-purpose agent type>
+
+  Section C (greenhouse, skills/greenhouse/scripts):
+  GREENHOUSE_LOCK: <the Python call greenhouse's store uses to take its cross-process lock>
+  LOCK_ON_WINDOWS: <what that locking does on Windows>
+  MAX_FACTS: <the maximum number of facts greenhouse harvests>
+verify:
+  type: all
+  checks:
+    - {type: answer_key, path: FINDINGS.txt, key: GATE_DEFAULT, pattern: '(?i)"?enforce"?'}
+    - {type: answer_key, path: FINDINGS.txt, key: DUPLICATE_THRESHOLD, expected: "0.6"}
+    - {type: answer_key, path: FINDINGS.txt, key: ATOMIC_WRITE, pattern: '(?i).*os\.replace.*'}
+    - {type: answer_key, path: FINDINGS.txt, key: MIN_BUDGET, expected: "5"}
+    - {type: answer_key, path: FINDINGS.txt, key: MAX_BUDGET, expected: "400"}
+    - {type: answer_key, path: FINDINGS.txt, key: GENERAL_PURPOSE_BUDGET, expected: "40"}
+    - {type: answer_key, path: FINDINGS.txt, key: GREENHOUSE_LOCK, pattern: '(?i).*flock.*'}
+    - {type: answer_key, path: FINDINGS.txt, key: LOCK_ON_WINDOWS, pattern: '(?i).*(no[- ]?op|nothing|disabled|skip|not lock|no lock|none|degrad).*'}
+    - {type: answer_key, path: FINDINGS.txt, key: MAX_FACTS, expected: "12"}
