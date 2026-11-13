@@ -53,7 +53,6 @@ export async function renderPlant(app) {
   const flat = h("input", { type: "checkbox" });
   const flatHelp = "Off: repos from groups keep their structure, e.g. platform/backend/api. "
     + "On: every repo sits directly in the garden folder; clashing names get their group as prefix.";
-  const protocol = h("select", {}, h("option", { value: "ssh" }, "SSH"), h("option", { value: "https" }, "HTTPS"));
 
   const preview = h("div");
   const go = h("button", { class: "btn primary" }, "Find repositories");
@@ -61,7 +60,7 @@ export async function renderPlant(app) {
   let stopWatching = null;
 
   const args = () => ({
-    root: rootPath(), flat: flat.checked, protocol: protocol.value, inputs: lines(sources.value),
+    root: rootPath(), flat: flat.checked, protocol: "auto", inputs: lines(sources.value),
   });
 
   async function lookup() {
@@ -97,7 +96,7 @@ export async function renderPlant(app) {
     }
   };
   // Changing inputs invalidates the looked-up plan.
-  for (const el of [name, parentDir, sources, flat, protocol]) {
+  for (const el of [name, parentDir, sources, flat]) {
     el.addEventListener("input", () => { showFolder(); plan = null; go.textContent = "Find repositories"; preview.replaceChildren(); });
   }
 
@@ -111,7 +110,8 @@ export async function renderPlant(app) {
       h("div", { class: "row between" },
         h("label", { class: "check", title: flatHelp }, flat, "Enable flat layout",
           h("span", { class: "info", title: flatHelp }, "i")),
-        h("label", { class: "inline" }, h("span", {}, "Clone over"), protocol)),
+        h("span", { class: "faint small", title: "https:// sources clone over HTTPS, git@ and ssh:// sources over SSH; a bare host like github.com/acme uses SSH" },
+          "Clones over the protocol you type")),
       h("div", { class: "row end" }, go)),
     preview);
   return () => stopWatching?.();

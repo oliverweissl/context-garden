@@ -155,7 +155,7 @@ export async function renderGarden(app, id) {
     return h("div", {},
       h("div", { class: "form" },
         h("label", {}, h("span", {}, "Add repositories or groups",
-          h("em", {}, `same layout as the garden (${garden.layout}, ${garden.protocol})`),
+          h("em", {}, `same layout as the garden (${garden.layout}, ${garden.protocol === "auto" ? "protocol as typed" : garden.protocol})`),
           h("span", { class: "info", title: LINK_HELP }, "i")), sources),
         h("div", { class: "row end" }, go)),
       preview);

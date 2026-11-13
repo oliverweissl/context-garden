@@ -116,6 +116,20 @@ pub fn parse_remote(input: &str) -> Option<(String, String)> {
     Some((host.to_lowercase(), path.to_string()))
 }
 
+/// Protocol used to clone a group's repos. A garden with an explicit "ssh" or
+/// "https" keeps it; an "auto" garden follows each input as it was typed
+/// (https:// URL: HTTPS, git@ / ssh:// URL: SSH), and a bare host defaults to SSH.
+fn group_protocol(protocol: &str, input: &str) -> &'static str {
+    match protocol {
+        "https" => "https",
+        "auto" => {
+            let i = input.trim().to_lowercase();
+            if i.starts_with("https://") || i.starts_with("http://") { "https" } else { "ssh" }
+        }
+        _ => "ssh",
+    }
+}
+
 fn is_github(host: &str) -> bool {
     host == "github.com" || host.starts_with("github.")
 }
@@ -451,7 +465,7 @@ fn plan_classified(
         });
         listing.groups.insert(path.clone());
         for r in listed {
-            let url = if protocol == "https" { &r.https } else { &r.ssh };
+            let url = if group_protocol(protocol, input) == "https" { &r.https } else { &r.ssh };
             let dest = if flat { r.name.clone() } else { r.nested.clone() };
             let repo = Repo {
                 name: r.name,
@@ -556,6 +570,17 @@ pub fn clone_all(repos: Vec<Repo>, report: impl Fn(usize, &Repo) + Send + Sync +
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn auto_protocol_follows_each_input() {
+        assert_eq!(group_protocol("auto", "https://gitlab.com/acme"), "https");
+        assert_eq!(group_protocol("auto", "git@github.com:acme"), "ssh");
+        assert_eq!(group_protocol("auto", "ssh://git@host/acme"), "ssh");
+        assert_eq!(group_protocol("auto", "github.com/acme"), "ssh");
+        // Existing gardens keep what they were created with.
+        assert_eq!(group_protocol("ssh", "https://gitlab.com/acme"), "ssh");
+        assert_eq!(group_protocol("https", "git@github.com:acme"), "https");
+    }
+
     use super::*;
 
     #[test]
