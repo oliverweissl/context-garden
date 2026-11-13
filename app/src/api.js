@@ -50,6 +50,8 @@ export const api = {
   openRepoPage: (url) => invoke("open_repo_page", { url }),
   installPlugin: (id) => invoke("install_profile_plugin", { id }),
   removeProfile: (id) => invoke("remove_profile", { id }),
+  /** Another app window, on the page `hash` (default: home). */
+  newWindow: (hash = "") => (mock ? Promise.resolve(window.open(`${location.pathname}${hash}`, "_blank")) : invoke("new_window", { hash })),
   copy: (text) => (mock ? navigator.clipboard.writeText(text) : invoke("clipboard_write", { text })),
   pasteText: () => (mock ? navigator.clipboard.readText() : invoke("clipboard_read")),
   pickFolder: (defaultPath) => open({ directory: true, defaultPath }),

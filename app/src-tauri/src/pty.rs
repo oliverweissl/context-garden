@@ -85,11 +85,19 @@ impl Ptys {
             .insert(id, Session { writer, master: pair.master, child });
 
         let out = channel.clone();
+        let owner = self.sessions.clone();
         std::thread::spawn(move || {
             let b64 = base64::engine::general_purpose::STANDARD;
             let mut buf = [0u8; 16 * 1024];
             while let Ok(n) = reader.read(&mut buf) {
-                if n == 0 || out.send(PtyEvent::Output(b64.encode(&buf[..n]))).is_err() {
+                if n == 0 {
+                    break;
+                }
+                if out.send(PtyEvent::Output(b64.encode(&buf[..n]))).is_err() {
+                    // The window that owned this terminal is gone: end the process with it.
+                    if let Some(mut s) = owner.lock().unwrap().remove(&id) {
+                        let _ = s.child.kill();
+                    }
                     break;
                 }
             }

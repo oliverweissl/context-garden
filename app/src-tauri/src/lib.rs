@@ -993,6 +993,27 @@ fn terminal_kill(ptys: State<Ptys>, id: u32) {
     ptys.kill(id)
 }
 
+/// Open another ContextGarden window, optionally on a page (`#/garden/<id>`).
+/// Every window runs the same UI; its terminals live and die with it.
+#[tauri::command]
+fn new_window(app: AppHandle, hash: Option<String>) -> Result<(), String> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static N: AtomicU32 = AtomicU32::new(0);
+    let hash = hash.unwrap_or_default();
+    if !(hash.is_empty() || hash.starts_with('#')) || hash.len() > 512 {
+        return Err("invalid page".into());
+    }
+    let label = format!("win-{}", N.fetch_add(1, Ordering::SeqCst) + 1);
+    let url = tauri::WebviewUrl::App(format!("index.html{hash}").into());
+    tauri::WebviewWindowBuilder::new(&app, label, url)
+        .title("ContextGarden")
+        .inner_size(1280.0, 820.0)
+        .min_inner_size(820.0, 560.0)
+        .build()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 pub fn run() {
     util::init_env();
     let app = tauri::Builder::default()
@@ -1008,6 +1029,7 @@ pub fn run() {
         .manage(worktrees::Session::default())
         .invoke_handler(tauri::generate_handler![
             add_garden_plugins,
+            new_window,
             app_update,
             open_repo_page,
             profile_plugin_outdated,
