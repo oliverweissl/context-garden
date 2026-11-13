@@ -36,8 +36,8 @@ route();
 
 document.getElementById("settings").addEventListener("click", () => openSettings());
 
-// Each window is independent; the new one opens on the page you are looking at.
-const newWindow = () => api.newWindow(location.hash).catch((e) => toast(errText(e), "error"));
+// Each window is independent and starts on the garden list.
+const newWindow = () => api.newWindow().catch((e) => toast(errText(e), "error"));
 document.getElementById("new-window").addEventListener("click", newWindow);
 window.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "n" && e.shiftKey && (e.ctrlKey || e.metaKey) && !e.altKey) {
