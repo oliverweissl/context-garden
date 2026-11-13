@@ -1,6 +1,7 @@
 //! ContextGarden desktop app: Tauri commands the web UI calls.
 
 mod accounts;
+mod control;
 mod plugins;
 mod pty;
 mod relocate;
@@ -21,7 +22,8 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
 use pty::{Launch, PtyEvent, Ptys};
 use skills::PLUGIN;
-use store::{Garden, GardenPlugin, Profile, Repo, SavedTerminal, Settings, Store};
+use control::Control;
+use store::{Garden, GardenPlugin, Link, Profile, Repo, SavedTerminal, Settings, Store};
 use util::{expand_tilde, home_dir, now_secs, run_env, slugify, which};
 
 /// (id, label, binary, env var that selects its config dir / account).
@@ -193,6 +195,7 @@ fn create_garden(
             created_at: now_secs(),
             terminals: Vec::new(),
             plugins: Vec::new(),
+            links: Vec::new(),
         };
         all.push(g.clone());
         Ok(g)
@@ -736,7 +739,10 @@ fn terminal_spawn(
     store: State<Store>,
     ptys: State<Ptys>,
     session_worktrees: State<worktrees::Session>,
+    control: State<Control>,
     garden: String,
+    key: Option<String>,
+    title: Option<String>,
     cwd: String,
     worktree: Option<String>,
     agent: Option<String>,
@@ -789,13 +795,30 @@ fn terminal_spawn(
         command = Some(agent_command(&agent, bin, &config, session.as_deref(), resume, &flags));
         who = Some((agent, None));
     }
-    let worktree = agent_worktree(&store, &session_worktrees, &g, &cwd, worktree, who, resume)?;
+    let worktree = agent_worktree(&store, &session_worktrees, &g, &cwd, worktree, who.clone(), resume)?;
     let cwd = worktree.clone().unwrap_or(cwd);
     // Claude reads skill modes and the plugin switch from the folder it starts in.
     if let Err(e) = skills::ensure_folder(&g, Path::new(&cwd)) {
         eprintln!("skills for {cwd}: {e}");
     }
+    // Agent terminals can be linked under a manager (or manage others) through the app's
+    // control endpoint; plain shells never get the secret.
+    let control_key = key.filter(|k| !k.is_empty()).filter(|_| who.is_some());
+    if let (Some(k), Some((agent, account))) = (&control_key, &who) {
+        let term = control::Term {
+            garden: g.id.clone(),
+            title: title.unwrap_or_else(|| k.clone()),
+            agent: Some(agent.clone()),
+            account: account.clone(),
+            cwd: cwd.clone(),
+            pty: 0,
+        };
+        env.extend(control.env(k, term));
+    }
     let id = ptys.spawn(Launch { command, cwd, env, cols, rows }, on_event)?;
+    if let Some(k) = &control_key {
+        control.set_pty(k, id);
+    }
     Ok(Spawned { id, worktree })
 }
 
@@ -1031,6 +1054,46 @@ fn new_window(app: AppHandle, hash: Option<String>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// The manager -> worker links among a garden's agent terminals.
+#[tauri::command]
+fn get_links(store: State<Store>, id: String) -> Result<Vec<Link>, String> {
+    Ok(store.garden(&id)?.links)
+}
+
+#[tauri::command]
+fn set_links(store: State<Store>, id: String, links: Vec<Link>) -> Result<Vec<Link>, String> {
+    let links = control::valid_links(links)?;
+    store.update_garden(&id, |g| {
+        g.links = links.clone();
+        Ok(links)
+    })
+}
+
+/// A window's answer to a `control-request` event (see control.rs).
+#[tauri::command]
+fn control_reply(control: State<Control>, id: u64, ok: bool, text: String) {
+    control.reply(id, if ok { Ok(text) } else { Err(text) });
+}
+
+/// Control calls reach the rest of the app through the handle.
+struct AppWorld(AppHandle);
+
+impl control::World for AppWorld {
+    fn links(&self, garden: &str) -> Vec<Link> {
+        self.0.state::<Store>().garden(garden).map(|g| g.links).unwrap_or_default()
+    }
+    fn alive(&self, pty: u32) -> bool {
+        self.0.state::<Ptys>().alive(pty)
+    }
+    fn ask(&self, _key: &str, request: serde_json::Value) -> Result<String, String> {
+        self.0.state::<Control>().wait_for(|id| {
+            let mut request = request;
+            request["id"] = id.into();
+            let _ = self.0.emit("control-request", request);
+        })
+    }
+}
+
 pub fn run() {
     util::init_env();
     let app = tauri::Builder::default()
@@ -1039,14 +1102,22 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             app.manage(Store::new(dir));
+            let control = app.state::<Control>().inner().clone();
+            if let Err(e) = control::start(control, std::sync::Arc::new(AppWorld(app.handle().clone()))) {
+                eprintln!("agent control endpoint: {e}"); // terminals still work, just unlinked
+            }
             Ok(())
         })
         .manage(Ptys::default())
+        .manage(Control::default())
         .manage(Cloning::default())
         .manage(worktrees::Session::default())
         .invoke_handler(tauri::generate_handler![
             add_garden_plugins,
             new_window,
+            get_links,
+            set_links,
+            control_reply,
             app_update,
             open_repo_page,
             profile_plugin_outdated,

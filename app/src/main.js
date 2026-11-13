@@ -11,8 +11,10 @@ import { renderGarden } from "./views/garden.js";
 import { openSettings, setPageSettings } from "./views/settings.js";
 import { setCrumbs, h, toast, errText } from "./ui.js";
 import { api } from "./api.js";
+import { initControl } from "./terminals.js";
 
 const app = document.getElementById("app");
+initControl();
 let cleanup = null;
 
 async function route() {

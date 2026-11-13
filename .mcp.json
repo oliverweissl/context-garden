@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "garden-control": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/cg_control.py"]
+    }
+  }
+}

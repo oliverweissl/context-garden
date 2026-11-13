@@ -91,6 +91,18 @@ handy for UI work; it is never part of a build.
   Terminals keep running while you look at another garden. Agents start through your
   login shell so PATH and npm shims match a normal terminal. Panes get `CONTEXT_GARDEN`
   and, if the garden has one, `GREENHOUSE_BASE`.
+- **Orchestrate (master / workers).** ⛓ Orchestrate in the terminal toolbar opens a graph of the
+  garden's open agent terminals. Drag from the ● on one node onto another to make the first its
+  manager; click ✕ on a line to remove it (loops are refused). Give a manager its goal in its own
+  terminal: through the plugin's `garden-control` MCP tools it can `list_terminals`, `send_prompt`
+  a task to a worker, `read_output` of a worker's screen, and workers `report_to_manager`, which
+  lands in the manager's terminal as a message. Only linked terminals can reach each other; the
+  app enforces the links. The app runs a local endpoint (127.0.0.1, random port) and gives each
+  agent terminal its own secret in `CG_CONTROL` / `CG_TOKEN` / `CG_TERMINAL`; plain shells get none,
+  and outside the app the MCP server offers no tools. Needs the context-garden plugin (≥ 0.6.0)
+  in the account (Claude Code); Codex is not wired up yet. Prompts are typed into the worker like
+  your own, so a busy agent queues them. Terminal titles are unique per garden (a second
+  "Claude Code" becomes "Claude Code 2") so managers can name them.
 - **Agent worktrees.** An agent terminal opened on a repo works in its own git worktree,
   `<garden>/.worktrees/<repo>/<agent>-<account>-<id>` on branch `cg/<agent>-<account>-<id>`,
   so agents on one repo never share a working tree (Settings → Terminals turns it off).

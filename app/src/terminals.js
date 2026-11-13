@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { api, PROFILES_CHANGED } from "./api.js";
 import { h, toast, errText, badge, modal } from "./ui.js";
+import { openOrchestrate } from "./views/orchestrate.js";
 import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
 const THEME = {
@@ -224,6 +225,12 @@ class Workspace {
   /** Open a pane. `opts.resume` reopens a saved one (same key and session). */
   async open(opts) {
     opts.key ||= crypto.randomUUID();
+    // Titles tell terminals apart for the agents that manage each other: "Claude Code", "Claude Code 2", …
+    if (opts.agent || opts.profile) {
+      const taken = new Set(this.panes.map((p) => p.opts.title));
+      const base = opts.title;
+      for (let n = 2; taken.has(opts.title); n++) opts.title = `${base} ${n}`;
+    }
     const claude = opts.agent === "claude" || opts.account?.agent === "claude";
     if (claude && !opts.session) opts.session = crypto.randomUUID();
     this.saved = this.saved.filter((r) => r.key !== opts.key);
@@ -659,7 +666,7 @@ class Pane {
         this.id = await api.login({ profile: this.opts.login, ...size }, out, exit);
       } else {
         const { id, worktree } = await api.spawn(
-          { garden: this.ws.gardenId, cwd: this.opts.cwd, worktree: this.opts.worktree, agent: this.opts.agent,
+          { garden: this.ws.gardenId, key: this.opts.key, title: this.opts.title, cwd: this.opts.cwd, worktree: this.opts.worktree, agent: this.opts.agent,
             profile: this.opts.profile, session: this.opts.session, resume: !!this.opts.resume,
             flags: this.opts.flags, ...size },
           out, exit);
@@ -858,6 +865,29 @@ function folderPicker(garden) {
 
 const workspaces = new Map();
 
+/**
+ * Answer the prompts and screen reads a manager agent sends to a terminal that
+ * lives in this window (see control.rs). Other windows stay silent.
+ */
+export function initControl() {
+  api.on("control-request", ({ payload: r }) => {
+    const pane = [...workspaces.values()].flatMap((w) => w.panes).find((p) => p.opts.key === r.key);
+    if (!pane) return;
+    if (pane.id == null) return api.controlReply(r.id, false, "that terminal is not running any more").catch(() => {});
+    try {
+      if (r.kind === "send") {
+        pane.send(String(r.text));
+        api.controlReply(r.id, true, "sent").catch(() => {});
+      } else if (r.kind === "read") {
+        const text = pane.renderedLines(Number(r.lines) || 60).join("\n").replace(/\s+$/, "");
+        api.controlReply(r.id, true, text.split("\n").slice(-(Number(r.lines) || 60)).join("\n")).catch(() => {});
+      }
+    } catch (e) {
+      api.controlReply(r.id, false, errText(e)).catch(() => {});
+    }
+  });
+}
+
 /** Toolbar + panes for a garden. Returns the element; terminals survive re-render. */
 export async function terminalArea(garden) {
   let ws = workspaces.get(garden.id);
@@ -1032,6 +1062,10 @@ export async function terminalArea(garden) {
       what, flags, quick, h("span", { class: "faint small" }, "in"), where.el,
       h("button", { class: "btn primary", onclick: open }, "Open"),
       h("span", { class: "grow" }),
+      h("button", {
+        class: "btn", title: "Link agent terminals: one manages others, prompts them and reads their output",
+        onclick: () => openOrchestrate(ws, garden),
+      }, "⛓ Orchestrate"),
       layout),
     banner,
     empty,

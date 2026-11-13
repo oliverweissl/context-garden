@@ -65,6 +65,16 @@ pub struct Garden {
     /// Other people's Claude Code plugins (skills, agents, MCP) used in this garden.
     #[serde(default)]
     pub plugins: Vec<GardenPlugin>,
+    /// Who manages whom among the garden's agent terminals (by terminal key).
+    #[serde(default)]
+    pub links: Vec<Link>,
+}
+
+/// `manager` may prompt and read `worker`; `worker` may report back to `manager`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Link {
+    pub manager: String,
+    pub worker: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

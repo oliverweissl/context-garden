@@ -67,9 +67,9 @@ export const api = {
 
   /** Start a terminal; onOutput gets Uint8Array chunks, onExit the exit code. */
   /** Resolves to { id, worktree }: worktree is the agent worktree it runs in, or null. */
-  spawn: ({ garden, cwd, worktree, agent, profile, session, resume, flags, cols, rows }, onOutput, onExit) =>
+  spawn: ({ garden, key, title, cwd, worktree, agent, profile, session, resume, flags, cols, rows }, onOutput, onExit) =>
     pty("terminal_spawn", {
-      garden, cwd, worktree: worktree || null, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume,
+      garden, key: key || null, title: title || null, cwd, worktree: worktree || null, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume,
       flags: flags || [], cols, rows,
     }, onOutput, onExit),
   /** First prompt of each saved Claude terminal, by key. */
@@ -87,6 +87,11 @@ export const api = {
   releaseWorktree: (garden, cwd, worktree) => invoke("worktree_release", { garden, cwd, worktree }),
   /** Remove unused, clean agent worktrees of a garden: [[path, why kept], …] for the rest. */
   sweepWorktrees: (garden) => invoke("worktree_sweep", { garden }),
+  /** Manager -> worker links among a garden's agent terminals: [{ manager, worker }] by terminal key. */
+  links: (id) => invoke("get_links", { id }),
+  setLinks: (id, links) => invoke("set_links", { id, links }),
+  /** Answer a `control-request` event (a manager's prompt or screen read of a terminal here). */
+  controlReply: (id, ok, text) => invoke("control_reply", { id, ok, text }),
   settings: () => invoke("get_settings"),
   saveSettings: (settings) => invoke("set_settings", { settings }),
 };
