@@ -21,6 +21,7 @@ results/      generated output (gitignored)
 | `seedbank-recurring-facts` | seedbank | repo | pre-populated `AGENTS.md` avoids re-discovering scattered facts |
 | `weeder-bloated-skill-audit`* | weeder | file | shrinks an oversized `SKILL.md` without losing a constraint |
 | `mycelium-overlapping-investigation` | mycelium | repo | overlapping 4-part question: fewer, better-briefed agents; the one-line lookup stays in the main thread |
+| `mycelium-forced-delegation` | mycelium | repo | the prompt requires three subagents with overlapping ground, so unguided ones repeat work; measures subagents spawned and total tokens including them |
 | `mycelium-notes-reuse` | mycelium | repo | two sessions on one subsystem: notes from session 1 cut session 2's rediscovery |
 
 \* `run_by_default: false` — skipped by a plain `scripts/benchmark run`

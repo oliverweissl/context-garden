@@ -28,6 +28,7 @@ def test_discovers_all_fixtures():
         "pruner-file-tokenusage-bug",
         "mycelium-overlapping-investigation",
         "mycelium-notes-reuse",
+        "mycelium-forced-delegation",
         "compost-noisy-failure-cluster",
         "seedbank-recurring-facts",
         "weeder-bloated-skill-audit",
