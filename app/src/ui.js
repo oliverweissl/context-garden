@@ -71,20 +71,36 @@ export function languageBar(languages) {
         h("span", { class: "faint" }, ` ${pct(n) < 1 ? "<1" : Math.round(pct(n))}%`)))));
 }
 
-/** Everything an account read and wrote: fresh input, cache and output tokens. */
-export const accountTotal = (a) => a.input + a.cache_read + a.cache_write + a.output;
+/** A remembered view setting; storage can be blocked, then the default holds. */
+export const loadPref = (key, fallback) => {
+  try { const v = localStorage.getItem(`cg.${key}`); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+};
+export const savePref = (key, value) => {
+  try { localStorage.setItem(`cg.${key}`, JSON.stringify(value)); } catch { /* private mode */ }
+};
+
+/**
+ * What an account read and wrote: fresh input and output tokens, plus the
+ * cache reads and writes unless `withCache` is off (the work the model did
+ * on new text, not what it re-read from its cache).
+ */
+export const accountTotal = (a, withCache = true) =>
+  a.input + a.output + (withCache ? a.cache_read + a.cache_write : 0);
 
 /**
  * Token use split by account as a donut with a legend. Each slice wears the
  * account's own badge color (the one on its terminals); the default config
  * dirs, which have none, take series colors. The legend repeats the badge.
  */
-export function tokenDonut(accounts, days) {
-  const rows = accounts.map((a) => ({ a, n: accountTotal(a) })).filter((r) => r.n > 0).sort((x, y) => y.n - x.n);
+export function tokenDonut(accounts, days, { withCache = true, onToggle = null } = {}) {
+  const rows = accounts.map((a) => ({ a, n: accountTotal(a, withCache) })).filter((r) => r.n > 0).sort((x, y) => y.n - x.n);
   const total = rows.reduce((t, r) => t + r.n, 0);
+  const toggle = () => (onToggle ? h("div", { class: "seg token-toggle", title: "Count tokens read from or written to the prompt cache, or only fresh input and output" },
+    [[true, "With cache"], [false, "No cache"]].map(([on, text]) =>
+      h("button", { class: withCache === on ? "active" : "", onclick: () => onToggle(on) }, text))) : null);
   if (!total) {
     return h("div", { class: "tile" },
-      h("div", { class: "tile-label" }, "Tokens by account"),
+      h("div", { class: "row between" }, h("div", { class: "tile-label" }, "Tokens by account"), toggle()),
       h("div", { class: "tile-value faint" }, "–"),
       h("div", { class: "tile-note" }, "No stats yet: no agent has run in this garden"));
   }
@@ -104,7 +120,7 @@ export function tokenDonut(accounts, days) {
   svg.setAttribute("viewBox", "0 0 100 100");
   svg.setAttribute("class", "donut");
   svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", `Tokens by account, ${fmt(total)} in all`);
+  svg.setAttribute("aria-label", `Tokens by account, ${fmt(total)} in all${withCache ? "" : ", cache excluded"}`);
   for (const r of rows) {
     const len = (C * r.n) / total;
     const arc = document.createElementNS(NS, "circle");
@@ -131,7 +147,7 @@ export function tokenDonut(accounts, days) {
   const cache = read ? Math.round((100 * rows.reduce((t, r) => t + r.a.cache_read, 0)) / read) : 0;
   const pct = (n) => { const v = (100 * n) / total; return v < 1 ? "<1%" : `${Math.round(v)}%`; };
   return h("div", { class: "tile token-split" },
-    h("div", { class: "tile-label" }, "Tokens by account"),
+    h("div", { class: "row between" }, h("div", { class: "tile-label" }, "Tokens by account"), toggle()),
     h("div", { class: "token-body" }, svg,
       h("div", { class: "token-legend small" }, rows.map((r) =>
         h("div", { class: "token-row", title: `${fmt(r.a.output)} out · ${fmt(r.a.cache_read)} from cache` },
@@ -142,7 +158,7 @@ export function tokenDonut(accounts, days) {
           h("b", {}, fmt(r.n)),
           h("span", { class: "faint pct" }, pct(r.n)))))),
     h("div", { class: "tile-note", title: "Claude Code and Codex sessions started in this garden's folders" },
-      `${sessions} sessions · ${days} days · ${cache}% from cache`));
+      `${sessions} sessions · ${days} days · ${withCache ? `${cache}% from cache` : "cache not counted"}`));
 }
 
 export const SKILL_COLORS = {

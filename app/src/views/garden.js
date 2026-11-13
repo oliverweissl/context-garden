@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { h, toast, errText, setCrumbs, tile, fmt, languageBar, tokenDonut, modal, SKILL_COLORS } from "../ui.js";
+import { h, toast, errText, setCrumbs, tile, fmt, languageBar, tokenDonut, modal, loadPref, savePref, SKILL_COLORS } from "../ui.js";
 import { cloneBoard, READY, ACTIVE } from "./cloning.js";
 import { planCard, SOURCES_HINT, LINK_HELP } from "./plant.js";
 import { skillPicker, pluginPanel } from "./skills.js";
@@ -63,21 +63,35 @@ export async function renderGarden(app, id) {
   }
 
   const refreshBtn = h("button", { class: "icon refresh", title: "Refresh numbers", onclick: () => refresh() }, "↻");
+  let stats = null;
+  let withCache = loadPref("tokens.withCache", true);
+
+  /** The tiles from the last numbers; the token tile alone follows the cache toggle. */
+  function drawTiles() {
+    const s = stats;
+    if (!s) return;
+    const n = s.repos.length - s.missing;
+    tiles.replaceChildren(
+      tile("Repositories", n, s.missing ? `${s.missing} deleted from disk`
+        : s.groups ? `${s.groups} groups · ${s.namespaces} folders` : "added one by one"),
+      tile("Code", fmt(s.lines), `lines in ${fmt(s.files)} tracked files`),
+      tile("Uncommitted", s.dirty, s.dirty === 1 ? "repo with changes" : "repos with changes", n ? s.dirty / n : 0),
+      tile("Agent files", fmt(s.agent_tokens), "tokens always loaded (AGENTS.md + CLAUDE.md)"),
+      tile("Seedbank", s.seedbank_facts, "cached facts"),
+      tile("Greenhouse", s.greenhouse_cards ?? "–", s.greenhouse_cards == null ? "no base yet" : "repo cards",
+        s.greenhouse_cards == null ? null : n ? s.greenhouse_cards / n : 0),
+      tokenDonut(s.accounts, s.days, {
+        withCache,
+        onToggle: (on) => { withCache = on; savePref("tokens.withCache", on); drawTiles(); },
+      }));
+  }
+
   async function refresh() {
     refreshBtn.classList.add("spin");
     try {
       const s = await api.stats(id);
-      const n = s.repos.length - s.missing;
-      tiles.replaceChildren(
-        tile("Repositories", n, s.missing ? `${s.missing} deleted from disk`
-          : s.groups ? `${s.groups} groups · ${s.namespaces} folders` : "added one by one"),
-        tile("Code", fmt(s.lines), `lines in ${fmt(s.files)} tracked files`),
-        tile("Uncommitted", s.dirty, s.dirty === 1 ? "repo with changes" : "repos with changes", n ? s.dirty / n : 0),
-        tile("Agent files", fmt(s.agent_tokens), "tokens always loaded (AGENTS.md + CLAUDE.md)"),
-        tile("Seedbank", s.seedbank_facts, "cached facts"),
-        tile("Greenhouse", s.greenhouse_cards ?? "–", s.greenhouse_cards == null ? "no base yet" : "repo cards",
-          s.greenhouse_cards == null ? null : n ? s.greenhouse_cards / n : 0),
-        tokenDonut(s.accounts, s.days));
+      stats = s;
+      drawTiles();
       langs.replaceChildren(languageBar(s.languages));
       missingSlot.replaceChildren(s.missing ? h("div", { class: "card row between" },
         h("span", { class: "small" }, `${s.missing} ${s.missing === 1 ? "repository was" : "repositories were"} deleted from disk.`),
@@ -92,6 +106,19 @@ export async function renderGarden(app, id) {
     }
     refreshBtn.classList.remove("spin");
   }
+
+  // The statistics fold away to a single line; the choice is remembered.
+  const statsBody = h("div", { class: "stats-body" }, tiles, langs);
+  const foldBtn = h("button", { class: "fold", "aria-expanded": "true" });
+  const setFolded = (folded) => {
+    statsBody.hidden = folded;
+    foldBtn.setAttribute("aria-expanded", String(!folded));
+    foldBtn.textContent = `${folded ? "▸" : "▾"} Statistics`;
+    foldBtn.title = folded ? "Show the repository statistics" : "Minimize the repository statistics";
+  };
+  foldBtn.onclick = () => { const folded = !statsBody.hidden; savePref("stats.folded", folded); setFolded(folded); };
+  setFolded(loadPref("stats.folded", false));
+  const statsHead = h("div", { class: "row between stats-head" }, foldBtn, refreshBtn);
 
   const skillDots = () => Object.entries(garden.skills).filter(([, m]) => m === "on")
     .map(([s]) => h("span", { class: "chip", style: `--c:${SKILL_COLORS[s]}` }, s));
@@ -274,7 +301,7 @@ export async function renderGarden(app, id) {
     h("button", { class: "btn", onclick: openRepos }, "Repositories"));
 
   const terms = await terminalArea(garden);
-  app.append(h("div", { class: "dash" }, head, tiles, missingSlot, h("div", { class: "dash-meta" }, langs, refreshBtn), boardSlot), terms.el);
+  app.append(h("div", { class: "dash" }, head, missingSlot, statsHead, statsBody, boardSlot), terms.el);
   refresh();
   if (garden.repos.some((r) => ACTIVE.has(r.status))) showBoard();
   else hideBoard();
