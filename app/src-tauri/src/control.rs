@@ -166,7 +166,7 @@ impl Control {
         let resolve = |name: &str| -> Result<String, String> {
             let hits: Vec<&String> = others
                 .iter()
-                .filter(|t| same_garden(&t))
+                .filter(|t| same_garden(t))
                 .filter(|t| t.0 == name || t.1.title.eq_ignore_ascii_case(name))
                 .map(|t| t.0)
                 .collect();
@@ -186,7 +186,7 @@ impl Control {
         match tool {
             "list_terminals" => {
                 let mut out = Vec::new();
-                for t in others.iter().filter(|t| same_garden(&t)) {
+                for t in others.iter().filter(|t| same_garden(t)) {
                     if manages(&me_key, t.0) {
                         out.push(describe(t.0, t.1, "worker"));
                     } else if manages(t.0, &me_key) {
