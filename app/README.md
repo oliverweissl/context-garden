@@ -86,6 +86,8 @@ handy for UI work; it is never part of a build.
   appears in its header: tick the steps, comment on each, then Send to agent (pasted and
   submitted) or Ask about this (pasted with the list, you type the question). Settings →
   Terminals can open it automatically.
+  ⧉ New window (Ctrl/Cmd+Shift+N) opens another independent window on the same page; a window's
+  terminals end when it closes. Avoid the same garden in two windows: both save its terminal list.
   Terminals keep running while you look at another garden. Agents start through your
   login shell so PATH and npm shims match a normal terminal. Panes get `CONTEXT_GARDEN`
   and, if the garden has one, `GREENHOUSE_BASE`.

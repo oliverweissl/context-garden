@@ -9,7 +9,7 @@ import { renderHome } from "./views/home.js";
 import { renderPlant } from "./views/plant.js";
 import { renderGarden } from "./views/garden.js";
 import { openSettings, setPageSettings } from "./views/settings.js";
-import { setCrumbs, h } from "./ui.js";
+import { setCrumbs, h, toast, errText } from "./ui.js";
 import { api } from "./api.js";
 
 const app = document.getElementById("app");
@@ -35,6 +35,16 @@ window.addEventListener("hashchange", route);
 route();
 
 document.getElementById("settings").addEventListener("click", () => openSettings());
+
+// Each window is independent; the new one opens on the page you are looking at.
+const newWindow = () => api.newWindow(location.hash).catch((e) => toast(errText(e), "error"));
+document.getElementById("new-window").addEventListener("click", newWindow);
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "n" && e.shiftKey && (e.ctrlKey || e.metaKey) && !e.altKey) {
+    e.preventDefault();
+    newWindow();
+  }
+});
 
 // A newer release on GitHub shows up next to Settings; offline means no hint.
 api.appUpdate().then((release) => {
