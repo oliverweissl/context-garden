@@ -8,6 +8,13 @@ const mock = !inTauri && import.meta.env.DEV ? await import("./mock.js") : null;
 const invoke = mock ? mock.mockInvoke : tauriInvoke;
 const listen = mock ? mock.mockListen : tauriListen;
 
+/** Tell open views (the terminal launcher) the account list changed, so they refresh without a restart. */
+export const PROFILES_CHANGED = "cg-profiles-changed";
+const profilesChanged = (result) => {
+  window.dispatchEvent(new Event(PROFILES_CHANGED));
+  return result;
+};
+
 export const api = {
   defaultRoot: () => invoke("default_root"),
   gardens: () => invoke("list_gardens"),
@@ -35,7 +42,8 @@ export const api = {
   stats: (id) => invoke("garden_stats", { id }),
   agents: () => invoke("list_agents"),
   profiles: () => invoke("list_profiles"),
-  addProfile: (name, agent, dir, icon, color) => invoke("add_profile", { name, agent, dir: dir || null, icon, color }),
+  addProfile: (name, agent, dir, icon, color) =>
+    invoke("add_profile", { name, agent, dir: dir || null, icon, color }).then(profilesChanged),
   /** Installed context-garden version in an account, or null. */
   pluginVersion: (id) => invoke("profile_plugin_version", { id }),
   /** True when main has newer skills than the account installed (Claude accounts). */
@@ -49,7 +57,7 @@ export const api = {
   appUpdate: () => invoke("app_update"),
   openRepoPage: (url) => invoke("open_repo_page", { url }),
   installPlugin: (id) => invoke("install_profile_plugin", { id }),
-  removeProfile: (id) => invoke("remove_profile", { id }),
+  removeProfile: (id) => invoke("remove_profile", { id }).then(profilesChanged),
   /** Another app window, on the page `hash` (default: home). */
   newWindow: (hash = "") => (mock ? Promise.resolve(window.open(`${location.pathname}${hash}`, "_blank")) : invoke("new_window", { hash })),
   copy: (text) => (mock ? navigator.clipboard.writeText(text) : invoke("clipboard_write", { text })),

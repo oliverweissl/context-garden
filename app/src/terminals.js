@@ -1,6 +1,6 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { api } from "./api.js";
+import { api, PROFILES_CHANGED } from "./api.js";
 import { h, toast, errText, badge, modal } from "./ui.js";
 import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
@@ -869,17 +869,25 @@ export async function terminalArea(garden) {
     }).catch(() => {});
   }
 
-  const [agents, profiles] = await Promise.all([api.agents(), api.profiles()]);
-  const what = h("select", {},
-    h("option", { value: "shell" }, "Terminal (no agent)"),
-    agents.map((a) => h("option", { value: `agent:${a.id}`, disabled: !a.found },
-      `${a.label}${a.found ? "" : " (not installed)"}`)),
-    profiles.length
-      ? h("optgroup", { label: "Accounts" }, profiles.map((p) => {
-        const a = agents.find((x) => x.id === p.agent);
-        return h("option", { value: `profile:${p.id}`, disabled: a && !a.found }, `${p.icon || "●"} ${a?.label || p.agent} · ${p.name}`);
-      }))
-      : null);
+  const [agents, initial] = await Promise.all([api.agents(), api.profiles()]);
+  let profiles = initial;
+  const what = h("select", {});
+  const drawWhat = () => {
+    const keep = what.value;
+    what.replaceChildren(
+      h("option", { value: "shell" }, "Terminal (no agent)"),
+      ...agents.map((a) => h("option", { value: `agent:${a.id}`, disabled: !a.found },
+        `${a.label}${a.found ? "" : " (not installed)"}`)),
+      ...(profiles.length
+        ? [h("optgroup", { label: "Accounts" }, profiles.map((p) => {
+          const a = agents.find((x) => x.id === p.agent);
+          return h("option", { value: `profile:${p.id}`, disabled: a && !a.found }, `${p.icon || "●"} ${a?.label || p.agent} · ${p.name}`);
+        }))]
+        : []));
+    // Keep the selection across a refresh unless that account is gone.
+    if ([...what.options].some((o) => o.value === keep)) what.value = keep;
+  };
+  drawWhat();
   // Startup flags for the chosen agent (e.g. --chrome), remembered per agent.
   const agentOf = () => {
     const [kind, id] = what.value.split(":");
@@ -942,6 +950,17 @@ export async function terminalArea(garden) {
     for (const r of records) {
       try {
         await ws.open(fromRecord(r));
+  // Accounts added or removed in Settings show up here at once, no restart.
+  const refreshProfiles = async () => {
+    try {
+      profiles = await api.profiles();
+    } catch {
+      return;
+    }
+    drawWhat();
+    drawFlags();
+  };
+  window.addEventListener(PROFILES_CHANGED, refreshProfiles);
       } catch (e) {
         toast(errText(e), "error");
       }
@@ -1018,5 +1037,12 @@ export async function terminalArea(garden) {
     empty,
     ws.grid);
   ws.fitAll();
-  return { el, dispose: () => { observer.disconnect(); ws.onChange = () => {}; } };
+  return {
+    el,
+    dispose: () => {
+      observer.disconnect();
+      window.removeEventListener(PROFILES_CHANGED, refreshProfiles);
+      ws.onChange = () => {};
+    },
+  };
 }
