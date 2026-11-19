@@ -364,12 +364,15 @@ const inside = (r, e) => e.clientX >= r.left && e.clientX <= r.right && e.client
 const record = (o) => ({
   key: o.key, title: o.title, cwd: o.cwd, cwd_label: o.cwdLabel || "", worktree: o.worktree || null,
   agent: o.agent || null, profile: o.profile || null, session: o.session || null, flags: o.flags || [],
+  env: o.env || [],
 });
 
-/** Split a flags line like a shell would: spaces separate, quotes group. */
+/** Split a flags line like a shell would: spaces separate, quotes group (also mid-word, as in FOO="a b"). */
 export function splitFlags(line) {
   const out = [];
-  for (const m of line.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) out.push(m[1] ?? m[2] ?? m[3]);
+  for (const [word] of line.matchAll(/(?:"[^"]*"|'[^']*'|[^\s"'])+/g)) {
+    out.push(word.replace(/"([^"]*)"|'([^']*)'/g, (_, d, q) => d ?? q));
+  }
   return out;
 }
 
@@ -377,6 +380,9 @@ const QUICK_FLAGS = { claude: [["--chrome", "Claude in Chrome"], ["--ide", "Conn
 const FLAGS_KEY = (agent) => `cg.flags.${agent}`;
 const loadFlags = (agent) => { try { return localStorage.getItem(FLAGS_KEY(agent)) || ""; } catch { return ""; } };
 const storeFlags = (agent, v) => { try { localStorage.setItem(FLAGS_KEY(agent), v); } catch { /* private mode */ } };
+const ENV_KEY = (agent) => `cg.env.${agent}`;
+const loadEnv = (agent) => { try { return localStorage.getItem(ENV_KEY(agent)) || ""; } catch { return ""; } };
+const storeEnv = (agent, v) => { try { localStorage.setItem(ENV_KEY(agent), v); } catch { /* private mode */ } };
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -669,7 +675,7 @@ class Pane {
         const { id, worktree } = await api.spawn(
           { garden: this.ws.gardenId, key: this.opts.key, title: this.opts.title, cwd: this.opts.cwd, worktree: this.opts.worktree, agent: this.opts.agent,
             profile: this.opts.profile, session: this.opts.session, resume: !!this.opts.resume,
-            flags: this.opts.flags, ...size },
+            flags: this.opts.flags, env: this.opts.env, ...size },
           out, exit);
         this.id = id;
         this.showWorktree(worktree);
@@ -929,19 +935,28 @@ export async function terminalArea(garden) {
     if ([...what.options].some((o) => o.value === keep)) what.value = keep;
   };
   drawWhat();
-  // Startup flags for the chosen agent (e.g. --chrome), remembered per agent.
+  // The launch line for the chosen agent: `ENV=value claude --flags`. The command itself
+  // is fixed (bold); variables and flags are remembered per agent.
   const agentOf = () => {
     const [kind, id] = what.value.split(":");
     return kind === "agent" ? id : kind === "profile" ? profiles.find((p) => p.id === id)?.agent : null;
   };
+  const env = h("input", {
+    class: "mono env", placeholder: "NAME=value",
+    title: "Environment variables for the agent, e.g. MAX_THINKING_TOKENS=8000. Quote values with spaces. Resuming keeps them.",
+  });
+  const command = h("b", { class: "mono launch-cmd" });
   const flags = h("input", {
     class: "mono flags", placeholder: "flags, e.g. --model opus",
     title: "Startup flags for the agent, as on the command line. Resuming keeps them.",
   });
+  const launch = h("span", { class: "launch-line", title: "Launch command" }, env, command, flags);
   const quick = h("span", { class: "quick-flags" });
   const drawFlags = () => {
     const agent = agentOf();
-    flags.hidden = !agent;
+    launch.hidden = !agent;
+    command.textContent = agent || "";
+    env.value = agent ? loadEnv(agent) : "";
     flags.value = agent ? loadFlags(agent) : "";
     const on = splitFlags(flags.value);
     quick.replaceChildren(...(QUICK_FLAGS[agent] || []).map(([flag, help]) => h("button", {
@@ -955,6 +970,7 @@ export async function terminalArea(garden) {
     }, flag.replace(/^--/, ""))));
   };
   flags.addEventListener("change", () => { const a = agentOf(); if (a) storeFlags(a, flags.value.trim()); drawFlags(); });
+  env.addEventListener("change", () => { const a = agentOf(); if (a) storeEnv(a, env.value.trim()); drawFlags(); });
   what.addEventListener("change", drawFlags);
 
   const where = folderPicker(garden);
@@ -974,6 +990,7 @@ export async function terminalArea(garden) {
         account: kind === "profile" ? profiles.find((p) => p.id === id) : null,
         title: kind === "shell" ? "Terminal" : kind === "profile" ? label.replace(/^\S+\s/, "") : label,
         flags: kind === "shell" ? [] : splitFlags(flags.value),
+        env: kind === "shell" ? [] : splitFlags(env.value),
       });
     } catch (e) {
       toast(errText(e), "error");
@@ -986,6 +1003,7 @@ export async function terminalArea(garden) {
     worktree: r.worktree,
     agent: r.agent, profile: r.profile, account: r.profile ? profiles.find((p) => p.id === r.profile) : null,
     flags: r.flags || [],
+    env: r.env || [],
   });
   const resume = async (records) => {
     for (const r of records) {
@@ -1070,7 +1088,7 @@ export async function terminalArea(garden) {
   const el = h("div", { class: "workspace" },
     h("div", { class: "toolbar" },
       recent,
-      what, flags, quick, h("span", { class: "faint small" }, "in"), where.el,
+      what, launch, quick, h("span", { class: "faint small" }, "in"), where.el,
       h("button", { class: "btn primary", onclick: open }, "Open"),
       h("span", { class: "grow" }),
       h("button", {

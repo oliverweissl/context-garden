@@ -67,10 +67,10 @@ export const api = {
 
   /** Start a terminal; onOutput gets Uint8Array chunks, onExit the exit code. */
   /** Resolves to { id, worktree }: worktree is the agent worktree it runs in, or null. */
-  spawn: ({ garden, key, title, cwd, worktree, agent, profile, session, resume, flags, cols, rows }, onOutput, onExit) =>
+  spawn: ({ garden, key, title, cwd, worktree, agent, profile, session, resume, flags, env, cols, rows }, onOutput, onExit) =>
     pty("terminal_spawn", {
       garden, key: key || null, title: title || null, cwd, worktree: worktree || null, agent: agent || null, profile: profile || null, session: session || null, resume: !!resume,
-      flags: flags || [], cols, rows,
+      flags: flags || [], env: env || [], cols, rows,
     }, onOutput, onExit),
   /** First prompt of each saved Claude terminal, by key. */
   terminalPreviews: (id) => invoke("terminal_previews", { id }).then((m) => m || {}),

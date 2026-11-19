@@ -104,6 +104,9 @@ pub struct SavedTerminal {
     /// Startup flags the agent was launched with, e.g. ["--chrome"].
     #[serde(default)]
     pub flags: Vec<String>,
+    /// Environment variables (`NAME=value`) the agent was launched with.
+    #[serde(default)]
+    pub env: Vec<String>,
     /// Agent worktree the pane works in (under `<garden>/.worktrees`), if any.
     #[serde(default)]
     pub worktree: Option<String>,
