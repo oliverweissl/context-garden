@@ -654,7 +654,8 @@ class Pane {
     try {
       const size = { cols: this.term.cols, rows: this.term.rows };
       const out = (bytes) => {
-        this.term.write(bytes);
+        // Confirm once rendered: the backend pauses the terminal while too much is unconfirmed.
+        this.term.write(bytes, () => this.ack(bytes.length));
         if (this.agent) {
           this.scan(this.decoder.decode(bytes, { stream: true }));
           this.waitForChecklist();
@@ -683,6 +684,16 @@ class Pane {
       this.term.write(`\x1b[31m${errText(e)}\x1b[0m\r\n`);
       this.exited(null);
     }
+  }
+
+  /** Output rendered; the id is unknown until spawn returns, so early counts wait. */
+  ack(n) {
+    this.unacked = (this.unacked || 0) + n;
+    if (this.id == null) return;
+    const total = this.unacked;
+    if (total < 32768) return; // batch the round trips
+    this.unacked = 0;
+    api.ack(this.id, total).catch(() => {});
   }
 
   scan(text) {

@@ -7,7 +7,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 use tauri::ipc::Channel;
 
 #[derive(Clone, Serialize)]
@@ -17,7 +18,15 @@ pub enum PtyEvent {
     Exit(Option<u32>),
 }
 
+/// Bytes sent to the pane but not yet confirmed as rendered. The reader stops
+/// at `MAX_IN_FLIGHT`, so a process that floods output (a runaway `cat`, a
+/// looping agent) makes the pty fill up and the process block, instead of
+/// the queue in the webview growing without bound until memory runs out.
+type Flow = Arc<(Mutex<usize>, Condvar)>;
+const MAX_IN_FLIGHT: usize = 1024 * 1024;
+
 struct Session {
+    flow: Flow,
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
     child: Box<dyn Child + Send + Sync>,
@@ -79,10 +88,11 @@ impl Ptys {
         let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
         let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
+        let flow: Flow = Arc::new((Mutex::new(0), Condvar::new()));
         self.sessions
             .lock()
             .unwrap()
-            .insert(id, Session { writer, master: pair.master, child });
+            .insert(id, Session { flow: flow.clone(), writer, master: pair.master, child });
 
         let out = channel.clone();
         let owner = self.sessions.clone();
@@ -93,6 +103,17 @@ impl Ptys {
                 if n == 0 {
                     break;
                 }
+                // Wait for the pane to catch up before reading more.
+                let (lock, cv) = &*flow;
+                let mut pending = lock.lock().unwrap();
+                while *pending >= MAX_IN_FLIGHT {
+                    if !owner.lock().unwrap().contains_key(&id) {
+                        return;
+                    }
+                    pending = cv.wait_timeout(pending, Duration::from_millis(200)).unwrap().0;
+                }
+                *pending += n;
+                drop(pending);
                 if out.send(PtyEvent::Output(b64.encode(&buf[..n]))).is_err() {
                     // The window that owned this terminal is gone: end the process with it.
                     if let Some(mut s) = owner.lock().unwrap().remove(&id) {
@@ -121,6 +142,16 @@ impl Ptys {
             }
         });
         Ok(id)
+    }
+
+    /// The pane rendered `bytes` of output: let the reader go on.
+    pub fn ack(&self, id: u32, bytes: usize) {
+        let flow = self.sessions.lock().unwrap().get(&id).map(|s| s.flow.clone());
+        if let Some(flow) = flow {
+            let mut pending = flow.0.lock().unwrap();
+            *pending = pending.saturating_sub(bytes);
+            flow.1.notify_all();
+        }
     }
 
     pub fn write(&self, id: u32, data: &str) -> Result<(), String> {
@@ -197,5 +228,39 @@ mod tests {
         }
         let _ = child.kill();
         assert!(out.contains(&want), "{out:?}");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod flow_tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn unacked_output_stops_at_the_window_and_resumes_on_ack() {
+        let sent = Arc::new(AtomicUsize::new(0));
+        let s = sent.clone();
+        let channel = Channel::new(move |body| {
+            if let tauri::ipc::InvokeResponseBody::Json(j) = body {
+                // base64 length * 3/4 ~ bytes
+                s.fetch_add(j.len() * 3 / 4, Ordering::SeqCst);
+            }
+            Ok(())
+        });
+        let ptys = Ptys::default();
+        let cwd = std::env::temp_dir().to_string_lossy().into();
+        let id = ptys
+            .spawn(Launch { command: Some("yes".into()), cwd, env: vec![], cols: 80, rows: 24 }, channel)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(1500));
+        let first = sent.load(Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(500));
+        let second = sent.load(Ordering::SeqCst);
+        assert_eq!(first, second, "reader kept sending without acks");
+        assert!(first < 3 * MAX_IN_FLIGHT, "sent {first}");
+        ptys.ack(id, 900_000);
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(sent.load(Ordering::SeqCst) > second, "did not resume after ack");
+        ptys.kill(id);
     }
 }
