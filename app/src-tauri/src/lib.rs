@@ -703,6 +703,38 @@ fn check_flags(flags: &[String]) -> Result<(), String> {
     }
 }
 
+/// Variables the app sets itself (or the shell relies on); a launch line may not override them.
+const RESERVED_ENV: [&str; 5] = ["PATH", "TERM", "COLORTERM", "CLAUDE_CONFIG_DIR", "CODEX_HOME"];
+
+/// Parse `KEY=VALUE` entries from a launch line. Names must be plain shell
+/// identifiers; the value may be empty and may contain anything (it never
+/// touches a shell, it goes straight into the process environment).
+fn parse_env(entries: &[String]) -> Result<Vec<(String, String)>, String> {
+    entries
+        .iter()
+        .filter(|e| !e.is_empty())
+        .map(|e| {
+            let (k, v) = e.split_once('=').ok_or_else(|| format!("{e}: environment variables are NAME=value"))?;
+            let ok = k.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if !ok {
+                return Err(format!("{k} is not a valid environment variable name"));
+            }
+            Ok((k.to_string(), v.to_string()))
+        })
+        .collect()
+}
+
+/// User variables that would clash with ones the app sets for this terminal.
+fn check_env(user: &[(String, String)], app: &[(String, String)]) -> Result<(), String> {
+    match user.iter().find(|(k, _)| {
+        RESERVED_ENV.contains(&k.as_str()) || k.starts_with("CONTEXT_GARDEN") || k.starts_with("CG_") || app.iter().any(|(a, _)| a == k)
+    }) {
+        Some((k, _)) => Err(format!("{k} is set by the app")),
+        None => Ok(()),
+    }
+}
+
 /// The agent's command line: a new session (Claude: with our id, so it can be
 /// resumed exactly) or the pane's previous one, then the user's startup flags.
 fn agent_command(
@@ -750,6 +782,7 @@ fn terminal_spawn(
     session: Option<String>,
     resume: bool,
     flags: Option<Vec<String>>,
+    env: Option<Vec<String>>,
     cols: u16,
     rows: u16,
     on_event: Channel<PtyEvent>,
@@ -765,6 +798,7 @@ fn terminal_spawn(
     }
     let flags: Vec<String> = flags.unwrap_or_default().into_iter().filter(|f| !f.is_empty()).collect();
     check_flags(&flags)?;
+    let user_env = parse_env(&env.unwrap_or_default())?;
     let mut env = vec![("CONTEXT_GARDEN".to_string(), g.name.clone())];
     // The skills resolve their mode from the git root they run in; group folders,
     // linked repos and repos without settings would read "off". The garden's
@@ -814,6 +848,11 @@ fn terminal_spawn(
             pty: 0,
         };
         env.extend(control.env(k, term));
+    }
+    // Launch-line variables only apply to agents; a plain shell is the user's own.
+    if who.is_some() {
+        check_env(&user_env, &env)?;
+        env.extend(user_env);
     }
     let id = ptys.spawn(Launch { command, cwd, env, cols, rows }, on_event)?;
     if let Some(k) = &control_key {
@@ -1219,5 +1258,20 @@ mod tests {
         assert!(check_flags(&["--resume=abc".into()]).is_err());
         assert!(check_flags(&["-c".into()]).is_err());
         assert!(check_flags(&["--model".into(), "opus".into()]).is_ok());
+    }
+
+    #[test]
+    fn launch_env_is_parsed_and_app_variables_refused() {
+        let env = parse_env(&["FOO=bar".into(), "EMPTY=".into(), "X=a=b c".into(), "".into()]).unwrap();
+        assert_eq!(env, vec![("FOO".into(), "bar".into()), ("EMPTY".into(), "".into()), ("X".into(), "a=b c".into())]);
+        assert!(parse_env(&["NOEQUALS".into()]).is_err());
+        assert!(parse_env(&["1BAD=x".into()]).is_err());
+        assert!(parse_env(&["BAD-NAME=x".into()]).is_err());
+        let app = vec![("GREENHOUSE_BASE".to_string(), "/x".to_string())];
+        assert!(check_env(&[("GREENHOUSE_BASE".into(), "y".into())], &app).is_err());
+        assert!(check_env(&[("CLAUDE_CONFIG_DIR".into(), "y".into())], &app).is_err());
+        assert!(check_env(&[("CG_TOKEN".into(), "y".into())], &app).is_err());
+        assert!(check_env(&[("CONTEXT_GARDEN_MODE_SEEDBANK".into(), "y".into())], &app).is_err());
+        assert!(check_env(&[("MAX_THINKING_TOKENS".into(), "8000".into())], &app).is_ok());
     }
 }

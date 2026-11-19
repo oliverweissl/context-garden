@@ -350,8 +350,12 @@ th .sort .arrow { font-size: 8px; min-width: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .modal[open], .icon.refresh.spin { animation: none; } }
 
-/* agent startup flags in the terminal toolbar */
+/* agent launch line in the terminal toolbar: ENV=value <command> --flags */
+.launch-line { display: inline-flex; align-items: center; gap: 6px; }
+.launch-line[hidden] { display: none; }
 .toolbar .flags { width: 190px; font-size: 12px; }
+.toolbar .env { width: 150px; font-size: 12px; }
+.launch-cmd { font-size: 12px; font-weight: 700; color: var(--text); user-select: none; }
 .toolbar .resume-pick { margin-right: 10px; }
 .recent-list { display: flex; flex-direction: column; }
 .recent-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
