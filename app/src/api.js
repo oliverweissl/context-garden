@@ -81,6 +81,8 @@ export const api = {
   login: ({ profile, cols, rows }, onOutput, onExit) =>
     pty("profile_login", { id: profile, cols, rows }, onOutput, onExit),
   write: (id, data) => invoke("terminal_write", { id, data }),
+  /** Tell the backend `bytes` of output are rendered, so it sends more (flow control). */
+  ack: (id, bytes) => invoke("terminal_ack", { id, bytes }),
   resize: (id, cols, rows) => invoke("terminal_resize", { id, cols, rows }),
   kill: (id) => invoke("terminal_kill", { id }),
   /** Remove a closed agent's worktree unless it holds work: resolves to why it was kept, or null. */

@@ -1024,6 +1024,11 @@ fn terminal_write(ptys: State<Ptys>, id: u32, data: String) -> Result<(), String
 }
 
 #[tauri::command]
+fn terminal_ack(ptys: State<Ptys>, id: u32, bytes: usize) {
+    ptys.ack(id, bytes)
+}
+
+#[tauri::command]
 fn terminal_resize(ptys: State<Ptys>, id: u32, cols: u16, rows: u16) -> Result<(), String> {
     ptys.resize(id, cols, rows)
 }
@@ -1156,6 +1161,7 @@ pub fn run() {
             save_terminals,
             terminal_write,
             terminal_resize,
+            terminal_ack,
             terminal_kill,
             worktree_release,
             worktree_sweep,
