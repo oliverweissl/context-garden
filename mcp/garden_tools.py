@@ -43,41 +43,66 @@ def _int(desc: str) -> dict:
 
 
 def _tool(name: str, description: str, props: dict, required: list[str]) -> dict:
-    return {"name": name, "description": description,
-            "inputSchema": {"type": "object", "properties": props, "required": required}}
+    return {
+        "name": name,
+        "description": description,
+        "inputSchema": {"type": "object", "properties": props, "required": required},
+    }
 
 
 TOOLS = [
-    _tool("seedbank_facts",
-          "Cached facts about this repository (build commands, conventions, invariants, past "
-          "mistakes): the compiled AGENTS.md plus the seedbank status line.",
-          {}, []),
-    _tool("greenhouse_brief",
-          "What the other repositories of this platform know that is relevant to a task.",
-          {"task": _str("What you are about to do."), "budget": _int("Max tokens (approx.).")},
-          ["task"]),
-    _tool("pruner_select",
-          "Smallest sufficient set of file:line ranges for a task in this repository (JSON).",
-          {"task": _str("The bug, error or change."),
-           "budget": _int("Token budget for the slice."),
-           "changed": {"type": "array", "items": {"type": "string"},
-                       "description": "Changed file paths, if known."},
-           "error": _str("Raw compiler error or traceback text.")},
-          ["task"]),
-    _tool("compost_get",
-          "Raw lines of a stored compost run (see the run id in a compost summary).",
-          {"run_id": _str("Run id."), "lines": _str("N, A:B (inclusive) or 'all'.")},
-          ["run_id", "lines"]),
-    _tool("compost_grep",
-          "Regex (or literal) search in the raw output of a stored compost run.",
-          {"run_id": _str("Run id."), "pattern": _str("Regex, or literal with fixed=true."),
-           "fixed": {"type": "boolean", "description": "Treat pattern as a literal string."},
-           "context": _int("Lines of context."), "max": _int("Max matches.")},
-          ["run_id", "pattern"]),
-    _tool("mycelium_notes",
-          "Findings that earlier agents recorded for this repository that match a query.",
-          {"query": _str("What you are looking for."), "limit": _int("Max notes.")},
-          ["query"]),
+    _tool(
+        "seedbank_facts",
+        "Cached facts about this repository (build commands, conventions, invariants, past "
+        "mistakes): the compiled AGENTS.md plus the seedbank status line.",
+        {},
+        [],
+    ),
+    _tool(
+        "greenhouse_brief",
+        "What the other repositories of this platform know that is relevant to a task.",
+        {"task": _str("What you are about to do."), "budget": _int("Max tokens (approx.).")},
+        ["task"],
+    ),
+    _tool(
+        "pruner_select",
+        "Smallest sufficient set of file:line ranges for a task in this repository (JSON).",
+        {
+            "task": _str("The bug, error or change."),
+            "budget": _int("Token budget for the slice."),
+            "changed": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Changed file paths, if known.",
+            },
+            "error": _str("Raw compiler error or traceback text."),
+        },
+        ["task"],
+    ),
+    _tool(
+        "compost_get",
+        "Raw lines of a stored compost run (see the run id in a compost summary).",
+        {"run_id": _str("Run id."), "lines": _str("N, A:B (inclusive) or 'all'.")},
+        ["run_id", "lines"],
+    ),
+    _tool(
+        "compost_grep",
+        "Regex (or literal) search in the raw output of a stored compost run.",
+        {
+            "run_id": _str("Run id."),
+            "pattern": _str("Regex, or literal with fixed=true."),
+            "fixed": {"type": "boolean", "description": "Treat pattern as a literal string."},
+            "context": _int("Lines of context."),
+            "max": _int("Max matches."),
+        },
+        ["run_id", "pattern"],
+    ),
+    _tool(
+        "mycelium_notes",
+        "Findings that earlier agents recorded for this repository that match a query.",
+        {"query": _str("What you are looking for."), "limit": _int("Max notes.")},
+        ["query"],
+    ),
 ]
 
 
@@ -87,22 +112,34 @@ def _opt(args: dict, key: str, flag: str) -> list[str]:
 
 
 def command(tool: str, a: dict) -> tuple[str, list[str]]:
-    """(skill, argv after the skill's script) for a tool call; KeyError when an argument is missing."""
+    """(skill, CLI argv) for a tool call; KeyError when an argument is missing."""
     if tool == "seedbank_facts":
         return "seedbank", ["status"]
     if tool == "greenhouse_brief":
         return "greenhouse", ["brief", *_opt(a, "budget", "--budget"), a["task"]]
     if tool == "pruner_select":
-        argv = ["select", "--json", "--task", a["task"], *_opt(a, "budget", "--budget"),
-                *_opt(a, "error", "--error")]
+        argv = [
+            "select",
+            "--json",
+            "--task",
+            a["task"],
+            *_opt(a, "budget", "--budget"),
+            *_opt(a, "error", "--error"),
+        ]
         if a.get("changed"):
             argv += ["--changed", *map(str, a["changed"])]
         return "pruner", argv
     if tool == "compost_get":
         return "compost", ["get", "--lines", str(a["lines"]), str(a["run_id"])]
     if tool == "compost_grep":
-        argv = ["grep", *(["-F"] if a.get("fixed") else []), *_opt(a, "context", "--context"),
-                *_opt(a, "max", "--max"), str(a["run_id"]), str(a["pattern"])]
+        argv = [
+            "grep",
+            *(["-F"] if a.get("fixed") else []),
+            *_opt(a, "context", "--context"),
+            *_opt(a, "max", "--max"),
+            str(a["run_id"]),
+            str(a["pattern"]),
+        ]
         return "compost", argv
     if tool == "mycelium_notes":
         return "mycelium", ["brief", *_opt(a, "limit", "--limit"), a["query"]]
@@ -110,8 +147,12 @@ def command(tool: str, a: dict) -> tuple[str, list[str]]:
 
 
 def skill_is_on(skill: str) -> bool:
-    r = subprocess.run([sys.executable, str(SKILLS / skill / "scripts" / "cg_mode.py"), skill, "--is-on"],
-                       capture_output=True, text=True, timeout=TIMEOUT)
+    r = subprocess.run(
+        [sys.executable, str(SKILLS / skill / "scripts" / "cg_mode.py"), skill, "--is-on"],
+        capture_output=True,
+        text=True,
+        timeout=TIMEOUT,
+    )
     return r.returncode == 0
 
 
@@ -119,7 +160,11 @@ def agents_md() -> str:
     r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
     root = Path(r.stdout.strip()) if r.returncode == 0 else Path.cwd()
     f = root / "AGENTS.md"
-    return f.read_text(errors="replace") if f.is_file() else "(no AGENTS.md yet: no facts promoted in this repository)"
+    return (
+        f.read_text(errors="replace")
+        if f.is_file()
+        else "(no AGENTS.md yet: no facts promoted in this repository)"
+    )
 
 
 def run_tool(tool: str, args: dict) -> tuple[str, bool]:
@@ -130,10 +175,16 @@ def run_tool(tool: str, args: dict) -> tuple[str, bool]:
         return f"missing or unknown argument: {e}", True
     try:
         if not skill_is_on(skill):
-            return (f"the {skill} skill is not on in this repository (run `{skill} mode on`, or ask the "
-                    "user); use the Bash CLI if you were told to call it explicitly"), True
-        r = subprocess.run([sys.executable, str(SKILLS / skill / "scripts" / f"{skill}.py"), *argv],
-                           capture_output=True, text=True, timeout=TIMEOUT)
+            return (
+                f"the {skill} skill is not on in this repository (run `{skill} mode on`, "
+                "or ask the user); use the Bash CLI if you were told to call it explicitly"
+            ), True
+        r = subprocess.run(
+            [sys.executable, str(SKILLS / skill / "scripts" / f"{skill}.py"), *argv],
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT,
+        )
     except (OSError, subprocess.SubprocessError) as e:
         return f"{skill} failed to run: {e}", True
     out = (r.stdout or "").rstrip()
@@ -156,8 +207,12 @@ def handle(msg: dict) -> dict | None:
         return None
     if method == "initialize":
         version = (msg.get("params") or {}).get("protocolVersion") or PROTOCOL
-        result = {"protocolVersion": version, "capabilities": {"tools": {}},
-                  "serverInfo": SERVER, "instructions": INSTRUCTIONS}
+        result = {
+            "protocolVersion": version,
+            "capabilities": {"tools": {}},
+            "serverInfo": SERVER,
+            "instructions": INSTRUCTIONS,
+        }
     elif method == "ping":
         result = {}
     elif method == "tools/list":
@@ -169,7 +224,11 @@ def handle(msg: dict) -> dict | None:
         else:
             result = tool_result(*run_tool(p["name"], p.get("arguments") or {}))
     else:
-        return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"unknown method {method}"}}
+        return {
+            "jsonrpc": "2.0",
+            "id": mid,
+            "error": {"code": -32601, "message": f"unknown method {method}"},
+        }
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
 
