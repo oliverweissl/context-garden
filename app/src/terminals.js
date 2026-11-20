@@ -3,6 +3,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { api, PROFILES_CHANGED } from "./api.js";
 import { h, toast, errText, badge, modal, agentIcon } from "./ui.js";
 import { openOrchestrate } from "./views/orchestrate.js";
+import { makeInbox } from "./inbox.js";
+import { parseMention, makeDraft, frameForWorker, noteForManager } from "./mentions.js";
 import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
 const THEME = {
@@ -454,10 +456,19 @@ class Pane {
     this.started = now();
     /** Plugin stamps the agent started with, by plugin id (null until known). */
     this.stamps = null;
-    this.state = { live: true, stale: "", noCredits: false };
+    this.state = { live: true, stale: "", noCredits: false, queued: 0 };
     this.recent = "";
     this.decoder = new TextDecoder();
     this.lastInput = 0;
+    this.lastOutput = 0;
+    this.draft = makeDraft();
+    this.links = [];
+    // Messages from other agents wait here while this one is asking the user something (see inbox.js).
+    this.inbox = makeInbox({
+      state: () => ({ lines: this.renderedLines(20), sinceInput: Date.now() - this.lastInput, sinceOutput: Date.now() - this.lastOutput }),
+      deliver: (text) => this.send(text),
+      onChange: (n) => this.mark({ queued: n }),
+    });
     this.checklist = this.agent ? loadChecklist(opts.key) : { seen: [], current: null };
     this.checklistChip = h("button", { class: "chip toggle checklist-chip", hidden: true, onclick: () => this.openChecklist() });
     this.term = new Terminal({
@@ -492,12 +503,38 @@ class Pane {
     this.term.onData((d) => {
       if (this.id == null) return;
       this.lastInput = Date.now();
+      if (this.mention(d)) return;
       if (d.includes("\r") && this.state.noCredits) this.mark({ noCredits: false });
       if (d.includes("\r")) this.recent = "";
       api.write(this.id, d).catch(() => {});
     });
     this.term.onResize(({ cols, rows }) => this.id != null && api.resize(this.id, cols, rows).catch(() => {}));
     this.drawChecklistChip();
+  }
+
+  /**
+   * `@"worker" task` or `@all task` typed here goes straight to those linked workers (see
+   * mentions.js). True when this keystroke was that line's Enter and was taken over.
+   */
+  mention(d) {
+    const typed = this.draft.feed(d);
+    if (typed.line?.startsWith("@") && !typed.enter) {
+      // Links change in the Orchestrate view; look them up while the user is still typing the line.
+      api.links(this.ws.gardenId).then((l) => { this.links = l; }).catch(() => {});
+    }
+    if (!typed.enter || !typed.line?.startsWith("@")) return false;
+    const workers = this.links
+      .filter((l) => l.manager === this.opts.key)
+      .map((l) => this.ws.panes.find((p) => p.opts.key === l.worker))
+      .filter((p) => p && p.id != null)
+      .map((p) => ({ key: p.opts.key, title: p.opts.title, pane: p }));
+    const m = parseMention(typed.line, workers);
+    if (!m) return false;
+    api.write(this.id, "\x15").catch(() => {}); // clear the line in the agent: Enter is not forwarded
+    for (const t of m.targets) t.pane.inbox.push(frameForWorker(this.opts.title, m.body));
+    this.inbox.push(noteForManager(m.targets, m.all, m.body));
+    toast(`Sent to ${m.all ? `${m.targets.length} workers` : m.targets[0].title}`);
+    return true;
   }
 
   /** Look for a checklist once output has been quiet for a second (agents animate a spinner while busy). */
@@ -704,6 +741,7 @@ class Pane {
   }
 
   scan(text) {
+    this.lastOutput = Date.now();
     this.recent = (this.recent + text.replace(ANSI, " ").replace(/\s+/g, " ")).slice(-4000);
     if (!this.state.noCredits && OUT_OF_CREDITS.test(this.recent)) this.mark({ noCredits: true });
   }
@@ -741,13 +779,13 @@ class Pane {
     const was = this.state.stale;
     Object.assign(this.state, change);
     if (this.state.stale !== was) window.dispatchEvent(new Event(STALE_CHANGED));
-    const { live, stale, noCredits } = this.state;
+    const { live, stale, noCredits, queued } = this.state;
     const [cls, tip] = noCredits ? ["out", "Out of credits: the agent reports its usage limit"]
       : !live ? ["", "Exited"]
         : stale ? ["stale", stale]
           : ["live", "Running"];
     this.status.className = `pane-status ${cls}`;
-    this.status.title = tip;
+    this.status.title = queued && live ? `${tip}. ${queued} message${queued > 1 ? "s" : ""} from other agents waiting until you are done` : tip;
   }
 
   exited(code) {
@@ -906,8 +944,8 @@ export function initControl() {
     if (pane.id == null) return api.controlReply(r.id, false, "that terminal is not running any more").catch(() => {});
     try {
       if (r.kind === "send") {
-        pane.send(String(r.text));
-        api.controlReply(r.id, true, "sent").catch(() => {});
+        const how = pane.inbox.push(String(r.text)); // "queued" while the agent waits on the user
+        api.controlReply(r.id, true, how === "queued" ? "queued: delivered when the terminal is idle" : "sent").catch(() => {});
       } else if (r.kind === "read") {
         const text = pane.renderedLines(Number(r.lines) || 60).join("\n").replace(/\s+$/, "");
         api.controlReply(r.id, true, text.split("\n").slice(-(Number(r.lines) || 60)).join("\n")).catch(() => {});
