@@ -126,8 +126,9 @@ fn claude_enabled(dir: &Path, plugin: &str) -> bool {
 
 /// Refresh the plugin's marketplace and install its newest version, with the
 /// agent's own plugin commands. Claude keeps whether it was switched on
-/// account-wide (gardens switch theirs on per folder).
-pub fn update(agent: &str, dir: &Path, plugin: &str) -> Result<(), String> {
+/// account-wide (gardens switch theirs on per folder). Returns a line for
+/// the UI when there is more to say (Codex: whether our hooks are trusted).
+pub fn update(agent: &str, dir: &Path, plugin: &str) -> Result<Option<String>, String> {
     let marketplace = plugin.split_once('@').map(|(_, m)| m).ok_or("plugin id needs <plugin>@<marketplace>")?;
     let dir_text = dir.to_string_lossy();
     match agent {
@@ -150,7 +151,7 @@ pub fn update(agent: &str, dir: &Path, plugin: &str) -> Result<(), String> {
                 // Already off is fine; the update must not leave it on everywhere.
                 let _ = run_env("claude", &["plugin", "disable", plugin, "--scope", "user"], None, &env);
             }
-            Ok(())
+            Ok(None)
         }
         "codex" => {
             if which("codex").is_none() {
@@ -161,10 +162,174 @@ pub fn update(agent: &str, dir: &Path, plugin: &str) -> Result<(), String> {
             if codex_marketplace_root(dir, marketplace).join(".git").exists() {
                 run_env("codex", &["plugin", "marketplace", "upgrade", marketplace], None, &env)?;
             }
-            run_env("codex", &["plugin", "add", plugin], None, &env).map(|_| ())
+            run_env("codex", &["plugin", "add", plugin], None, &env)?;
+            // Only our own plugin's hooks; others' stay for the user to trust.
+            Ok((plugin == crate::skills::PLUGIN).then(|| codex_trust_note(dir, plugin)))
         }
         other => Err(format!("'{other}' has no plugin support")),
     }
+}
+
+/// Codex runs a plugin's hooks only once the user trusts them: config.toml
+/// keeps `[hooks.state."<key>"] trusted_hash = "<hash>"` per hook. The hash
+/// covers the versioned install path, so every install or update of our own
+/// plugin needs fresh trust. Asks `codex app-server` for the hooks and their
+/// current hashes, then writes trust for `plugin`'s hooks only, never
+/// anyone else's. Returns how many hooks it trusted.
+pub fn trust_codex_hooks(dir: &Path, plugin: &str) -> Result<usize, String> {
+    let hooks: Vec<(String, String)> = codex_hook_list(dir)?
+        .into_iter()
+        .filter(|h| h["pluginId"] == plugin)
+        .filter_map(|h| Some((h["key"].as_str()?.to_string(), h["currentHash"].as_str()?.to_string())))
+        .collect();
+    let path = dir.join("config.toml");
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let next = with_hook_trust(&text, plugin, &hooks);
+    if next != text {
+        crate::util::atomic_write(&path, &next)?;
+    }
+    Ok(hooks.len())
+}
+
+/// One line for the UI after installing or updating the plugin in a Codex account.
+pub fn codex_trust_note(dir: &Path, plugin: &str) -> String {
+    match trust_codex_hooks(dir, plugin) {
+        Ok(0) => "Codex listed no context-garden hooks to trust".into(),
+        Ok(n) => format!("Trusted {n} context-garden hooks for Codex (in its config.toml)"),
+        Err(e) => {
+            eprintln!("trusting Codex hooks in {}: {e}", dir.display());
+            "Codex hooks are not trusted yet: run /hooks in Codex and trust the context-garden ones".into()
+        }
+    }
+}
+
+/// Every hook Codex knows for this account (`hooks/list` over app-server JSON-RPC).
+fn codex_hook_list(dir: &Path) -> Result<Vec<serde_json::Value>, String> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+    use std::time::Duration;
+
+    let bin = which("codex").ok_or("`codex` is not installed")?;
+    let shim = bin.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd"));
+    let mut cmd = if shim {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "codex"]);
+        c
+    } else {
+        Command::new(&bin)
+    };
+    crate::util::no_window(&mut cmd);
+    let mut child = cmd
+        .arg("app-server")
+        .env("CODEX_HOME", dir)
+        .current_dir(dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("could not run `codex app-server`: {e}"))?;
+    let cwd = dir.to_string_lossy();
+    let requests = [
+        serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"clientInfo": {"name": "context-garden", "version": env!("CARGO_PKG_VERSION")}}}),
+        serde_json::json!({"jsonrpc": "2.0", "method": "initialized"}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "hooks/list", "params": {"cwds": [cwd]}}),
+    ];
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let wrote = requests.iter().try_for_each(|r| writeln!(stdin, "{r}"));
+    let answer = wrote.map_err(|e| format!("codex app-server: {e}")).and_then(|_| {
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        loop {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let line = rx.recv_timeout(left).map_err(|_| "codex app-server did not list its hooks".to_string())?;
+            let Ok(msg) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+            if msg["id"] == 2 {
+                break Ok(msg);
+            }
+        }
+    });
+    drop(stdin);
+    let _ = child.kill();
+    let _ = child.wait();
+    let answer = answer?;
+    if let Some(e) = answer.get("error") {
+        return Err(format!("codex app-server: {}", e["message"].as_str().unwrap_or("hooks/list failed")));
+    }
+    Ok(answer["result"]["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|d| d["hooks"].as_array().cloned().unwrap_or_default())
+        .collect())
+}
+
+/// `config` with `trusted_hash` set for each (key, hash) of `plugin`. Only
+/// `[hooks.state."<plugin>:…"]` tables are touched: one of ours whose hook is
+/// gone loses its trust (and the table, if nothing else is in it); other
+/// settings in our tables (say `enabled = false`) stay.
+fn with_hook_trust(config: &str, plugin: &str, hooks: &[(String, String)]) -> String {
+    let prefix = format!("[hooks.state.\"{plugin}:");
+    // A key or hash that would need escaping is not something Codex hands out.
+    let plain = |s: &str| !s.is_empty() && !s.contains(['"', '\\', '\n', '\r']);
+    let hooks: Vec<&(String, String)> = hooks.iter().filter(|(k, h)| k.starts_with(&format!("{plugin}:")) && plain(k) && plain(h)).collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut done: Vec<&str> = Vec::new();
+    let mut lines = config.lines().peekable();
+    while let Some(line) = lines.next() {
+        let head = line.trim();
+        let ours = head.strip_prefix(&prefix).and_then(|rest| rest.strip_suffix("\"]")).map(|rest| format!("{plugin}:{rest}"));
+        let Some(key) = ours else {
+            out.push(line.to_string());
+            continue;
+        };
+        let mut body = Vec::new();
+        while let Some(next) = lines.peek() {
+            if next.trim_start().starts_with('[') {
+                break;
+            }
+            body.push(lines.next().unwrap_or_default().to_string());
+        }
+        let others: Vec<String> = body.into_iter().filter(|l| !l.trim_start().starts_with("trusted_hash")).collect();
+        match hooks.iter().find(|(k, _)| *k == key) {
+            Some((k, hash)) => {
+                out.push(line.to_string());
+                out.push(format!("trusted_hash = \"{hash}\""));
+                out.extend(others);
+                done.push(k);
+            }
+            None if others.iter().all(|l| l.trim().is_empty()) => {
+                // Drop the table, and the blank line before it.
+                if out.last().is_some_and(|l| l.trim().is_empty()) {
+                    out.pop();
+                }
+            }
+            None => {
+                out.push(line.to_string());
+                out.extend(others);
+            }
+        }
+    }
+    for (key, hash) in hooks.iter().filter(|(k, _)| !done.contains(&k.as_str())) {
+        if out.last().is_some_and(|l| !l.trim().is_empty()) {
+            out.push(String::new());
+        }
+        out.push(format!("[hooks.state.\"{key}\"]"));
+        out.push(format!("trusted_hash = \"{hash}\""));
+    }
+    let mut text = out.join("\n");
+    if !text.is_empty() {
+        text.push('\n');
+    }
+    text
 }
 
 /// Last `max` bytes of a file, from the first full line on.
@@ -283,6 +448,51 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+#[test]
+    fn hook_trust_touches_only_our_tables() {
+        let config = "model = \"x\"\n\n[hooks.state.\"other@m:hooks.json:stop:0:0\"]\ntrusted_hash = \"sha256:theirs\"\n\n[hooks.state.\"cg@cg:hooks/hooks.json:stop:0:0\"]\ntrusted_hash = \"sha256:old\"\n\n[hooks.state.\"cg@cg:hooks/codex-hooks.json:stop:0:0\"]\nenabled = false\ntrusted_hash = \"sha256:old\"\n\n[projects.\"/p\"]\ntrust_level = \"trusted\"\n";
+        let hooks = vec![
+            ("cg@cg:hooks/codex-hooks.json:stop:0:0".to_string(), "sha256:new1".to_string()),
+            ("cg@cg:hooks/codex-hooks.json:session_start:0:0".to_string(), "sha256:new2".to_string()),
+            // Not ours: ignored even if handed over.
+            ("other@m:hooks.json:stop:0:0".to_string(), "sha256:evil".to_string()),
+        ];
+        let out = with_hook_trust(config, "cg@cg", &hooks);
+        assert!(out.contains("[hooks.state.\"other@m:hooks.json:stop:0:0\"]\ntrusted_hash = \"sha256:theirs\""));
+        assert!(!out.contains("evil"));
+        // A hook that is gone loses its table; a kept one keeps its other settings.
+        assert!(!out.contains("hooks/hooks.json:stop"));
+        assert!(out.contains("[hooks.state.\"cg@cg:hooks/codex-hooks.json:stop:0:0\"]\ntrusted_hash = \"sha256:new1\"\nenabled = false"));
+        assert!(out.ends_with("[hooks.state.\"cg@cg:hooks/codex-hooks.json:session_start:0:0\"]\ntrusted_hash = \"sha256:new2\"\n"));
+        assert!(out.contains("[projects.\"/p\"]\ntrust_level = \"trusted\""));
+        assert!(!out.contains("sha256:old"));
+        // Running it again changes nothing.
+        assert_eq!(with_hook_trust(&out, "cg@cg", &hooks), out);
+    }
+
+    #[test]
+    fn hook_trust_skips_values_that_would_break_the_toml() {
+        let hooks = vec![("cg@cg:a\"]\nx".to_string(), "h".to_string()), ("cg@cg:b".to_string(), "h\"".to_string())];
+        assert_eq!(with_hook_trust("", "cg@cg", &hooks), "");
+    }
+
+    /// Against a real Codex home with context-garden installed:
+    /// CG_TEST_CODEX_HOME=<dir> cargo test -- --ignored trust_codex_hooks_live
+    #[test]
+    #[ignore]
+    fn trust_codex_hooks_live() {
+        let dir = PathBuf::from(std::env::var("CG_TEST_CODEX_HOME").expect("CG_TEST_CODEX_HOME"));
+        let n = trust_codex_hooks(&dir, crate::skills::PLUGIN).unwrap();
+        assert!(n > 0);
+        let untrusted: Vec<_> = codex_hook_list(&dir)
+            .unwrap()
+            .into_iter()
+            .filter(|h| h["pluginId"] == crate::skills::PLUGIN && h["trustStatus"] != "trusted")
+            .collect();
+        assert!(untrusted.is_empty(), "{untrusted:?}");
+        println!("{}", codex_trust_note(&dir, crate::skills::PLUGIN));
     }
 
     #[test]

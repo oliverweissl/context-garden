@@ -55,8 +55,9 @@ export async function accountsPanel(app) {
       btn.disabled = true;
       btn.textContent = label;
       try {
-        await work();
-        toast(done);
+        // A line from the app when there is more to say (Codex: hook trust).
+        const note = await work();
+        toast(note ? `${done}. ${note}` : done);
       } catch (e) {
         toast(errText(e), "error");
       }
@@ -162,7 +163,7 @@ export async function accountsPanel(app) {
         if (!existing) login(p);
         if (!(await api.pluginVersion(p.id).catch(() => true))) {
           api.installPlugin(p.id)
-            .then(() => { toast(`Skills installed for ${p.name}`); draw(); })
+            .then((note) => { toast(note ? `Skills installed for ${p.name}. ${note}` : `Skills installed for ${p.name}`); draw(); })
             .catch((e) => toast(`Skills not installed: ${errText(e)}`, "error"));
         }
       } catch (e) {

@@ -1,0 +1,32 @@
+{
+  "name": "context-garden",
+  "version": "0.6.0",
+  "description": "Tools for reducing redundant agent context and preserving important repository knowledge.",
+  "author": {
+    "name": "Oliver Weißl",
+    "url": "https://github.com/oliverweissl"
+  },
+  "repository": "https://github.com/oliverweissl/context-garden",
+  "license": "MIT",
+  "skills": "./skills/",
+  "hooks": "./hooks/codex-hooks.json",
+  "mcpServers": {
+    "garden-control": {
+      "command": "python3",
+      "args": [
+        "mcp/cg_control.py"
+      ],
+      "cwd": ".",
+      "env_vars": [
+        "CG_CONTROL",
+        "CG_TOKEN",
+        "CG_TERMINAL"
+      ]
+    }
+  },
+  "interface": {
+    "displayName": "Context Garden",
+    "shortDescription": "Context skills and agent orchestration for Context Garden",
+    "developerName": "Oliver Weißl"
+  }
+}
