@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 
 PROTOCOL = "2025-06-18"
-SERVER = {"name": "garden-control", "version": "0.6.0"}
+SERVER = {"name": "garden-control", "version": "0.7.0"}
 
 INSTRUCTIONS = (
     "You run inside Context Garden. Other agent terminals of this garden may be "
