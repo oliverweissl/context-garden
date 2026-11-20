@@ -24,11 +24,13 @@ Two options. Both give you the same six skills; the app adds one window around t
 
 **From a release.** Download the installer for your OS from
 [Releases](https://github.com/oliverweissl/context-garden/releases): `.dmg` (macOS),
-`.msi` / `.exe` (Windows), `.deb` / `.rpm` / `.AppImage` (Linux). The builds are not
-code-signed yet, so the first start needs one extra step:
+`.msi` / `.exe` (Windows), `.deb` / `.rpm` / `.AppImage` (Linux). macOS builds are
+signed and notarized once the release pipeline has its Apple certificate
+([CONTRIBUTING.md](CONTRIBUTING.md#signed-macos-releases)); until then, and on Windows,
+the first start needs one extra step:
 
-- **macOS:** right-click ContextGarden in Applications, then Open (or
-  `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
+- **macOS** ("Apple could not verify ContextGarden…"): right-click ContextGarden in
+  Applications, then Open (or `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
 - **Windows:** SmartScreen, then "More info", then "Run anyway".
 - **Linux:** `sudo apt install ./ContextGarden_*.deb`, or `chmod +x` the `.AppImage` and run it.
 
