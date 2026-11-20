@@ -23,7 +23,9 @@ GitLab groups `glab` (`brew install glab` / `winget install glab.glab`, then
 `glab auth login` with a personal access token that has the `api` and `write_repository`
 scopes; add `--hostname gitlab.example.com` for self-hosted GitLab). Single repo URLs and
 local folders need neither. When a newer release is out, a "Version … available" button
-appears next to Settings.
+appears next to Settings; "Skills outdated (N)" appears there when an account's
+context-garden plugin is behind main or an open agent still runs older skills than its
+account has, and opens a list with Update per account (or Update all).
 
 ## Use it
 
