@@ -1129,6 +1129,24 @@ impl control::World for AppWorld {
     fn alive(&self, pty: u32) -> bool {
         self.0.state::<Ptys>().alive(pty)
     }
+    fn saved(&self, garden: &str) -> Vec<(String, control::Term)> {
+        let Ok(g) = self.0.state::<Store>().garden(garden) else { return vec![] };
+        g.terminals
+            .into_iter()
+            .filter(|t| t.agent.is_some() || t.profile.is_some())
+            .map(|t| {
+                let term = control::Term {
+                    garden: g.id.clone(),
+                    title: t.title,
+                    agent: t.agent,
+                    account: t.profile,
+                    cwd: t.cwd,
+                    pty: 0,
+                };
+                (t.key, term)
+            })
+            .collect()
+    }
     fn ask(&self, _key: &str, request: serde_json::Value) -> Result<String, String> {
         self.0.state::<Control>().wait_for(|id| {
             let mut request = request;

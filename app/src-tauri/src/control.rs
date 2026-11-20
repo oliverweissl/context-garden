@@ -76,6 +76,9 @@ pub fn valid_links(links: Vec<Link>) -> Result<Vec<Link>, String> {
 pub trait World {
     fn links(&self, garden: &str) -> Vec<Link>;
     fn alive(&self, pty: u32) -> bool;
+    /// The garden's saved agent terminals (key, term with pty 0): after a restart these
+    /// are known to the app but not yet running, and must still be listed and linkable.
+    fn saved(&self, garden: &str) -> Vec<(String, Term)>;
     /// Ask the window owning terminal `key`: {"kind": "send"|"read", ...}.
     fn ask(&self, key: &str, request: Value) -> Result<String, String>;
 }
@@ -158,6 +161,11 @@ impl Control {
             let me = g.terms.get(&key).cloned().ok_or("unknown terminal")?;
             (key, me, g.terms.clone())
         };
+        // Saved terminals that are not running (yet) still count: links outlive a restart.
+        let mut terms = terms;
+        for (k, t) in world.saved(&me.garden) {
+            terms.entry(k).or_insert(t);
+        }
         let links = world.links(&me.garden);
         let manages = |m: &str, w: &str| links.iter().any(|l| l.manager == m && l.worker == w);
         let same_garden = |t: &&(&String, &Term)| t.1.garden == me.garden && t.0 != &me_key;
@@ -176,11 +184,20 @@ impl Control {
                 _ => Err(format!("'{name}' is ambiguous; use its key")),
             }
         };
+        let running = |t: &Term| t.pty != 0 && world.alive(t.pty);
+        // A linked terminal that is saved but closed: say so at once instead of timing out.
+        let ensure_running = |key: &String| -> Result<(), String> {
+            match terms.get(key) {
+                Some(t) if running(t) => Ok(()),
+                Some(t) => Err(format!("'{}' is not running; ask the user to resume it in the app", t.title)),
+                None => Err("unknown terminal".into()),
+            }
+        };
         let text = |name: &str| args.get(name).and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
         let describe = |key: &String, t: &Term, role: &str| {
             json!({
                 "key": key, "title": t.title, "role": role, "agent": t.agent, "account": t.account,
-                "folder": t.cwd, "running": world.alive(t.pty),
+                "folder": t.cwd, "running": running(t),
             })
         };
         match tool {
@@ -201,6 +218,7 @@ impl Control {
                 if !manages(&me_key, &to) {
                     return Err("you do not manage that terminal".into());
                 }
+                ensure_running(&to)?;
                 let framed = format!(
                     "[Task from your manager \"{}\"] {body}\n(When done or blocked, tell your manager with the report_to_manager tool.)",
                     me.title
@@ -213,6 +231,7 @@ impl Control {
                 if !manages(&me_key, &from) {
                     return Err("you do not manage that terminal".into());
                 }
+                ensure_running(&from)?;
                 let lines = args.get("lines").and_then(|v| v.as_u64()).unwrap_or(60).clamp(1, MAX_LINES as u64);
                 let screen = world.ask(&from, json!({ "kind": "read", "key": from, "lines": lines }))?;
                 Ok(json!({ "terminal": from, "output": screen }))
@@ -318,6 +337,7 @@ mod tests {
 
     struct Fake {
         links: Vec<Link>,
+        saved: Vec<(String, Term)>,
         asked: M<Vec<Value>>,
     }
     impl World for Fake {
@@ -326,6 +346,9 @@ mod tests {
         }
         fn alive(&self, _: u32) -> bool {
             true
+        }
+        fn saved(&self, _: &str) -> Vec<(String, Term)> {
+            self.saved.clone()
         }
         fn ask(&self, _: &str, request: Value) -> Result<String, String> {
             let reply = if request["kind"] == "read" { "screen text".to_string() } else { "ok".into() };
@@ -343,7 +366,7 @@ mod tests {
         let boss = c.register("boss", term("Boss", 1));
         let w1 = c.register("w1", term("Worker One", 2));
         let w2 = c.register("w2", term("Worker Two", 3));
-        let fake = Fake { links: vec![Link { manager: "boss".into(), worker: "w1".into() }], asked: M::new(vec![]) };
+        let fake = Fake { links: vec![Link { manager: "boss".into(), worker: "w1".into() }], saved: vec![], asked: M::new(vec![]) };
         (c, fake, boss, w1, w2)
     }
 
@@ -385,6 +408,28 @@ mod tests {
         assert_eq!(c.call(&f, "nope", "list_terminals", &Value::Null).unwrap_err(), "unknown terminal");
     }
 
+    #[test]
+    fn linked_terminals_not_yet_resumed_are_listed_and_refused_clearly() {
+        // After an app restart only the manager runs; its worker is saved, not spawned.
+        let c = Control::default();
+        let boss = c.register("boss", term("Boss", 1));
+        let f = Fake {
+            links: vec![Link { manager: "boss".into(), worker: "w1".into() }],
+            saved: vec![("w1".into(), term("Worker One", 0))],
+            asked: M::new(vec![]),
+        };
+        let l = c.call(&f, &boss, "list_terminals", &Value::Null).unwrap();
+        assert_eq!(l["terminals"][0]["key"], "w1");
+        assert_eq!(l["terminals"][0]["running"], false);
+        let e = c.call(&f, &boss, "send_prompt", &json!({ "to": "Worker One", "text": "go" })).unwrap_err();
+        assert!(e.contains("not running") && e.contains("resume"), "{e}");
+        assert!(f.asked.lock().unwrap().is_empty());
+        // Once resumed, the live registration wins over the saved record.
+        c.register("w1", term("Worker One", 2));
+        assert_eq!(c.call(&f, &boss, "list_terminals", &Value::Null).unwrap()["terminals"][0]["running"], true);
+        assert!(c.call(&f, &boss, "send_prompt", &json!({ "to": "w1", "text": "go" })).is_ok());
+    }
+
     fn post(addr: &str, request_line: &str, body: &str) -> String {
         let mut s = TcpStream::connect(addr).unwrap();
         write!(s, "{request_line} HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}", body.len()).unwrap();
@@ -424,7 +469,7 @@ mod tests {
         let a = c.register("k", term("T", 1));
         let b = c.register("k", term("T", 2));
         assert_ne!(a, b);
-        let f = Fake { links: vec![], asked: M::new(vec![]) };
+        let f = Fake { links: vec![], saved: vec![], asked: M::new(vec![]) };
         assert!(c.call(&f, &a, "list_terminals", &Value::Null).is_err());
         assert!(c.call(&f, &b, "list_terminals", &Value::Null).is_ok());
     }
