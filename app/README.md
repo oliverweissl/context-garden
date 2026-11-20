@@ -17,6 +17,14 @@ code-signed yet, so the first start needs one extra step:
   `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
 - **Windows:** SmartScreen, then "More info", then "Run anyway".
 
+**Updates:** when a newer release exists, the app shows an update button. Builds that carry an
+updater key install it in place and restart; otherwise (and for `.deb`/`.rpm`, which cannot
+replace themselves) it opens the release page. Maintainers set this up once:
+`npx tauri signer generate -w ~/.tauri/contextgarden.key`, put the **public** key in
+`UPDATER_PUBKEY` (`src-tauri/src/updates.rs`), and add the private key and its password as the repository
+secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Releases then
+carry signed update bundles and a `latest.json` (published releases only, not drafts).
+
 The app needs `git` and Claude Code and/or Codex on your PATH. For GitHub orgs it also
 needs `gh` (`brew install gh` / `winget install GitHub.cli`, then `gh auth login`); for
 GitLab groups `glab` (`brew install glab` / `winget install glab.glab`, then

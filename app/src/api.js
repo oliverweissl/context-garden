@@ -55,6 +55,10 @@ export const api = {
     invoke("update_account_plugin", { agent: agent || null, profile: profile || null, plugin }),
   /** { version, url } of a newer app release, or null. */
   appUpdate: () => invoke("app_update"),
+  /** True when this build holds an updater key and can install updates itself. */
+  canSelfUpdate: () => invoke("app_can_self_update"),
+  /** Download the newest signed release, install it and restart (does not return on success). */
+  installUpdate: () => invoke("app_install_update"),
   openRepoPage: (url) => invoke("open_repo_page", { url }),
   installPlugin: (id) => invoke("install_profile_plugin", { id }),
   removeProfile: (id) => invoke("remove_profile", { id }).then(profilesChanged),

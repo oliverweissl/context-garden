@@ -492,6 +492,39 @@ async fn app_update(app: AppHandle) -> Result<Option<updates::AppRelease>, Strin
     updates::newer_release(&app.package_info().version.to_string())
 }
 
+/// Whether this build can install updates itself (it has an updater key), or only point at the release page.
+#[tauri::command]
+fn app_can_self_update() -> bool {
+    !updates::UPDATER_PUBKEY.is_empty()
+}
+
+/// Download the newest signed release, install it and restart the app.
+#[tauri::command]
+async fn app_install_update(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    if updates::UPDATER_PUBKEY.is_empty() {
+        return Err("this build cannot update itself; use the release page".into());
+    }
+    let endpoint = updates::UPDATER_ENDPOINT.parse().map_err(|e| format!("{e}"))?;
+    let updater = app
+        .updater_builder()
+        .pubkey(updates::UPDATER_PUBKEY)
+        .endpoints(vec![endpoint])
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("could not check for the update: {e}"))?
+        .ok_or("already up to date")?;
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| format!("could not install the update: {e}"))?;
+    app.restart()
+}
+
 #[tauri::command]
 fn open_repo_page(url: String) -> Result<(), String> {
     updates::open_repo_page(&url)
@@ -1160,6 +1193,7 @@ pub fn run() {
     util::init_env();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -1181,6 +1215,8 @@ pub fn run() {
             set_links,
             control_reply,
             app_update,
+            app_can_self_update,
+            app_install_update,
             open_repo_page,
             profile_plugin_outdated,
             update_profile_plugin,
