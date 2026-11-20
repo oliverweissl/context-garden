@@ -1058,10 +1058,6 @@ export async function terminalArea(garden) {
     flags: r.flags || [],
     env: r.env || [],
   });
-  const resume = async (records) => {
-    for (const r of records) {
-      try {
-        await ws.open(fromRecord(r));
   // Accounts added or removed in Settings show up here at once, no restart.
   const refreshProfiles = async () => {
     try {
@@ -1073,6 +1069,10 @@ export async function terminalArea(garden) {
     drawFlags();
   };
   window.addEventListener(PROFILES_CHANGED, refreshProfiles);
+  const resume = async (records) => {
+    for (const r of records) {
+      try {
+        await ws.open(fromRecord(r));
       } catch (e) {
         toast(errText(e), "error");
       }

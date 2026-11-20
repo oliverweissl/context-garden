@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
-    "test": "node --test src/checklist.test.js src/inbox.test.js src/mentions.test.js"
+    "test": "node --test src/checklist.test.js src/inbox.test.js src/mentions.test.js",
+    "test:ui": "node --test e2e/ui.test.js"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.0.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "puppeteer-core": "^23.11.1",
     "vite": "^6.0.0"
   }
 }

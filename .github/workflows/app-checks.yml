@@ -31,6 +31,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - name: UI regression tests (headless Chrome, mocked backend)
+        run: npm run test:ui
       - name: Rust tests and lint
         working-directory: app/src-tauri
         run: |

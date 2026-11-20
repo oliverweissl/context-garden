@@ -148,6 +148,8 @@ Removing a garden or account only forgets it; nothing on disk is deleted.
 ## Tests
 
 ```bash
-cd app && npm test                     # checklist detector (node --test)
+cd app && npm test                     # unit tests: checklist, inbox, mentions (node --test)
+cd app && npm run test:ui              # UI regression: real UI + mocked backend in headless Chrome
+                                       # (CHROME_PATH if Chrome is not in a standard place)
 cd app/src-tauri && cargo test && cargo clippy --all-targets
 ```
