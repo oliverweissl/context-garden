@@ -36,6 +36,14 @@ async function route() {
 window.addEventListener("hashchange", route);
 route();
 
+// The logo always leads to the main menu: from anywhere, and also when the hash is already
+// "#/" (no hashchange fires then, so a popup or stale view would stay).
+document.querySelector(".brand").addEventListener("click", (e) => {
+  e.preventDefault();
+  if (location.hash === "#/" || location.hash === "") route();
+  else location.hash = "#/";
+});
+
 document.getElementById("settings").addEventListener("click", () => openSettings());
 
 // Each window is independent and starts on the garden list.
