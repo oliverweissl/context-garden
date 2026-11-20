@@ -562,9 +562,12 @@ async fn install_profile_plugin(store: State<'_, Store>, id: String) -> Result<O
                 return Err("`codex` is not installed".into());
             }
             let env = [("CODEX_HOME", p.dir.as_str())];
-            if !codex_config_has(&dir, &format!("[marketplaces.{}]", MARKETPLACE.0)) {
-                run_env("codex", &["plugin", "marketplace", "add", MARKETPLACE.1], None, &env)?;
+            if codex_config_has(&dir, &format!("[marketplaces.{}]", MARKETPLACE.0)) {
+                // The account has an older snapshot of the marketplace: refresh
+                // it first, or `plugin add` reinstalls the old files.
+                return accounts::update("codex", &dir, PLUGIN);
             }
+            run_env("codex", &["plugin", "marketplace", "add", MARKETPLACE.1], None, &env)?;
             run_env("codex", &["plugin", "add", PLUGIN], None, &env)?;
             return Ok(Some(accounts::codex_trust_note(&dir, PLUGIN)));
         }
