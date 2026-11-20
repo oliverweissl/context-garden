@@ -3,6 +3,10 @@
     "garden-control": {
       "command": "python3",
       "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/cg_control.py"]
+    },
+    "garden-tools": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/garden_tools.py"]
     }
   }
 }
