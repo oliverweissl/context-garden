@@ -111,7 +111,9 @@ handy for UI work; it is never part of a build.
   app enforces the links. The app runs a local endpoint (127.0.0.1, random port) and gives each
   agent terminal its own secret in `CG_CONTROL` / `CG_TOKEN` / `CG_TERMINAL`; plain shells get none,
   and outside the app the MCP server offers no tools. Needs the context-garden plugin (≥ 0.6.0)
-  in the account (Claude Code); Codex is not wired up yet. Prompts are typed into the worker like
+  in the account; Codex reads it from the plugin's `.codex-plugin/plugin.json`, which passes
+  `CG_CONTROL` / `CG_TOKEN` / `CG_TERMINAL` through to the server (`env_vars`), so Codex
+  accounts installed before this need Update once. Prompts are typed into the worker like
   your own, so a busy agent queues them. Terminal titles are unique per garden (a second
   "Work" becomes "Work 2") so managers can name them.
 - **Agent worktrees.** An agent terminal opened on a repo works in its own git worktree,
@@ -125,6 +127,17 @@ handy for UI work; it is never part of a build.
   (`CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex) with a name, icon and
   color shown on its terminals. Log in once inside a terminal of that account; the CLI
   stores the credential itself. The app never reads, copies or sends credentials.
+  **Codex hook trust:** Codex runs a plugin's hooks only after you trust them (`/hooks`),
+  and the trust is tied to the installed copy, so every update needs it again. After
+  installing or updating context-garden in a Codex account, the app trusts **only
+  context-garden's own hooks** for you: it asks `codex app-server` for their current
+  hashes and writes `[hooks.state."context-garden@context-garden:…"] trusted_hash = …`
+  tables to that account's `config.toml`. Other plugins' and your own hook settings are
+  left alone, and any other setting in those tables (e.g. `enabled = false`) is kept. The
+  toast says how many it trusted; if Codex could not be asked, it says to trust them with
+  `/hooks` instead. The Codex hook set (`hooks/codex-hooks.json`) leaves out mycelium's
+  subagent hooks (Codex has no Agent tool), and compost only redirects there (Codex hooks
+  cannot rewrite or approve a command).
 - **Garden art.** Each garden card grows a small, unique garden hashed from its id:
   16 plots, 4 plant types, 64 bloom colors, 16 stem colors, widths, sizes and heights;
   one plant per repo (3 to 16).

@@ -101,6 +101,17 @@ def enabled() -> bool:
     return bool(os.environ.get("CG_CONTROL") and os.environ.get("CG_TOKEN"))
 
 
+# Why there are no tools. The app sets CG_CONTROL / CG_TOKEN in every agent
+# terminal; an agent that filters its MCP servers' environment (Codex passes
+# only what env_vars lists) drops them unless the plugin manifest names them.
+NOT_AVAILABLE = (
+    "not available: CG_CONTROL / CG_TOKEN are not set for this MCP server. Either "
+    "this terminal was not started by Context Garden, or the agent did not pass "
+    "them on (Codex: update the context-garden plugin, whose .codex-plugin "
+    "manifest lists them in env_vars, and restart the terminal)"
+)
+
+
 def call_app(tool: str, args: dict) -> dict:
     body = json.dumps({"token": os.environ["CG_TOKEN"], "tool": tool, "args": args}).encode()
     req = urllib.request.Request(
@@ -144,9 +155,7 @@ def handle(msg: dict) -> dict | None:
         params = msg.get("params") or {}
         name = params.get("name")
         if not enabled() or name not in {t["name"] for t in TOOLS}:
-            result = tool_result(
-                "not available: this terminal was not started by Context Garden", True
-            )
+            result = tool_result(NOT_AVAILABLE, True)
         else:
             out = call_app(name, params.get("arguments") or {})
             if out.get("ok"):
@@ -160,6 +169,8 @@ def handle(msg: dict) -> dict | None:
 
 
 def main() -> int:
+    if not enabled():  # the agent's MCP log shows why the server has no tools
+        print(f"garden-control: {NOT_AVAILABLE}", file=sys.stderr)
     for line in sys.stdin:
         line = line.strip()
         if not line:

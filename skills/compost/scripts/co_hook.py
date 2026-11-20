@@ -13,6 +13,9 @@ What happens is `hook` in <git root>/.compost/config.json, or $COMPOST_HOOK:
             the permission prompt for the matched command. Opt-in only.
   off       never touch Bash calls.
 
+Under Codex (`hook --codex`) ask and rewrite act as redirect: Codex's
+PreToolUse accepts only deny, never allow/ask or a rewritten input.
+
 A leading `cd <dir> &&` into another repo is kept outside the routed command,
 so the run lands in that repo's store (sessions started in a folder of repos).
 Skipped: commands already using compost, pipes or redirections (the output
@@ -126,7 +129,7 @@ def mode_for(cwd: str) -> str:
     return mode if mode in MODES else DEFAULT_MODE
 
 
-def decide(payload: dict, bin_path: str):
+def decide(payload: dict, bin_path: str, codex: bool = False):
     """The hook's JSON answer, or None to let the call through untouched."""
     if payload.get("tool_name") != "Bash":
         return None
@@ -138,6 +141,8 @@ def decide(payload: dict, bin_path: str):
     mode = mode_for(cwd)
     if mode == "off":
         return None
+    if codex:
+        mode = "redirect"
     new = routed(command, bin_path, cwd)
     out = {"hookEventName": "PreToolUse"}
     if mode == "redirect":
@@ -157,7 +162,8 @@ def decide(payload: dict, bin_path: str):
 def main() -> int:
     payload = json.loads(sys.stdin.read() or "{}")
     bin_path = str(Path(__file__).resolve().parent.parent / "bin" / "compost")
-    answer = decide(payload, bin_path) if isinstance(payload, dict) else None
+    codex = "--codex" in sys.argv[1:]
+    answer = decide(payload, bin_path, codex) if isinstance(payload, dict) else None
     if answer:
         print(json.dumps(answer))
     return 0

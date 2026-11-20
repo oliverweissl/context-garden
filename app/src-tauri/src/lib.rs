@@ -473,7 +473,7 @@ async fn update_account_plugin(
     agent: Option<String>,
     profile: Option<String>,
     plugin: String,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     let (agent, dir) = account_dir(&store, agent.as_deref(), profile.as_deref())?;
     accounts::update(&agent, &dir, &plugin)
 }
@@ -481,7 +481,7 @@ async fn update_account_plugin(
 /// Pull the latest skills from main into an account; Claude keeps them
 /// switched off account-wide (gardens switch them on).
 #[tauri::command]
-async fn update_profile_plugin(store: State<'_, Store>, id: String) -> Result<(), String> {
+async fn update_profile_plugin(store: State<'_, Store>, id: String) -> Result<Option<String>, String> {
     let (agent, dir) = account_dir(&store, None, Some(&id))?;
     accounts::update(&agent, &dir, PLUGIN)
 }
@@ -536,7 +536,7 @@ fn open_repo_page(url: String) -> Result<(), String> {
 /// and enables it account-wide; outside a garden every skill's mode is off,
 /// so the skills decline there.
 #[tauri::command]
-async fn install_profile_plugin(store: State<'_, Store>, id: String) -> Result<(), String> {
+async fn install_profile_plugin(store: State<'_, Store>, id: String) -> Result<Option<String>, String> {
     let p = store.profiles()?.into_iter().find(|p| p.id == id).ok_or("that account no longer exists")?;
     let dir = expand_tilde(&p.dir);
     match p.agent.as_str() {
@@ -566,10 +566,11 @@ async fn install_profile_plugin(store: State<'_, Store>, id: String) -> Result<(
                 run_env("codex", &["plugin", "marketplace", "add", MARKETPLACE.1], None, &env)?;
             }
             run_env("codex", &["plugin", "add", PLUGIN], None, &env)?;
+            return Ok(Some(accounts::codex_trust_note(&dir, PLUGIN)));
         }
         other => return Err(format!("'{other}' has no plugin support")),
     }
-    Ok(())
+    Ok(None)
 }
 
 /// What a plugin marketplace offers, read before anything is installed.
