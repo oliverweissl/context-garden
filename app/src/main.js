@@ -48,11 +48,38 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// A newer release on GitHub shows up next to Settings; offline means no hint.
-api.appUpdate().then((release) => {
+// A newer release on GitHub shows up next to Settings; offline means no hint. Builds with an
+// updater key install it in place (then restart); others, and installs that fail (a .deb or
+// .rpm cannot replace itself), open the release page with the installers.
+api.appUpdate().then(async (release) => {
   if (!release) return;
-  document.getElementById("settings").before(h("button", {
-    class: "btn update", title: "Opens the release page with the installers",
-    onclick: () => api.openRepoPage(release.url).catch(() => {}),
-  }, `Version ${release.version} available`));
+  const canSelf = await api.canSelfUpdate().catch(() => false);
+  const page = () => api.openRepoPage(release.url).catch(() => {});
+  let armed = false;
+  const btn = h("button", {
+    class: "btn update",
+    title: canSelf ? "Downloads the update, installs it and restarts the app" : "Opens the release page with the installers",
+    onclick: async () => {
+      if (!canSelf) return page();
+      // Terminals close while the app restarts: ask with a second click, not a blocking dialog.
+      if (!armed) {
+        armed = true;
+        btn.textContent = "Click again: restarts the app";
+        setTimeout(() => { if (!btn.disabled) { armed = false; btn.textContent = `Update to ${release.version}`; } }, 5000);
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Updating…";
+      try {
+        await api.installUpdate();
+      } catch (e) {
+        btn.disabled = false;
+        armed = false;
+        btn.textContent = `Version ${release.version} available`;
+        toast(`${errText(e)}. Opening the release page instead.`, "error");
+        page();
+      }
+    },
+  }, canSelf ? `Update to ${release.version}` : `Version ${release.version} available`);
+  document.getElementById("settings").before(btn);
 }).catch(() => {});

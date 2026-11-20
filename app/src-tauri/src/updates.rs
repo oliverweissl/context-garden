@@ -10,6 +10,15 @@ use crate::util::run;
 
 pub const REPO: &str = "https://github.com/oliverweissl/context-garden";
 
+/// Public half of the updater signing key (`npx tauri signer generate`); the private half is
+/// the `TAURI_SIGNING_PRIVATE_KEY` secret of the release workflow. Empty until the owner has
+/// generated one: the app then still shows new releases but opens the release page instead of
+/// installing them. Updates are only installed when their signature verifies against this key.
+pub const UPDATER_PUBKEY: &str = "";
+
+/// `latest.json` that tauri-action attaches to each published release.
+pub const UPDATER_ENDPOINT: &str = "https://github.com/oliverweissl/context-garden/releases/latest/download/latest.json";
+
 /// (commit, ref name) pairs of the repository.
 type Refs = Vec<(String, String)>;
 
