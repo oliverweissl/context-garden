@@ -257,6 +257,8 @@ label.check input { accent-color: var(--accent); width: 16px; height: 16px; }
   display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 3px; border-radius: 6px;
   font-size: 11px; line-height: 1; color: #050805; background: var(--c); flex: none; white-space: nowrap;
 }
+.agent-icon { width: 14px; height: 14px; flex: none; color: var(--text, currentColor); }
+.chip .agent-icon { vertical-align: -2px; }
 .badge.big { min-width: 40px; height: 40px; padding: 0 8px; border-radius: 12px; font-size: 20px; }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .swatch {
