@@ -4,6 +4,7 @@ import { api, PROFILES_CHANGED } from "./api.js";
 import { h, toast, errText, badge, modal, agentIcon } from "./ui.js";
 import { openOrchestrate } from "./views/orchestrate.js";
 import { makeInbox } from "./inbox.js";
+import { parseMention, makeDraft, frameForWorker, noteForManager } from "./mentions.js";
 import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
 const THEME = {
@@ -460,6 +461,8 @@ class Pane {
     this.decoder = new TextDecoder();
     this.lastInput = 0;
     this.lastOutput = 0;
+    this.draft = makeDraft();
+    this.links = [];
     // Messages from other agents wait here while this one is asking the user something (see inbox.js).
     this.inbox = makeInbox({
       state: () => ({ lines: this.renderedLines(20), sinceInput: Date.now() - this.lastInput, sinceOutput: Date.now() - this.lastOutput }),
@@ -500,12 +503,38 @@ class Pane {
     this.term.onData((d) => {
       if (this.id == null) return;
       this.lastInput = Date.now();
+      if (this.mention(d)) return;
       if (d.includes("\r") && this.state.noCredits) this.mark({ noCredits: false });
       if (d.includes("\r")) this.recent = "";
       api.write(this.id, d).catch(() => {});
     });
     this.term.onResize(({ cols, rows }) => this.id != null && api.resize(this.id, cols, rows).catch(() => {}));
     this.drawChecklistChip();
+  }
+
+  /**
+   * `@"worker" task` or `@all task` typed here goes straight to those linked workers (see
+   * mentions.js). True when this keystroke was that line's Enter and was taken over.
+   */
+  mention(d) {
+    const typed = this.draft.feed(d);
+    if (typed.line?.startsWith("@") && !typed.enter) {
+      // Links change in the Orchestrate view; look them up while the user is still typing the line.
+      api.links(this.ws.gardenId).then((l) => { this.links = l; }).catch(() => {});
+    }
+    if (!typed.enter || !typed.line?.startsWith("@")) return false;
+    const workers = this.links
+      .filter((l) => l.manager === this.opts.key)
+      .map((l) => this.ws.panes.find((p) => p.opts.key === l.worker))
+      .filter((p) => p && p.id != null)
+      .map((p) => ({ key: p.opts.key, title: p.opts.title, pane: p }));
+    const m = parseMention(typed.line, workers);
+    if (!m) return false;
+    api.write(this.id, "\x15").catch(() => {}); // clear the line in the agent: Enter is not forwarded
+    for (const t of m.targets) t.pane.inbox.push(frameForWorker(this.opts.title, m.body));
+    this.inbox.push(noteForManager(m.targets, m.all, m.body));
+    toast(`Sent to ${m.all ? `${m.targets.length} workers` : m.targets[0].title}`);
+    return true;
   }
 
   /** Look for a checklist once output has been quiet for a second (agents animate a spinner while busy). */

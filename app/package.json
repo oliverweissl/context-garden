@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
-    "test": "node --test src/checklist.test.js src/inbox.test.js"
+    "test": "node --test src/checklist.test.js src/inbox.test.js src/mentions.test.js"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.0.0",
