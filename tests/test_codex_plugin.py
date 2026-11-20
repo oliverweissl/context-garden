@@ -63,7 +63,10 @@ def _co_hook(args, payload, env_mode):
     script = REPO_ROOT / "skills" / "compost" / "scripts" / "co_hook.py"
     out = subprocess.run(
         [sys.executable, str(script), *args],
-        input=json.dumps(payload), capture_output=True, text=True, check=True,
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=True,
         env={"PATH": "/usr/bin:/bin", "COMPOST_HOOK": env_mode},
     ).stdout
     return json.loads(out)["hookSpecificOutput"] if out.strip() else None
@@ -93,8 +96,12 @@ def test_control_server_explains_missing_env():
         },
     ]
     run = subprocess.run(
-        [sys.executable, str(script)], input="\n".join(json.dumps(m) for m in msgs) + "\n",
-        capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"}, check=True,
+        [sys.executable, str(script)],
+        input="\n".join(json.dumps(m) for m in msgs) + "\n",
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin"},
+        check=True,
     )
     listed, called = (json.loads(line) for line in run.stdout.splitlines())
     assert listed["result"]["tools"] == []
