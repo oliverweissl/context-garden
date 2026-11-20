@@ -85,13 +85,18 @@ def test_control_server_explains_missing_env():
     script = REPO_ROOT / "mcp" / "cg_control.py"
     msgs = [
         {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "report_to_manager", "arguments": {"text": "x"}}},
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "report_to_manager", "arguments": {"text": "x"}},
+        },
     ]
     run = subprocess.run(
         [sys.executable, str(script)], input="\n".join(json.dumps(m) for m in msgs) + "\n",
         capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"}, check=True,
     )
-    listed, called = (json.loads(l) for l in run.stdout.splitlines())
+    listed, called = (json.loads(line) for line in run.stdout.splitlines())
     assert listed["result"]["tools"] == []
     assert called["result"]["isError"]
     assert "env_vars" in called["result"]["content"][0]["text"]
