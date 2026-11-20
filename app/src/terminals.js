@@ -738,7 +738,9 @@ class Pane {
   }
 
   mark(change) {
+    const was = this.state.stale;
     Object.assign(this.state, change);
+    if (this.state.stale !== was) window.dispatchEvent(new Event(STALE_CHANGED));
     const { live, stale, noCredits } = this.state;
     const [cls, tip] = noCredits ? ["out", "Out of credits: the agent reports its usage limit"]
       : !live ? ["", "Exited"]
@@ -882,6 +884,16 @@ function folderPicker(garden) {
 }
 
 const workspaces = new Map();
+
+/** Fired when a pane's "runs older plugins" marker turns on or off. */
+export const STALE_CHANGED = "cg-stale-changed";
+
+/** Agent terminals, in any garden, still running older plugins than their account has (the yellow dot). */
+export function staleTerminals() {
+  return [...workspaces.entries()].flatMap(([garden, ws]) => ws.panes
+    .filter((p) => p.state.live && p.state.stale)
+    .map((p) => ({ garden, title: p.opts.title, why: p.state.stale })));
+}
 
 /**
  * Answer the prompts and screen reads a manager agent sends to a terminal that

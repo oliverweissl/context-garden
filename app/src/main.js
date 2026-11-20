@@ -12,6 +12,7 @@ import { openSettings, setPageSettings } from "./views/settings.js";
 import { setCrumbs, h, toast, errText } from "./ui.js";
 import { api } from "./api.js";
 import { initControl } from "./terminals.js";
+import { initOutdated } from "./views/outdated.js";
 
 const app = document.getElementById("app");
 initControl();
@@ -91,3 +92,6 @@ api.appUpdate().then(async (release) => {
   }, canSelf ? `Update to ${release.version}` : `Version ${release.version} available`);
   document.getElementById("settings").before(btn);
 }).catch(() => {});
+
+// Accounts with older context-garden skills, and terminals running old ones (#64).
+initOutdated();
