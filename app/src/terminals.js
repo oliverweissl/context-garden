@@ -1,7 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { api, PROFILES_CHANGED } from "./api.js";
-import { h, toast, errText, badge, modal } from "./ui.js";
+import { h, toast, errText, badge, modal, agentIcon } from "./ui.js";
 import { openOrchestrate } from "./views/orchestrate.js";
 import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
@@ -225,7 +225,7 @@ class Workspace {
   /** Open a pane. `opts.resume` reopens a saved one (same key and session). */
   async open(opts) {
     opts.key ||= crypto.randomUUID();
-    // Titles tell terminals apart for the agents that manage each other: "Claude Code", "Claude Code 2", …
+    // Titles tell terminals apart for the agents that manage each other: "Work", "Work 2", "Codex", …
     if (opts.agent || opts.profile) {
       const taken = new Set(this.panes.map((p) => p.opts.title));
       const base = opts.title;
@@ -478,6 +478,7 @@ class Pane {
         onpointerdown: (e) => ws.drag(this, e),
       },
       this.status,
+      agentIcon(opts.agent || opts.account?.agent),
       opts.account ? badge(opts.account) : null,
       h("b", {}, opts.title),
       this.where = h("span", { class: "faint small ellipsis", title: "Started in" }, opts.cwdLabel),
@@ -982,13 +983,15 @@ export async function terminalArea(garden) {
     if (kind === "profile" && !(await api.pluginVersion(id).catch(() => true))) {
       toast("This account has no context-garden skills yet: Settings → Accounts → Install", "error");
     }
+    // The agent shows as its icon, so a title is the account's name, or the agent's when there is none.
     const label = what.selectedOptions[0].textContent.replace(" (not installed)", "");
+    const account = kind === "profile" ? profiles.find((p) => p.id === id) : null;
     try {
       await ws.open({
         cwd: where.value, cwdLabel: where.label,
         agent: kind === "agent" ? id : null, profile: kind === "profile" ? id : null,
-        account: kind === "profile" ? profiles.find((p) => p.id === id) : null,
-        title: kind === "shell" ? "Terminal" : kind === "profile" ? label.replace(/^\S+\s/, "") : label,
+        account,
+        title: kind === "shell" ? "Terminal" : account ? account.name : label,
         flags: kind === "shell" ? [] : splitFlags(flags.value),
         env: kind === "shell" ? [] : splitFlags(env.value),
       });
@@ -1047,6 +1050,7 @@ export async function terminalArea(garden) {
       list.replaceChildren(...closed.map((r) => {
         const account = r.profile ? profiles.find((p) => p.id === r.profile) : null;
         return h("div", { class: "recent-row" },
+          agentIcon(r.agent || account?.agent),
           account ? badge(account) : null,
           h("div", { class: "grow recent-what" },
             h("div", {}, h("b", {}, r.title), h("span", { class: "faint small" }, ` · ${r.cwd_label || "garden root"} · ${ago(r.used_at)}`)),

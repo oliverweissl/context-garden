@@ -77,7 +77,8 @@ handy for UI work; it is never part of a build.
   and agent token use of the last 30 days per account (Claude Code and Codex), read
   from local transcripts and shown as a donut.
 - **Terminals.** Claude Code, Codex, Gemini CLI or a plain shell, in the garden root, a
-  group folder or a repo. Drag a pane header onto another pane's edge to split it there,
+  group folder or a repo. A pane header shows its agent as an icon (the name on hover)
+  next to the account badge, and is titled by the account. Drag a pane header onto another pane's edge to split it there,
   drag the gaps to resize; grid / columns / rows rearrange all, maximize, close. Shift+Enter
   is a line break. An agent's header shows where it works now (`→ repo`, from its
   transcript); its dot turns yellow when its account got newer plugins than it started
@@ -102,7 +103,7 @@ handy for UI work; it is never part of a build.
   and outside the app the MCP server offers no tools. Needs the context-garden plugin (≥ 0.6.0)
   in the account (Claude Code); Codex is not wired up yet. Prompts are typed into the worker like
   your own, so a busy agent queues them. Terminal titles are unique per garden (a second
-  "Claude Code" becomes "Claude Code 2") so managers can name them.
+  "Work" becomes "Work 2") so managers can name them.
 - **Agent worktrees.** An agent terminal opened on a repo works in its own git worktree,
   `<garden>/.worktrees/<repo>/<agent>-<account>-<id>` on branch `cg/<agent>-<account>-<id>`,
   so agents on one repo never share a working tree (Settings → Terminals turns it off).

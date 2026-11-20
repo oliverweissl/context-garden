@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { h, toast, errText, badge } from "../ui.js";
+import { h, toast, errText, badge, agentIcon } from "../ui.js";
 import { loginTerminal } from "../terminals.js";
 
 const ENV = { claude: "CLAUDE_CONFIG_DIR", codex: "CODEX_HOME" };
@@ -107,7 +107,7 @@ export async function accountsPanel(app) {
     list.replaceChildren(...profiles.map((p) => h("div", { class: "card" },
       h("div", { class: "row between" },
         h("div", { class: "row" }, badge(p), h("h3", {}, p.name)),
-        h("span", { class: "chip" }, agents.find((a) => a.id === p.agent)?.label || p.agent)),
+        h("span", { class: "chip" }, agentIcon(p.agent), " ", agents.find((a) => a.id === p.agent)?.label || p.agent)),
       h("div", { class: "faint small mono ellipsis", title: p.dir }, `${ENV[p.agent]}=${p.dir}`),
       pluginsBlock(p),
       h("div", { class: "row end" },

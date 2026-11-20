@@ -180,6 +180,47 @@ export function errText(e) {
 }
 
 /** Account badge: its symbol on its color (falls back for accounts made before icons). */
+/** Which agent a terminal or account runs, and its display name. */
+export const AGENT_NAMES = { claude: "Claude Code", codex: "Codex", gemini: "Gemini CLI" };
+
+// Small marks drawn for this app (24×24) that say which agent it is at a glance;
+// the full name is the tooltip and the accessible label.
+const AGENT_MARKS = {
+  // A spark of rays, in Claude orange.
+  claude: [["path", {
+    d: Array.from({ length: 10 }, (_, i) => {
+      const a = (i * Math.PI) / 5 + 0.2, r = i % 2 ? 7.5 : 10;
+      return `M${(12 + 2.2 * Math.cos(a)).toFixed(2)} ${(12 + 2.2 * Math.sin(a)).toFixed(2)}L${(12 + r * Math.cos(a)).toFixed(2)} ${(12 + r * Math.sin(a)).toFixed(2)}`;
+    }).join(""),
+    stroke: "#d97757", "stroke-width": 2.6, "stroke-linecap": "round", fill: "none",
+  }]],
+  // A terminal prompt.
+  codex: [
+    ["rect", { x: 2.5, y: 3.5, width: 19, height: 17, rx: 4.5, fill: "none", stroke: "currentColor", "stroke-width": 1.8 }],
+    ["path", { d: "M7.5 9l3 3-3 3M12.5 15.5h4.5", fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }],
+  ],
+  // A four-pointed star, in Gemini blue.
+  gemini: [["path", { d: "M12 2.5C12.6 7.6 16.4 11.4 21.5 12C16.4 12.6 12.6 16.4 12 21.5C11.4 16.4 7.6 12.6 2.5 12C7.6 11.4 11.4 7.6 12 2.5Z", fill: "#5b8def" }]],
+};
+
+/** The agent's mark (an inline SVG with its name as tooltip), or null for no or an unknown agent. */
+export function agentIcon(agent) {
+  const marks = AGENT_MARKS[agent];
+  if (!marks) return null;
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  };
+  const name = AGENT_NAMES[agent];
+  const svg = el("svg", { viewBox: "0 0 24 24", class: "agent-icon", role: "img", "aria-label": name });
+  const tip = el("title", {});
+  tip.textContent = name;
+  svg.append(tip, ...marks.map(([tag, attrs]) => el(tag, attrs)));
+  return svg;
+}
+
 export function badge(profile, big = false) {
   const color = profile.color || "#9ba596";
   return h("span", { class: `badge${big ? " big" : ""}`, style: `--c:${color}`, title: profile.name || "" },

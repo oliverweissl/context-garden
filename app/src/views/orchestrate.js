@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { h, modal, toast, errText, badge } from "../ui.js";
+import { h, modal, toast, errText, badge, agentIcon } from "../ui.js";
 
 // Node positions are a per-viewer convenience; blocked storage just means default places.
 const loadPref = (key, fallback) => { try { return JSON.parse(localStorage.getItem(`cg.${key}`)) ?? fallback; } catch { return fallback; } };
@@ -72,7 +72,7 @@ export async function openOrchestrate(ws, garden) {
       el.style.cssText = `left:${x}px;top:${y}px;width:${W}px;height:${H}px`;
       el.classList.toggle("master", manages > 0 && !managed);
       el.replaceChildren(
-        h("div", { class: "og-title" }, p.opts.account ? badge(p.opts.account) : null, h("span", { class: "ellipsis" }, p.opts.title)),
+        h("div", { class: "og-title" }, agentIcon(p.opts.agent || p.opts.account?.agent), p.opts.account ? badge(p.opts.account) : null, h("span", { class: "ellipsis" }, p.opts.title)),
         h("div", { class: "faint small ellipsis" }, p.opts.cwdLabel || "garden root"),
         h("div", { class: "og-role small" },
           manages ? h("span", { class: "chip" }, manages > 1 || !managed ? `★ manages ${manages}` : `manages ${manages}`) : null,
