@@ -26,13 +26,21 @@ Two options. Both give you the same six skills; the app adds one window around t
 [Releases](https://github.com/oliverweissl/context-garden/releases): `.dmg` (macOS),
 `.msi` / `.exe` (Windows), `.deb` / `.rpm` / `.AppImage` (Linux). macOS builds are
 signed and notarized once the release pipeline has its Apple certificate
-([CONTRIBUTING.md](CONTRIBUTING.md#signed-macos-releases)); until then, and on Windows,
+([CONTRIBUTING.md](CONTRIBUTING.md#signed-macos-releases)); until then they are ad-hoc signed only.
+On macOS the simplest install is Homebrew, which clears the warning for you:
+`brew install --cask oliverweissl/tap/contextgarden`. Otherwise, and on Windows,
 the first start needs one extra step:
 
 - **macOS** ("Apple could not verify ContextGarden…"): right-click ContextGarden in
   Applications, then Open (or `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
 - **Windows:** SmartScreen, then "More info", then "Run anyway".
-- **Linux:** `sudo apt install ./ContextGarden_*.deb`, or `chmod +x` the `.AppImage` and run it.
+- **Linux (Debian/Ubuntu):** add the apt repository once, then `apt` keeps it updated:
+  ```bash
+  curl -fsSL https://oliverweissl.github.io/context-garden/contextgarden.gpg | sudo tee /usr/share/keyrings/contextgarden.gpg >/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/contextgarden.gpg] https://oliverweissl.github.io/context-garden stable main" | sudo tee /etc/apt/sources.list.d/contextgarden.list
+  sudo apt update && sudo apt install contextgarden
+  ```
+  Or `sudo apt install ./ContextGarden_*.deb`, or `chmod +x` the `.AppImage` and run it.
 
 **From source.** Needs Rust, Node 18+ and the
 [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (Xcode Command Line

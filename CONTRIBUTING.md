@@ -48,3 +48,14 @@ spctl --assess --type open --context context:primary-signature -v ContextGarden_
 xcrun stapler validate ContextGarden_*.dmg
 spctl --assess --type execute -v /Applications/ContextGarden.app   # "source=Notarized Developer ID"
 ```
+
+## apt repository
+
+Release tags publish the `.deb` to a signed apt repository on the `gh-pages`
+branch (`scripts/apt-repo.sh`). One-time setup:
+
+1. `gpg --quick-generate-key "ContextGarden apt <you@example.com>" rsa4096 sign never`
+2. Add the repository secret `APT_GPG_PRIVATE_KEY`:
+   `gpg --armor --export-secret-keys <KEYID>` (no passphrase, so CI can sign).
+3. Settings, Pages: deploy from branch `gh-pages`, root. Without the secret the
+   release job only warns and skips the apt step.
