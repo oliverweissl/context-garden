@@ -185,7 +185,7 @@ export function cloneBoard(garden, { onReady, onHide } = {}) {
       const n = repos.length;
       setBar(total, done, failed, n);
       counts.textContent = `${done}/${n} in${failed ? ` · ${failed} failed` : ""}`;
-      title.textContent = active ? `Fetching ${n - active} of ${n}…` : failed ? `Done, ${failed} failed` : "All repositories are in";
+      title.textContent = !n ? "Empty garden" : active ? `Fetching ${n - active} of ${n}…` : failed ? `Done, ${failed} failed` : "All repositories are in";
       retryAll.hidden = !failed;
       hide.hidden = !onHide || !!active || !failed;
       retryAll.disabled = !!active;

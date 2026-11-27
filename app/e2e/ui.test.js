@@ -191,3 +191,12 @@ ui("the plant page (new garden) opens", async () => {
   await open("#/new");
   assert.ok((await text("#app")).length > 50);
 });
+
+ui("a garden can start empty: no sources, the button plants it", async () => {
+  await open("#/new");
+  assert.match(await text("#app .btn.primary"), /Plant empty garden/);
+  await page.type("textarea", "~/code/tool");
+  assert.match(await text("#app .btn.primary"), /Find repositories/);
+  await page.$eval("textarea", (e) => { e.value = ""; e.dispatchEvent(new Event("input")); });
+  assert.match(await text("#app .btn.primary"), /Plant empty garden/);
+});

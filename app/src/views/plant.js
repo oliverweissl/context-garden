@@ -59,6 +59,11 @@ export async function renderPlant(app) {
   let plan = null;
   let stopWatching = null;
 
+  // No sources: the garden starts empty (repos can be added to it later).
+  const isEmpty = () => lines(sources.value).length === 0;
+  const idleLabel = () => (isEmpty() ? "Plant empty garden" : "Find repositories");
+  go.textContent = idleLabel();
+
   const args = () => ({
     root: rootPath(), flat: flat.checked, protocol: "auto", inputs: lines(sources.value),
   });
@@ -73,7 +78,7 @@ export async function renderPlant(app) {
       toast(errText(e), "error");
     }
     go.disabled = false;
-    if (!plan) return (go.textContent = "Find repositories");
+    if (!plan) return (go.textContent = idleLabel());
     preview.replaceChildren(planCard(plan, lookup));
     go.textContent = plan.repos.length ? "Plant garden" : "Find repositories";
     if (!plan.repos.length) plan = null;
@@ -81,13 +86,13 @@ export async function renderPlant(app) {
 
   go.onclick = async () => {
     if (!name.value.trim()) return toast("Give the garden a name", "error");
-    if (!plan) return lookup();
+    if (!plan && !isEmpty()) return lookup();
     go.disabled = true;
     try {
       const a = args();
       const garden = await api.create({
         name: name.value, root: a.root, layout: a.flat ? "flat" : "nested", protocol: a.protocol,
-        repoInputs: plan.repo_inputs, groupInputs: plan.group_inputs, repos: plan.repos,
+        repoInputs: plan?.repo_inputs ?? [], groupInputs: plan?.group_inputs ?? [], repos: plan?.repos ?? [],
       });
       stopWatching = await growing(app, garden);
     } catch (e) {
@@ -97,7 +102,7 @@ export async function renderPlant(app) {
   };
   // Changing inputs invalidates the looked-up plan.
   for (const el of [name, parentDir, sources, flat]) {
-    el.addEventListener("input", () => { showFolder(); plan = null; go.textContent = "Find repositories"; preview.replaceChildren(); });
+    el.addEventListener("input", () => { showFolder(); plan = null; go.textContent = idleLabel(); preview.replaceChildren(); });
   }
 
   app.append(
@@ -105,7 +110,7 @@ export async function renderPlant(app) {
     h("div", { class: "card form" },
       h("label", {}, h("span", {}, "Name"), name),
       h("label", {}, h("span", {}, "Location"), h("div", { class: "row" }, parentDir, browse), folder),
-      h("label", {}, h("span", {}, "Sources", h("em", {}, "one per line: repos, folders, GitLab groups, GitHub orgs"),
+      h("label", {}, h("span", {}, "Sources", h("em", {}, "optional, one per line: repos, folders, GitLab groups, GitHub orgs. Leave empty to start an empty garden"),
         h("span", { class: "info", title: LINK_HELP }, "i")), sources),
       h("div", { class: "row between" },
         h("label", { class: "check", title: flatHelp }, flat, "Enable flat layout",
