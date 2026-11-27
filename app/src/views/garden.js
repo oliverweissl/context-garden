@@ -6,6 +6,7 @@ import { skillPicker, pluginPanel } from "./skills.js";
 import { terminalArea } from "../terminals.js";
 import { gardenArt } from "../art.js";
 import { setPageSettings } from "./settings.js";
+import { gardenNetworkPanel } from "./network.js";
 
 export async function renderGarden(app, id) {
   let garden;
@@ -280,6 +281,7 @@ export async function renderGarden(app, id) {
       refresh();
     }) },
     { name: "External plugins", build: () => pluginPanel(garden) },
+    { name: "Network", build: () => gardenNetworkPanel(garden) },
     { name: "Garden", build: () => h("div", { class: "card skills" },
       h("h3", {}, garden.name),
       h("div", { class: "faint small mono" }, garden.root),

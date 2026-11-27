@@ -2,6 +2,7 @@
 
 mod accounts;
 mod control;
+mod netrules;
 mod plugins;
 mod pty;
 mod relocate;
@@ -1016,6 +1017,79 @@ async fn worktree_sweep(
     Ok(worktrees::sweep(&g, &session, &saved))
 }
 
+/// Network rules: the switch, the lists, and each garden's choice (#81).
+#[tauri::command]
+fn net_config(store: State<Store>) -> Result<netrules::NetConfig, String> {
+    store.net()
+}
+
+/// Off by default. Enforcement (sandbox + proxy) is not part of this step yet.
+#[tauri::command]
+fn net_set_enabled(store: State<Store>, enabled: bool) -> Result<netrules::NetConfig, String> {
+    store.update_net(|c| {
+        c.enabled = enabled;
+        Ok(c.clone())
+    })
+}
+
+/// Create (empty id) or replace a list; its entries are checked and normalized.
+#[tauri::command]
+fn net_save_list(store: State<Store>, list: netrules::List) -> Result<netrules::NetConfig, String> {
+    store.update_net(|c| {
+        c.save_list(list)?;
+        Ok(c.clone())
+    })
+}
+
+#[tauri::command]
+fn net_delete_list(store: State<Store>, id: String) -> Result<netrules::NetConfig, String> {
+    store.update_net(|c| {
+        c.delete_list(&id)?;
+        Ok(c.clone())
+    })
+}
+
+/// Add one entry to a list (normalized); the prompt's "add to list" uses it too.
+#[tauri::command]
+fn net_add_entry(store: State<Store>, id: String, entry: String) -> Result<netrules::NetConfig, String> {
+    store.update_net(|c| {
+        c.add_entry(&id, &entry)?;
+        Ok(c.clone())
+    })
+}
+
+/// Put the built-in "Agent endpoints" list back to its default hosts.
+#[tauri::command]
+fn net_reset_builtin(store: State<Store>) -> Result<netrules::NetConfig, String> {
+    store.update_net(|c| {
+        c.reset_builtin();
+        Ok(c.clone())
+    })
+}
+
+/// Which lists a garden uses (combined).
+#[tauri::command]
+fn net_set_garden_lists(store: State<Store>, garden: String, ids: Vec<String>) -> Result<netrules::NetConfig, String> {
+    store.garden(&garden)?;
+    store.update_net(|c| {
+        c.set_garden(&garden, ids)?;
+        Ok(c.clone())
+    })
+}
+
+/// What a garden's lists say about a host (or IP), without resolving it.
+#[tauri::command]
+fn net_check(store: State<Store>, garden: String, host: String) -> Result<netrules::Decision, String> {
+    let c = store.net()?;
+    let entry = netrules::parse_entry(&host)?;
+    let host = match entry {
+        netrules::Entry::Host(h) => h,
+        netrules::Entry::Cidr(ip, bits) if bits == if ip.is_ipv4() { 32 } else { 128 } => ip.to_string(),
+        _ => return Err("enter one hostname or IP address to check".into()),
+    };
+    Ok(netrules::decide(&c.garden_lists(&garden), &host, &[]))
+}
+
 #[tauri::command]
 fn get_settings(store: State<Store>) -> Result<Settings, String> {
     store.settings()
@@ -1300,6 +1374,14 @@ pub fn run() {
             worktree_release,
             worktree_sweep,
             get_settings,
+            net_config,
+            net_set_enabled,
+            net_save_list,
+            net_delete_list,
+            net_reset_builtin,
+            net_add_entry,
+            net_set_garden_lists,
+            net_check,
             set_settings,
         ])
         .build(tauri::generate_context!())

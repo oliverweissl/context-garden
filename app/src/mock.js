@@ -124,6 +124,19 @@ const handlers = {
   set_links: ({ links }) => (mockLinks = links),
   control_reply: () => null,
   get_settings: () => ({ worktrees: true }),
+  // Network rules (#81): just enough to click through the Network tabs in a browser.
+  net_config: () => mockNet,
+  net_set_enabled: ({ enabled }) => ((mockNet = { ...mockNet, enabled }), mockNet),
+  net_save_list: ({ list }) => {
+    const id = list.id || `list-${mockNet.lists.length}`;
+    const entries = list.entries.map((e) => e.trim().toLowerCase()).filter(Boolean);
+    mockNet = { ...mockNet, lists: [...mockNet.lists.filter((l) => l.id !== id), { ...list, id, entries }] };
+    return mockNet;
+  },
+  net_delete_list: ({ id }) => ((mockNet = { ...mockNet, lists: mockNet.lists.filter((l) => l.id !== id) }), mockNet),
+  net_reset_builtin: () => mockNet,
+  net_set_garden_lists: ({ garden, ids }) => ((mockNet = { ...mockNet, gardens: { ...mockNet.gardens, [garden]: ids } }), mockNet),
+  net_check: () => ({ decision: "ask" }),
   set_settings: () => null,
 };
 
@@ -136,6 +149,7 @@ export async function mockListen(name, cb) {
 }
 
 let mockLinks = [];
+let mockNet = { enabled: false, gardens: {}, lists: [{ id: "agent-endpoints", name: "Agent endpoints", kind: "allow", builtin: true, entries: ["api.anthropic.com", "chatgpt.com"] }] };
 
 export function mockInvoke(cmd, args) {
   const fn = handlers[cmd];

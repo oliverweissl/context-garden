@@ -239,6 +239,29 @@ impl Store {
         atomic_write(&self.dir.join("settings.json"), &(text + "\n"))
     }
 
+    /// Network rules (network.json); the built-in list is always there.
+    pub fn net(&self) -> Result<crate::netrules::NetConfig, String> {
+        let _g = self.lock.lock().unwrap();
+        let mut c: crate::netrules::NetConfig = read_json(&self.dir.join("network.json"))?;
+        c.ensure_builtin();
+        Ok(c)
+    }
+
+    /// Read-modify-write of network.json under the lock.
+    pub fn update_net<R>(
+        &self,
+        f: impl FnOnce(&mut crate::netrules::NetConfig) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let _g = self.lock.lock().unwrap();
+        let path = self.dir.join("network.json");
+        let mut c: crate::netrules::NetConfig = read_json(&path)?;
+        c.ensure_builtin();
+        let out = f(&mut c)?;
+        let text = serde_json::to_string_pretty(&c).map_err(|e| e.to_string())?;
+        atomic_write(&path, &(text + "\n"))?;
+        Ok(out)
+    }
+
     pub fn profiles(&self) -> Result<Vec<Profile>, String> {
         let _g = self.lock.lock().unwrap();
         Ok(read_json::<ProfileFile>(&self.profiles_path())?.profiles)

@@ -98,6 +98,16 @@ export const api = {
   setLinks: (id, links) => invoke("set_links", { id, links }),
   /** Answer a `control-request` event (a manager's prompt or screen read of a terminal here). */
   controlReply: (id, ok, text) => invoke("control_reply", { id, ok, text }),
+  /** Network rules (#81): { enabled, lists: [{ id, name, kind, entries, builtin }], gardens: { id: [listId] } }. */
+  netConfig: () => invoke("net_config"),
+  netSetEnabled: (enabled) => invoke("net_set_enabled", { enabled }),
+  netSaveList: (list) => invoke("net_save_list", { list }),
+  netDeleteList: (id) => invoke("net_delete_list", { id }),
+  netResetBuiltin: () => invoke("net_reset_builtin"),
+  netAddEntry: (id, entry) => invoke("net_add_entry", { id, entry }),
+  netSetGardenLists: (garden, ids) => invoke("net_set_garden_lists", { garden, ids }),
+  /** { decision: "allow" | "deny", list } or { decision: "ask" } for one host or IP in a garden. */
+  netCheck: (garden, host) => invoke("net_check", { garden, host }),
   settings: () => invoke("get_settings"),
   saveSettings: (settings) => invoke("set_settings", { settings }),
 };
