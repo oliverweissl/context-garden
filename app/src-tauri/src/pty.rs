@@ -45,6 +45,8 @@ pub struct Launch {
     pub env: Vec<(String, String)>,
     pub cols: u16,
     pub rows: u16,
+    /// Argv prefix that starts the shell inside the network sandbox (#81); empty: none.
+    pub sandbox: Vec<String>,
 }
 
 fn default_shell() -> String {
@@ -59,7 +61,15 @@ fn default_shell() -> String {
 /// (claude.cmd on Windows) resolve the same way they do in a normal terminal.
 fn build_command(launch: &Launch) -> CommandBuilder {
     let shell = default_shell();
-    let mut cmd = CommandBuilder::new(&shell);
+    let mut cmd = match launch.sandbox.split_first() {
+        Some((helper, args)) => {
+            let mut c = CommandBuilder::new(helper);
+            c.args(args);
+            c.arg(&shell);
+            c
+        }
+        None => CommandBuilder::new(&shell),
+    };
     match (&launch.command, cfg!(windows)) {
         (None, true) => cmd.arg("-NoLogo"),
         (None, false) => cmd.arg("-l"),
@@ -193,6 +203,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_sandboxed_launch_starts_the_shell_through_the_helper() {
+        let launch = Launch {
+            command: Some("claude".into()),
+            cwd: "/".into(),
+            env: vec![],
+            cols: 80,
+            rows: 24,
+            sandbox: vec!["/app".into(), "--cg-sandbox".into(), "landlock".into(), "1".into(), "--".into()],
+        };
+        let argv: Vec<String> = build_command(&launch).get_argv().iter().map(|a| a.to_string_lossy().into()).collect();
+        assert_eq!(argv, ["/app", "--cg-sandbox", "landlock", "1", "--", &default_shell(), "-lc", "claude"]);
+    }
+
+    #[test]
     fn agent_command_runs_in_cwd_with_env() {
         let cwd = std::env::temp_dir().canonicalize().unwrap();
         let launch = Launch {
@@ -201,6 +225,7 @@ mod tests {
             env: vec![("CG_TEST".into(), "ok".into())],
             cols: 80,
             rows: 24,
+            sandbox: vec![],
         };
         let pair = native_pty_system()
             .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
@@ -250,7 +275,7 @@ mod flow_tests {
         let ptys = Ptys::default();
         let cwd = std::env::temp_dir().to_string_lossy().into();
         let id = ptys
-            .spawn(Launch { command: Some("yes".into()), cwd, env: vec![], cols: 80, rows: 24 }, channel)
+            .spawn(Launch { command: Some("yes".into()), cwd, env: vec![], cols: 80, rows: 24, sandbox: vec![] }, channel)
             .unwrap();
         std::thread::sleep(Duration::from_millis(1500));
         let first = sent.load(Ordering::SeqCst);

@@ -7,6 +7,8 @@ mod netrules;
 mod plugins;
 mod pty;
 mod relocate;
+#[cfg(target_os = "linux")]
+pub mod sandbox;
 mod skills;
 mod sources;
 mod stats;
@@ -958,16 +960,32 @@ fn terminal_spawn(
     let control_key = key.filter(|k| !k.is_empty()).filter(|_| who.is_some());
     // Network security layer (#81): with it on, an agent terminal reaches the network
     // through its own proxy listener, which applies the garden's lists and asks about
-    // the rest. Not enforced yet: the OS sandbox that leaves no other way out comes next.
+    // the rest. On Linux the OS sandbox below leaves it as the only way out.
     let net_key = match (&who, &control_key) {
         (Some(_), Some(k)) => Some(k.clone()),
         (Some(_), None) => Some(format!("pty-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0))),
         _ => None,
     };
     let net_key = net_key.filter(|_| store.net().is_ok_and(|c| c.enabled));
+    // Linux: the OS sandbox that leaves the proxy as the only way out. Decided
+    // before anything starts: no sandbox, no agent terminal (owner decision 3).
+    #[cfg(target_os = "linux")]
+    let sandbox_mode = match &net_key {
+        Some(_) => Some(sandbox_mode(&store)?),
+        None => None,
+    };
+    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
+    let mut sandbox = vec![];
     if let Some(k) = &net_key {
         let port = net.listen(k, &g.id, title.as_deref().unwrap_or(k))?;
         env.extend(proxy_env(port));
+        #[cfg(target_os = "linux")]
+        if let Some(mode) = sandbox_mode {
+            // The proxy, and the control endpoint for the garden-control tools.
+            let mut ports = vec![port];
+            ports.extend(control.addr().and_then(|a| a.rsplit(':').next()?.parse::<u16>().ok()));
+            sandbox = sandbox::wrap(mode, &ports)?;
+        }
     }
     if let (Some(k), Some((agent, account))) = (&control_key, &who) {
         let term = control::Term {
@@ -985,7 +1003,7 @@ fn terminal_spawn(
         check_env(&user_env, &env)?;
         env.extend(user_env);
     }
-    let id = ptys.spawn(Launch { command, cwd, env, cols, rows }, on_event)?;
+    let id = ptys.spawn(Launch { command, cwd, env, cols, rows, sandbox }, on_event)?;
     if let Some(k) = &control_key {
         control.set_pty(k, id);
     }
@@ -1111,7 +1129,86 @@ fn net_config(store: State<Store>) -> Result<netrules::NetConfig, String> {
     store.net()
 }
 
-/// Off by default. Enforcement (sandbox + proxy) is not part of this step yet.
+/// Which sandbox modes work on this machine; probed once per app start.
+#[cfg(target_os = "linux")]
+fn sandbox_support() -> &'static sandbox::Support {
+    static SUPPORT: std::sync::OnceLock<sandbox::Support> = std::sync::OnceLock::new();
+    SUPPORT.get_or_init(sandbox::detect)
+}
+
+/// The mode a new agent terminal starts in, or why it must not start.
+#[cfg(target_os = "linux")]
+fn sandbox_mode(store: &Store) -> Result<sandbox::Mode, String> {
+    sandbox_mode_for(sandbox_support(), store.net()?.fallback_agreed)
+}
+
+/// Namespace mode where it works; the fallback only with the user's agreement;
+/// otherwise the reason agent terminals do not start. Never a silent downgrade.
+#[cfg(target_os = "linux")]
+fn sandbox_mode_for(support: &sandbox::Support, fallback_agreed: bool) -> Result<sandbox::Mode, String> {
+    match support.best() {
+        Ok(sandbox::Mode::Namespace) => Ok(sandbox::Mode::Namespace),
+        Ok(sandbox::Mode::Landlock) if fallback_agreed => Ok(sandbox::Mode::Landlock),
+        Ok(sandbox::Mode::Landlock) => Err("The network security layer is on, but namespace mode does not work on this system. \
+             Agent terminals start in the Landlock fallback only after you agree to its limit in Settings → Network."
+            .into()),
+        Err(why) => Err(format!(
+            "The network security layer is on, but neither of its sandboxes works on this system, so agent terminals do not start ({why}). \
+             Turn the layer off in Settings → Network to run them without it."
+        )),
+    }
+}
+
+/// What Settings → Network shows about enforcement on this machine.
+#[derive(Serialize)]
+struct NetMode {
+    /// "namespace", "landlock", "none" (Linux, neither works) or "unenforced"
+    /// (no OS sandbox on this platform yet: the proxy variables only).
+    mode: String,
+    /// Why namespace mode / the fallback do not work here (Linux).
+    namespace_error: Option<String>,
+    landlock_error: Option<String>,
+    fallback_agreed: bool,
+}
+
+#[tauri::command]
+fn net_mode(store: State<Store>) -> Result<NetMode, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let s = sandbox_support();
+        let mode = match s.best() {
+            Ok(m) => format!("{m:?}").to_lowercase(),
+            Err(_) => "none".into(),
+        };
+        // The agreement covers the fallback as detected; once namespace mode
+        // works it is cleared, so a later fallback is asked about again.
+        let cfg = if s.namespace.is_ok() {
+            store.update_net(|c| {
+                c.fallback_agreed = false;
+                Ok(c.clone())
+            })?
+        } else {
+            store.net()?
+        };
+        Ok(NetMode { mode, namespace_error: s.namespace.clone().err(), landlock_error: s.landlock.clone().err(), fallback_agreed: cfg.fallback_agreed })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = store;
+        Ok(NetMode { mode: "unenforced".into(), namespace_error: None, landlock_error: None, fallback_agreed: false })
+    }
+}
+
+/// The user's agreement to the Linux Landlock fallback (or taking it back).
+#[tauri::command]
+fn net_agree_fallback(store: State<Store>, agree: bool) -> Result<netrules::NetConfig, String> {
+    store.update_net(|c| {
+        c.fallback_agreed = agree;
+        Ok(c.clone())
+    })
+}
+
+/// Off by default. Applies to agent terminals started or resumed afterwards.
 #[tauri::command]
 fn net_set_enabled(store: State<Store>, enabled: bool) -> Result<netrules::NetConfig, String> {
     store.update_net(|c| {
@@ -1290,7 +1387,7 @@ fn profile_login(
     let command = if p.agent == "codex" { format!("{bin} login") } else { bin.to_string() };
     let env = vec![(var.unwrap().to_string(), p.dir.clone())];
     let cwd = home_dir().to_string_lossy().into();
-    ptys.spawn(Launch { command: Some(command), cwd, env, cols, rows }, on_event)
+    ptys.spawn(Launch { command: Some(command), cwd, env, cols, rows, sandbox: vec![] }, on_event)
 }
 
 #[tauri::command]
@@ -1522,6 +1619,8 @@ pub fn run() {
             get_settings,
             net_config,
             net_set_enabled,
+            net_mode,
+            net_agree_fallback,
             net_save_list,
             net_delete_list,
             net_reset_builtin,
@@ -1543,6 +1642,24 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn agent_terminals_start_only_inside_a_working_sandbox() {
+        use sandbox::{Mode, Support};
+        let s = |n: bool, l: bool| Support {
+            namespace: if n { Ok(()) } else { Err("no userns".into()) },
+            landlock: if l { Ok(()) } else { Err("no landlock".into()) },
+        };
+        assert_eq!(sandbox_mode_for(&s(true, true), false), Ok(Mode::Namespace));
+        // The fallback needs the agreement: without it, refused with where to agree.
+        let e = sandbox_mode_for(&s(false, true), false).unwrap_err();
+        assert!(e.contains("Landlock fallback") && e.contains("Settings → Network"), "{e}");
+        assert_eq!(sandbox_mode_for(&s(false, true), true), Ok(Mode::Landlock));
+        // Neither works: refused even with an old agreement, with both reasons.
+        let e = sandbox_mode_for(&s(false, false), true).unwrap_err();
+        assert!(e.contains("do not start") && e.contains("no userns") && e.contains("no landlock"), "{e}");
+    }
 
     #[test]
     fn first_prompt_skips_commands_and_unwraps_pastes() {

@@ -126,6 +126,12 @@ ui("the Network settings tab shows the built-in agent list and adds a list (#81)
   assert.match(body, /Network security layer/);
   assert.match(body, /built-in/);
   assert.equal(await page.$eval(".network input[type=checkbox]", (b) => b.checked), false, "off by default");
+  // The mock machine has only the Landlock fallback: its hole is stated and it needs an agreement.
+  assert.match(await text(".net-mode"), /Landlock fallback[\s\S]*any host on the proxy's port number[\s\S]*Until you agree/);
+  await clickText(".net-mode button", "I understand, use the fallback");
+  await page.waitForFunction(() => /You agreed/.test(document.querySelector(".net-mode").textContent));
+  await clickText(".net-mode button", "Withdraw agreement");
+  await page.waitForFunction(() => /Until you agree/.test(document.querySelector(".net-mode").textContent));
   const before = (await page.$$(".network .net-list")).length;
   await clickText(".network button", "+ Deny list");
   await page.waitForFunction((n) => document.querySelectorAll(".network .net-list").length === n + 1, {}, before);
