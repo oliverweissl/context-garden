@@ -848,6 +848,8 @@ fn terminal_spawn(
     let mut command = None;
     // (agent, account name) of an agent terminal, which names its worktree branch.
     let mut who: Option<(String, Option<String>)> = None;
+    // The account dir of a Codex terminal (None: the default login).
+    let mut account_dir: Option<String> = None;
     if let Some(profile_id) = profile.filter(|p| !p.is_empty()) {
         let p = store
             .profiles()?
@@ -858,6 +860,7 @@ fn terminal_spawn(
         env.push((var.unwrap().to_string(), p.dir.clone()));
         command = Some(agent_command(&p.agent, bin, &expand_tilde(&p.dir), session.as_deref(), resume, &flags));
         who = Some((p.agent.clone(), Some(p.name.clone())));
+        account_dir = Some(p.dir.clone());
     } else if let Some(agent) = agent.filter(|a| !a.is_empty()) {
         let (_, _, bin, _) = AGENTS.iter().find(|a| a.0 == agent).ok_or("unknown agent")?;
         let config = std::env::var_os("CLAUDE_CONFIG_DIR")
@@ -865,6 +868,9 @@ fn terminal_spawn(
             .unwrap_or_else(|| home_dir().join(".claude"));
         command = Some(agent_command(&agent, bin, &config, session.as_deref(), resume, &flags));
         who = Some((agent, None));
+    }
+    if who.as_ref().is_some_and(|(agent, _)| agent == "codex") {
+        trust_codex_plugin_hooks(&accounts::config_dir("codex", account_dir.as_deref()));
     }
     let worktree = agent_worktree(&store, &session_worktrees, &g, &cwd, worktree, who.clone(), resume)?;
     let cwd = worktree.clone().unwrap_or(cwd);
@@ -896,6 +902,20 @@ fn terminal_spawn(
         control.set_pty(k, id);
     }
     Ok(Spawned { id, worktree })
+}
+
+/// Codex runs a plugin's hooks only while config.toml trusts their current
+/// hashes, and those change with every new copy of the plugin, however it got
+/// there (the app, `codex plugin` itself, a marketplace upgrade). Trust was only
+/// written when the app installed or updated the plugin, so other copies ran
+/// with every context-garden hook skipped. Renew it before each Codex start.
+fn trust_codex_plugin_hooks(dir: &Path) {
+    if !codex_config_has(dir, &format!("[plugins.\"{PLUGIN}\"]")) {
+        return;
+    }
+    if let Err(e) = accounts::trust_codex_hooks(dir, PLUGIN) {
+        eprintln!("trusting Codex hooks in {}: {e}", dir.display());
+    }
 }
 
 /// The worktree an agent terminal on a repo runs in: its saved one (set up
