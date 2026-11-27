@@ -1,5 +1,6 @@
 import { api } from "../api.js";
 import { h, modal, toast, errText, badge, agentIcon } from "../ui.js";
+import { linkNotices } from "../links.js";
 
 // Node positions are a per-viewer convenience; blocked storage just means default places.
 const loadPref = (key, fallback) => { try { return JSON.parse(localStorage.getItem(`cg.${key}`)) ?? fallback; } catch { return fallback; } };
@@ -46,11 +47,21 @@ export async function openOrchestrate(ws, garden) {
     links = next;
     try {
       links = await api.setLinks(garden.id, next);
+      tell(before, links);
     } catch (e) {
       links = before;
       toast(errText(e), "error");
     }
     draw();
+  }
+
+  /** Tell the running agents on both ends of each changed link (queued while they are busy). */
+  function tell(before, after) {
+    const pane = (k) => ws.panes.find((p) => p.opts.key === k);
+    for (const { key, text } of linkNotices(before, after, (k) => pane(k)?.opts.title || k)) {
+      const p = pane(key);
+      if (p && p.id != null) p.inbox.push(text);
+    }
   }
 
   function draw() {
