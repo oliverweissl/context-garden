@@ -364,6 +364,7 @@ name = "context-garden-app"
 version = "0.7.0"
 dependencies = [
  "base64 0.22.1",
+ "libc",
  "portable-pty",
  "serde",
  "serde_json",

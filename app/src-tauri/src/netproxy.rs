@@ -6,6 +6,10 @@
 //! the timeout (60 s). The proxy resolves names itself and dials the addresses it
 //! checked, so a rebinding between check and dial is not possible.
 //!
+//! On Linux a listener serves only processes of the user running the app (the
+//! owner of the connecting socket, from /proc/net/tcp): other users of the
+//! machine cannot use it as a relay.
+//!
 //! Enforcement (the OS sandbox that leaves this proxy as the only way out) is a
 //! later step; until then programs that ignore the proxy variables bypass it.
 
@@ -212,6 +216,10 @@ impl NetProxy {
     }
 
     fn serve(&self, mut client: TcpStream, key: &str, garden: &str, title: &str) {
+        if !same_user(&client) {
+            eprintln!("network proxy ({title}): refused a connection from another user");
+            return;
+        }
         let _ = client.set_read_timeout(Some(Duration::from_secs(30)));
         let mut first = [0u8; 1];
         if client.peek(&mut first).ok() != Some(1) {
@@ -350,6 +358,28 @@ impl NetProxy {
             }
         }
     }
+}
+
+/// Whether the process at the other end of a loopback connection runs as this
+/// user: its socket's owner in /proc/net/tcp. Unknown counts as no.
+#[cfg(target_os = "linux")]
+fn same_user(s: &TcpStream) -> bool {
+    use std::net::SocketAddr::V4;
+    let (Ok(V4(peer)), Ok(V4(local))) = (s.peer_addr(), s.local_addr()) else { return false };
+    // Addresses as the kernel prints them: the 32-bit value in host order, in hex.
+    let hex = |a: std::net::SocketAddrV4| format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port());
+    let (me, them) = (hex(local), hex(peer));
+    let uid = unsafe { libc::geteuid() };
+    let Ok(table) = std::fs::read_to_string("/proc/net/tcp") else { return false };
+    table.lines().skip(1).any(|l| {
+        let f: Vec<&str> = l.split_whitespace().collect();
+        f.len() > 7 && f[1] == them && f[2] == me && f[7].parse() == Ok(uid)
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn same_user(_: &TcpStream) -> bool {
+    true
 }
 
 /// Headers up to the blank line, and whatever came after them.
@@ -579,6 +609,15 @@ mod tests {
             s.read(&mut b)
         });
         assert!(!matches!(gone, Ok(n) if n > 0), "closed listener answers nothing");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn connections_of_this_user_are_served() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let _c = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (s, _) = l.accept().unwrap();
+        assert!(same_user(&s), "found in /proc/net/tcp with this uid");
     }
 
     #[test]
