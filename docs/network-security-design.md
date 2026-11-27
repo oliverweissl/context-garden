@@ -25,7 +25,7 @@ Status: **confirmed by the owner** (2026-11-27), with the decisions in section 8
                                                         └───────────────────────────────────────────┘
 ```
 
-- **One proxy listener per agent terminal.** The listener knows which terminal, and therefore which garden, a connection comes from, so no credentials are needed in the proxy URL. Each listener is a Unix socket where the OS sandbox can pass one in (Linux netns, see 3.1), otherwise a loopback TCP port.
+- **One proxy listener per agent terminal.** The listener knows which terminal, and therefore which garden, a connection comes from, so no credentials are needed in the proxy URL. Each listener is a loopback TCP port. On Linux it serves only processes of the user running the app (the connecting socket's owner, checked per connection), so other users of the machine cannot use it as a relay. Inside the sandbox a terminal reaches only its own listener (3.1). Credentials in the proxy URL were tried instead and dropped: Ubuntu's npm 9.2 does not send them on CONNECT and failed with 407.
 - **The OS sandbox is the enforcement and the proxy is the decision point.** Inside the sandbox, the only route out is that terminal's proxy. A program that ignores the proxy variables gets no network: it fails closed.
 - The proxy resolves DNS itself (CONNECT by hostname, SOCKS5 with remote DNS). The sandbox needs no DNS, and every decision sees the hostname and the resolved addresses.
 - With the feature **off** (the default), nothing changes: no sandbox, no proxy variables, today's behaviour.
