@@ -162,7 +162,9 @@ def skill_is_on(skill: str) -> bool:
 
 
 def agents_md() -> str:
-    r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, **_NO_WINDOW)
+    r = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, **_NO_WINDOW
+    )
     root = Path(r.stdout.strip()) if r.returncode == 0 else Path.cwd()
     f = root / "AGENTS.md"
     return (
