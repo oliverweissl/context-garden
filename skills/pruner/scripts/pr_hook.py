@@ -19,6 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
 HOOK_BUDGET = 1500
 SELECT_TIMEOUT = 20
 MAX_PROMPT_CHARS = 50_000
@@ -92,6 +95,7 @@ def main() -> int:
             [sys.executable, str(Path(__file__).resolve().parent / "pruner.py"), "--repo", str(root),
              "select", "--task", task_line(prompt), "--error", prompt, "--budget", str(HOOK_BUDGET)],
             stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=SELECT_TIMEOUT,
+            **_NO_WINDOW,
         )
     except subprocess.TimeoutExpired:
         return 0

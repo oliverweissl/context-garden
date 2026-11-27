@@ -11,6 +11,7 @@ import argparse
 import json
 import re
 import shlex
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,9 @@ from pr_select import (
     select,
 )
 
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
 STORE_DIRNAME = ".pruner"
 RANGE_RE = re.compile(r"^(.+):(\d+)-(\d+)$")
 LINES_RE = re.compile(r"^(\d+):(\d+)$")
@@ -52,6 +56,7 @@ def _git_exclude_store(repo_root: Path) -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=10,
+            **_NO_WINDOW,
         )
         if out.returncode != 0:
             return

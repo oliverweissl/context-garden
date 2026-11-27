@@ -32,6 +32,9 @@ from co_cluster import (
 from co_profiles import PARSERS, ProfileDetector, analyse, strip_ansi
 from co_store import Store, find_repo_root, find_store_root
 
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
 # Absolute path of the wrapper, so printed retrieval handles are runnable
 # as-is (`compost` itself is not expected to be on PATH).
 # Shell-quoted: printed for the agent to run, and plugin paths may contain spaces.
@@ -493,6 +496,7 @@ def cmd_run(args, store: Store) -> int:
                 stderr=subprocess.STDOUT,
                 # own process group: signals/timeouts reach the whole tree
                 start_new_session=True,
+                **_NO_WINDOW,
             )
         except (FileNotFoundError, PermissionError) as e:
             code, what = (127, "command not found") if isinstance(

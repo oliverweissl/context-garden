@@ -25,6 +25,9 @@ from gh_base import (
 import gh_bundle
 from gh_harvest import harvest, repo_slug
 
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
 # Shell-quoted: printed for the agent to run, and plugin paths may contain spaces.
 BIN = shlex.quote(str(Path(__file__).resolve().parent.parent / "bin" / "greenhouse"))
 DEFAULT_BUDGET = 600
@@ -530,6 +533,7 @@ def cmd_hook(args, repo_root) -> int:
             [sys.executable, str(Path(__file__).resolve()), "hook", "session-end", "--wait"],
             cwd=root, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, start_new_session=True,
+            **_NO_WINDOW,
         )
         child.stdin.write(json.dumps({"cwd": str(root), "repos": [str(r) for r, _ in targets]}).encode())
         child.stdin.close()  # don't wait: the child outlives this hook

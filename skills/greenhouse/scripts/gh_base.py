@@ -27,6 +27,9 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
 try:
     import fcntl
 except ImportError:  # Windows: no flock; locking degrades to a no-op
@@ -49,6 +52,7 @@ def git(args, cwd) -> str:
         proc = subprocess.run(
             ["git", *args], cwd=cwd, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            **_NO_WINDOW,
         )
     except FileNotFoundError:  # no git binary
         return ""

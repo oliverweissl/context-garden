@@ -26,6 +26,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
 MODES = ("on", "manual", "off")
 DEFAULT_MODE = "off"
 NOT_ON = 3  # --is-on exit status when manual/off
@@ -39,6 +42,7 @@ def repo_root() -> Path:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"], stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True,
+            **_NO_WINDOW,
         )
         if out.returncode == 0 and out.stdout.strip():
             return Path(out.stdout.strip())
