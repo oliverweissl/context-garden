@@ -17,8 +17,12 @@ so a fork or a moved remote still matches by history.
 from __future__ import annotations
 
 import re
+import os
 import subprocess
 from pathlib import Path
+
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
 _SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)
 _SCP = re.compile(r"^(?:[^@/\s]+@)?([^:/\s]+):(?!//)(.+)$")  # user@host:path
@@ -29,6 +33,7 @@ def _git(args, cwd) -> str:
         proc = subprocess.run(
             ["git", *args], cwd=cwd, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            **_NO_WINDOW,
         )
     except (FileNotFoundError, NotADirectoryError):  # no git binary / no such dir
         return ""

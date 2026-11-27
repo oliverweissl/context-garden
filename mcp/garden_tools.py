@@ -14,9 +14,13 @@ Separate from garden-control (mcp/cg_control.py), which is app-only.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
 PROTOCOL = "2025-06-18"
 SERVER = {"name": "garden-tools", "version": "0.7.0"}
@@ -152,12 +156,13 @@ def skill_is_on(skill: str) -> bool:
         capture_output=True,
         text=True,
         timeout=TIMEOUT,
+        **_NO_WINDOW,
     )
     return r.returncode == 0
 
 
 def agents_md() -> str:
-    r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, **_NO_WINDOW)
     root = Path(r.stdout.strip()) if r.returncode == 0 else Path.cwd()
     f = root / "AGENTS.md"
     return (
@@ -184,6 +189,7 @@ def run_tool(tool: str, args: dict) -> tuple[str, bool]:
             capture_output=True,
             text=True,
             timeout=TIMEOUT,
+            **_NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as e:
         return f"{skill} failed to run: {e}", True

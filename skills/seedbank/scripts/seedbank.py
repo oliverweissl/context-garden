@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import re
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +44,9 @@ from sb_store import (
     safe_scope,
     sha256_file,
 )
+
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
 MAX_TRACKED_SESSIONS = 32  # session ids kept per key; session_count keeps counting
 
@@ -179,7 +183,7 @@ def cmd_observe_run(args, store: Store) -> int:
     timed_out = False
     try:
         proc = subprocess.run(
-            cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=args.timeout
+            cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=args.timeout, **_NO_WINDOW
         )
         raw, returncode = proc.stdout, proc.returncode
     except subprocess.TimeoutExpired as e:  # subprocess.run kills the child on timeout

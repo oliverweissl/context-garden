@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
 IGNORE_DIRS = {
     ".git",
@@ -86,6 +90,7 @@ def _git_tracked_files(repo_root: Path) -> list[str] | None:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=10,
+            **_NO_WINDOW,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):  # no git / stuck git: walk instead
         return None
@@ -160,6 +165,7 @@ def changed_files_from_git(repo_root: Path) -> list[str]:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=10,
+            **_NO_WINDOW,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):  # no git / stuck git
         return []

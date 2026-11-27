@@ -23,6 +23,9 @@ import tempfile
 import time
 from pathlib import Path
 
+# Child processes get no console window of their own on Windows.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - non-POSIX: best effort, no locking
@@ -48,6 +51,7 @@ def find_repo_root() -> Path:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             universal_newlines=True,
+            **_NO_WINDOW,
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return Path(proc.stdout.strip()).resolve()
