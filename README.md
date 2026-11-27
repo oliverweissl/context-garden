@@ -47,6 +47,14 @@ git clone https://github.com/oliverweissl/context-garden && cd context-garden/ap
 npm install
 npm run tauri build    # installer in src-tauri/target/release/bundle/
 ```
+**macOS:** after Rust is installed, load it into your shell, then build from the repo's
+`app/` folder:
+```bash
+source "$HOME/.cargo/env"
+cd path/to/context-garden/app
+cargo --version
+npm run tauri build
+```
 Use the installed app, not `npm run tauri dev`: the dev build is for working on the app
 itself and some features work less well in it.
 
