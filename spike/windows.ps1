@@ -49,6 +49,11 @@ Add-Type -Path (Join-Path $PSScriptRoot "Pty.cs")
 [Pty]::Run("logon", "cgsandbox", $pw, "cmd.exe /c echo HELLO-PTY & whoami")
 "== ConPTY with LogonUser + CreateProcessAsUserW (runner is an elevated admin)"
 [Pty]::Run("asuser", "cgsandbox", $pw, "cmd.exe /c echo HELLO-PTY & whoami")
+"== relay idea: a process running AS the sandbox user hosts its own ConPTY"
+icacls C:\cgspike /grant "Everyone:(OI)(CI)F" | Out-Null
+Copy-Item Pty.cs, inner.ps1 C:\cgspike\
+As-Sandbox (Get-Command pwsh).Source "-NoProfile -File C:\cgspike\inner.ps1" "pwsh as sandbox user running the ConPTY harness"
+Get-Content C:\cgspike\inner.txt -ErrorAction SilentlyContinue
 "== whoami privileges of the runner"; whoami /priv | Select-String "AssignPrimary|IncreaseQuota|Impersonate"
 Stop-Process -Id $proxy.Id, $other.Id -ErrorAction SilentlyContinue
 exit 0
