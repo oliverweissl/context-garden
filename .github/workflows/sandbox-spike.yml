@@ -1,0 +1,19 @@
+name: Sandbox spike (temporary, #81)
+on:
+  push:
+    branches: ["spike/81-sandbox-platforms"]
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash spike/macos.sh
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - shell: pwsh
+        run: ./spike/windows.ps1
