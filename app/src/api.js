@@ -49,6 +49,10 @@ export const api = {
   /** True when main has newer skills than the account installed (Claude accounts). */
   pluginOutdated: (id) => invoke("profile_plugin_outdated", { id }),
   updatePlugin: (id) => invoke("update_profile_plugin", { id }),
+  /** At startup: { version, tag, behind: [profile] } when accounts lack this app's release of the skills (first window only), else null. */
+  releaseSkills: () => invoke("release_skills"),
+  /** Install this app's release of context-garden into an account, its marketplace pinned to the release tag. */
+  pinPlugin: (id) => invoke("pin_profile_plugin", { id }).then(profilesChanged),
   /** Plugins of an account, or of an agent's default login: [{ id, version, latest, stamp }]. */
   accountPlugins: (agent, profile) => invoke("account_plugins", { agent: agent || null, profile: profile || null }),
   updateAccountPlugin: (agent, profile, plugin) =>

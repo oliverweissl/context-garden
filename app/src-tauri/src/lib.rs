@@ -433,14 +433,63 @@ fn profile_plugin_version(store: State<Store>, id: String) -> Result<Option<Stri
     })
 }
 
-/// Whether main has moved past the skills an account has: Claude records the
-/// commit it installed, Codex keeps a checkout of the marketplace. Unknown
-/// counts as current.
+/// Whether an account's skills are behind: Claude records the commit it
+/// installed, Codex keeps a checkout of the marketplace. An account pinned to a
+/// release tag (see `pin_profile_plugin`) is compared with this app's release,
+/// any other with main. Unknown counts as current.
 #[tauri::command]
-async fn profile_plugin_outdated(store: State<'_, Store>, id: String) -> Result<bool, String> {
+async fn profile_plugin_outdated(app: AppHandle, store: State<'_, Store>, id: String) -> Result<bool, String> {
     let p = store.profiles()?.into_iter().find(|p| p.id == id).ok_or("that account no longer exists")?;
-    let Some(installed) = accounts::installed_commit(&p.agent, &expand_tilde(&p.dir), PLUGIN) else { return Ok(false) };
+    let dir = expand_tilde(&p.dir);
+    let Some(installed) = accounts::installed_commit(&p.agent, &dir, PLUGIN) else { return Ok(false) };
+    if accounts::marketplace_ref(&p.agent, &dir, MARKETPLACE.0).is_some() {
+        return Ok(app_release(&app)?.is_some_and(|(_, commit)| commit != installed));
+    }
     Ok(updates::main_commit()? != installed)
+}
+
+/// This app's release tag and its commit, if the release is tagged.
+fn app_release(app: &AppHandle) -> Result<Option<(String, String)>, String> {
+    updates::release_tag(&app.package_info().version.to_string())
+}
+
+/// Set once the first window has asked about the release's skills this run.
+static RELEASE_ASKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[derive(Serialize)]
+struct ReleaseSkills {
+    version: String,
+    tag: String,
+    /// Accounts whose installed context-garden is not the release's commit.
+    behind: Vec<Profile>,
+}
+
+/// At startup: the Claude/Codex accounts whose context-garden is not this app's
+/// release. Only the first window of an app run gets an answer (None after),
+/// and so does an untagged build or one that cannot reach GitHub.
+#[tauri::command]
+async fn release_skills(app: AppHandle, store: State<'_, Store>) -> Result<Option<ReleaseSkills>, String> {
+    use std::sync::atomic::Ordering;
+    if RELEASE_ASKED.swap(true, Ordering::SeqCst) {
+        return Ok(None);
+    }
+    let Some((tag, commit)) = app_release(&app)? else { return Ok(None) };
+    let behind: Vec<Profile> = store
+        .profiles()?
+        .into_iter()
+        .filter(|p| p.agent == "claude" || p.agent == "codex")
+        .filter(|p| accounts::installed_commit(&p.agent, &expand_tilde(&p.dir), PLUGIN).is_some_and(|c| c != commit))
+        .collect();
+    Ok(Some(ReleaseSkills { version: app.package_info().version.to_string(), tag, behind }))
+}
+
+/// Install this app's release of context-garden into an account, with its
+/// marketplace pinned to the release tag.
+#[tauri::command]
+async fn pin_profile_plugin(app: AppHandle, store: State<'_, Store>, id: String) -> Result<Option<String>, String> {
+    let (agent, dir) = account_dir(&store, None, Some(&id))?;
+    let (tag, _) = app_release(&app)?.ok_or("this app version has no release tag to install")?;
+    accounts::pin(&agent, &dir, PLUGIN, MARKETPLACE.1, &tag)
 }
 
 /// The config dir of an account, or of the agent's default login.
@@ -481,8 +530,14 @@ async fn update_account_plugin(
 /// Pull the latest skills from main into an account; Claude keeps them
 /// switched off account-wide (gardens switch them on).
 #[tauri::command]
-async fn update_profile_plugin(store: State<'_, Store>, id: String) -> Result<Option<String>, String> {
+async fn update_profile_plugin(app: AppHandle, store: State<'_, Store>, id: String) -> Result<Option<String>, String> {
     let (agent, dir) = account_dir(&store, None, Some(&id))?;
+    // An account pinned to a release moves to this app's release, not to main.
+    if accounts::marketplace_ref(&agent, &dir, MARKETPLACE.0).is_some() {
+        if let Some((tag, _)) = app_release(&app)? {
+            return accounts::pin(&agent, &dir, PLUGIN, MARKETPLACE.1, &tag);
+        }
+    }
     accounts::update(&agent, &dir, PLUGIN)
 }
 
@@ -1224,6 +1279,8 @@ pub fn run() {
             open_repo_page,
             profile_plugin_outdated,
             update_profile_plugin,
+            release_skills,
+            pin_profile_plugin,
             account_plugins,
             update_account_plugin,
             terminal_locations,

@@ -4,7 +4,8 @@ import { staleTerminals, STALE_CHANGED } from "../terminals.js";
 
 /**
  * "Skills outdated" next to Settings (#64): accounts whose context-garden
- * plugin is behind main (the same check as Settings → Accounts), and agent
+ * plugin is behind main, or behind this app's release when the account is
+ * pinned to one (the same check as Settings → Accounts), and agent
  * terminals still running older plugins than their account has (the yellow
  * pane dot). One click opens the list; Update runs the usual account update.
  */
@@ -72,10 +73,10 @@ function openList() {
     const stale = staleTerminals();
     if (!behind.length && !stale.length) return m.close();
     body.replaceChildren(...[
-      behind.length ? h("p", { class: "muted small" }, "These accounts have older skills than main:") : null,
+      behind.length ? h("p", { class: "muted small" }, "These accounts have older skills (than main, or than this app's release for accounts pinned to one):") : null,
       ...behind.map((x) => h("div", { class: "plugin-line" },
         badge(x.profile), h("span", { class: "ellipsis" }, x.profile.name),
-        h("span", { class: "warn small" }, `${x.version} → newer on main`),
+        h("span", { class: "warn small" }, `${x.version} → newer available`),
         h("span", { class: "grow" }),
         h("button", { class: "btn small-btn", onclick: (e) => update(e.target, [x]) }, "Update"))),
       behind.length > 1
