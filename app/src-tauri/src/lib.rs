@@ -772,6 +772,12 @@ fn check_env(user: &[(String, String)], app: &[(String, String)]) -> Result<(), 
     }
 }
 
+/// Codex config override that lets commands in its workspace-write sandbox use
+/// the network. A launch flag that mentions the sandbox (`-s`/`--sandbox`,
+/// `--dangerously-bypass-approvals-and-sandbox`, or
+/// `-c sandbox_workspace_write.network_access=false`) replaces it.
+const CODEX_NETWORK: &str = "sandbox_workspace_write.network_access=true";
+
 /// The agent's command line: a new session (Claude: with our id, so it can be
 /// resumed exactly) or the pane's previous one, then the user's startup flags.
 fn agent_command(
@@ -785,7 +791,18 @@ fn agent_command(
     let mut cmd = match (agent, session) {
         ("claude", Some(id)) if resume && claude_session_exists(config_dir, id) => format!("{bin} --resume {id}"),
         ("claude", Some(id)) => format!("{bin} --session-id {id}"),
-        ("codex", _) if resume => format!("{bin} resume --last"),
+        ("codex", _) => {
+            let mut c = bin.to_string();
+            // Codex's default sandbox (workspace-write) keeps its shell off the network;
+            // the app turns network on unless the launch line picks a sandbox itself.
+            if !flags.iter().any(|f| f.contains("sandbox")) {
+                c.push_str(&format!(" -c {CODEX_NETWORK}"));
+            }
+            if resume {
+                c.push_str(" resume --last");
+            }
+            c
+        }
         _ => bin.to_string(),
     };
     for f in flags {
@@ -1324,8 +1341,14 @@ mod tests {
         std::fs::create_dir_all(dir.join("projects/-tmp-x")).unwrap();
         std::fs::write(dir.join(format!("projects/-tmp-x/{id}.jsonl")), "{}").unwrap();
         assert_eq!(agent_command("claude", "claude", &dir, Some(id), true, &[]), format!("claude --resume {id}"));
-        assert_eq!(agent_command("codex", "codex", &dir, None, true, &[]), "codex resume --last");
-        assert_eq!(agent_command("codex", "codex", &dir, None, false, &[]), "codex");
+        let net = format!("codex -c {CODEX_NETWORK}");
+        assert_eq!(agent_command("codex", "codex", &dir, None, true, &[]), format!("{net} resume --last"));
+        assert_eq!(agent_command("codex", "codex", &dir, None, false, &[]), net);
+        // A launch line that picks the sandbox keeps Codex's own setting.
+        let off = vec!["-c".to_string(), "sandbox_workspace_write.network_access=false".into()];
+        assert_eq!(agent_command("codex", "codex", &dir, None, false, &off), "codex -c sandbox_workspace_write.network_access=false");
+        let mode = vec!["--sandbox".to_string(), "read-only".into()];
+        assert_eq!(agent_command("codex", "codex", &dir, None, true, &mode), "codex resume --last --sandbox read-only");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
