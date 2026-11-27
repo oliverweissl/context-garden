@@ -4,7 +4,7 @@ Set-Location $PSScriptRoot
 "== firewall profiles"; Get-NetFirewallProfile | Format-Table Name, Enabled, DefaultOutboundAction -AutoSize | Out-String
 "== admin?"; ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $proxy = Start-Process python -ArgumentList "proxy.py","47101","$env:TEMP\proxy.log" -PassThru -WindowStyle Hidden
-$other = Start-Process python -ArgumentList "-c","import socket,time;s=socket.socket();s.bind(('127.0.0.1',47102));s.listen(5);time.sleep(900)" -PassThru -WindowStyle Hidden
+$other = Start-Process python -ArgumentList "other.py" -PassThru -WindowStyle Hidden
 Start-Sleep 2
 New-Item -ItemType Directory C:\cgspike -Force | Out-Null
 icacls C:\cgspike /grant "Everyone:(OI)(CI)F" | Out-Null
@@ -39,24 +39,16 @@ As-Sandbox "cmd.exe" "/c curl.exe -sS -m 8 -o NUL -w %{http_code} https://exampl
 "== firewall rules accepted"; Get-NetFirewallRule -DisplayName "cg-sandbox-*" | Format-Table DisplayName, Enabled, Action -AutoSize | Out-String
 "== the runner user is unaffected"; curl.exe -sS -m 10 -o NUL -w "%{http_code}" https://example.com
 "== proxy log"; Get-Content "$env:TEMP\proxy.log" -ErrorAction SilentlyContinue
-Add-Type -TypeDefinition @"
-using System; using System.Runtime.InteropServices;
-public static class Logon {
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct SI { public int cb; public string r, d, t; public int x,y,xs,ys,xc,yc,fill,flags; public short sw, cb2; public IntPtr r2, i, o, e; }
-  [StructLayout(LayoutKind.Sequential)] public struct PI { public IntPtr hp, ht; public int pid, tid; }
-  [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool CreateProcessWithLogonW(string u, string d, string p, int lf, string app, string cmd, int cf, IntPtr env, string cwd, ref SI si, out PI pi);
-  [DllImport("kernel32.dll")] public static extern uint WaitForSingleObject(IntPtr h, uint ms);
-  [DllImport("kernel32.dll")] public static extern bool GetExitCodeProcess(IntPtr h, out uint c);
-  public static string Run(string u, string p, string cmd) {
-    var si = new SI(); si.cb = Marshal.SizeOf(si); PI pi;
-    if (!CreateProcessWithLogonW(u, ".", p, 1, null, cmd, 0, IntPtr.Zero, "C:\\", ref si, out pi)) return "CreateProcessWithLogonW failed " + Marshal.GetLastWin32Error();
-    WaitForSingleObject(pi.hp, 30000); uint c; GetExitCodeProcess(pi.hp, out c); return "exit " + c;
-  }
-}
-"@
-"== CreateProcessWithLogonW without a new console: does its output land in this console?"
-[Logon]::Run("cgsandbox", $pw, "cmd.exe /c echo HELLO-FROM-SANDBOX-USER & whoami")
-[Logon]::Run("cgsandbox", $pw, "cmd.exe /c whoami > C:\Users\Public\who.txt")
-Get-Content C:\Users\Public\who.txt -ErrorAction SilentlyContinue
+"== inbound rule for the user"
+New-NetFirewallRule -DisplayName "cg-sandbox-block-inbound" -Direction Inbound -Action Block -LocalUser $sddl | Out-Null
+Get-NetFirewallRule -DisplayName "cg-sandbox-block-inbound" | Format-Table DisplayName, Enabled -AutoSize | Out-String
+Add-Type -Path (Join-Path $PSScriptRoot "Pty.cs")
+"== ConPTY, same user (control)"
+[Pty]::Run("self", "", "", "cmd.exe /c echo HELLO-PTY & whoami")
+"== ConPTY handed to CreateProcessWithLogonW"
+[Pty]::Run("logon", "cgsandbox", $pw, "cmd.exe /c echo HELLO-PTY & whoami")
+"== ConPTY with LogonUser + CreateProcessAsUserW (runner is an elevated admin)"
+[Pty]::Run("asuser", "cgsandbox", $pw, "cmd.exe /c echo HELLO-PTY & whoami")
+"== whoami privileges of the runner"; whoami /priv | Select-String "AssignPrimary|IncreaseQuota|Impersonate"
 Stop-Process -Id $proxy.Id, $other.Id -ErrorAction SilentlyContinue
 exit 0
