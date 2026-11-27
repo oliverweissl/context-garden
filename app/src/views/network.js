@@ -2,8 +2,8 @@ import { api } from "../api.js";
 import { h, toast, errText } from "../ui.js";
 
 // Network rules (#81, docs/network-security-design.md): named allow / deny lists of
-// hostnames, *.domains and IP ranges, combined per garden. This step stores and
-// evaluates them; the sandbox and proxy that enforce them come next.
+// hostnames, *.domains and IP ranges, combined per garden, applied by the app's
+// proxy. On Linux an OS sandbox leaves that proxy as agent terminals' only way out.
 
 const KIND = { allow: "Allow list", deny: "Deny list" };
 const HELP = "One entry per line: a hostname (api.github.com), a domain with all its subdomains "
@@ -14,7 +14,8 @@ const HELP = "One entry per line: a hostname (api.github.com), a domain with all
 export async function networkPanel() {
   const root = h("div", { class: "network" });
   let cfg = await api.netConfig();
-  const apply = (next) => { cfg = next; draw(); };
+  let mode = await api.netMode();
+  const apply = (next) => { cfg = next; mode = { ...mode, fallback_agreed: next.fallback_agreed }; draw(); };
   const run = (p, done) => p.then((c) => { apply(c); if (done) toast(done); }).catch((e) => toast(errText(e), "error"));
 
   function listCard(list) {
@@ -39,6 +40,39 @@ export async function networkPanel() {
         h("button", { class: "btn primary", onclick: save }, "Save")));
   }
 
+  /** How the layer is enforced on this machine, and the fallback's agreement (design 3.1). */
+  function modeBox() {
+    const why = (label, text) => (text ? h("p", { class: "faint small mono" }, `${label}: ${text}`) : null);
+    if (mode.mode === "namespace") {
+      return h("div", { class: "card net-mode" },
+        h("p", { class: "small" }, h("span", { class: "chip ok" }, "Namespace mode"), " No network except through the app."));
+    }
+    if (mode.mode === "landlock") {
+      const agree = h("button", { class: mode.fallback_agreed ? "btn" : "btn primary",
+        onclick: () => run(api.netAgreeFallback(!mode.fallback_agreed), mode.fallback_agreed ? "Agreement withdrawn" : "Landlock fallback agreed") },
+      mode.fallback_agreed ? "Withdraw agreement" : "I understand, use the fallback");
+      return h("div", { class: "card net-mode" },
+        h("p", { class: "small" }, h("span", { class: "chip warn" }, "Landlock fallback"),
+          " A TCP connection to any host on the proxy's port number (or the app's control port number) is not blocked."),
+        h("p", { class: "faint small" }, "Namespace mode, which has no such hole, does not work on this system. "
+          + "In the fallback, agent terminals also cannot open TCP ports of their own or reach other local ports, and "
+          + "names resolve only through the proxy."),
+        why("Namespace mode", mode.namespace_error),
+        h("p", { class: "small" }, mode.fallback_agreed
+          ? "You agreed: agent terminals start in the fallback while the layer is on."
+          : "Until you agree, agent terminals do not start while the layer is on."),
+        h("div", { class: "row end" }, agree));
+    }
+    if (mode.mode === "none") {
+      return h("div", { class: "card net-mode" },
+        h("p", { class: "small warn" }, "Neither sandbox works on this system, so agent terminals do not start while the layer is on."),
+        why("Namespace mode", mode.namespace_error), why("Landlock fallback", mode.landlock_error));
+    }
+    return h("div", { class: "card net-mode" },
+      h("p", { class: "small" }, h("span", { class: "chip" }, "Proxy only"),
+        " Not enforced on this system yet: a program that ignores the proxy settings (HTTPS_PROXY and friends) is not stopped."));
+  }
+
   function draw() {
     const box = h("input", {
       type: "checkbox", checked: cfg.enabled,
@@ -50,8 +84,8 @@ export async function networkPanel() {
       h("p", { class: "faint small" },
         "Off by default. When on, agent terminals started or resumed afterwards reach the network through the app's "
         + "proxy, which applies the open garden's lists and asks about anything they do not cover (declined after 60 s "
-        + "without an answer). Not enforced yet: until the sandbox step, a program that ignores the proxy settings "
-        + "(HTTPS_PROXY and friends) is not stopped."),
+        + "without an answer)."),
+      modeBox(),
       h("p", { class: "muted small" }, HELP),
       ...cfg.lists.map(listCard),
       h("div", { class: "row" },

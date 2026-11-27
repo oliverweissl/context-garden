@@ -105,6 +105,9 @@ export const api = {
   /** Network rules (#81): { enabled, lists: [{ id, name, kind, entries, builtin }], gardens: { id: [listId] } }. */
   netConfig: () => invoke("net_config"),
   netSetEnabled: (enabled) => invoke("net_set_enabled", { enabled }),
+  /** How the layer is enforced here: { mode: namespace | landlock | none | unenforced, namespace_error, landlock_error, fallback_agreed }. */
+  netMode: () => invoke("net_mode"),
+  netAgreeFallback: (agree) => invoke("net_agree_fallback", { agree }),
   netSaveList: (list) => invoke("net_save_list", { list }),
   netDeleteList: (id) => invoke("net_delete_list", { id }),
   netResetBuiltin: () => invoke("net_reset_builtin"),

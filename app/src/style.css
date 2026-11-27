@@ -440,6 +440,9 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .network .row input[type=text] { flex: 1; }
 .network .chip.warn { color: var(--amber); }
 .network .ok { color: var(--accent); }
+.network .warn { color: var(--amber); }
+.network .net-mode { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.network .net-mode p { margin: 0; }
 .net-prompt .row input[type=text] { flex: 1; }
 .net-prompt .net-choices { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 6px; }
 .net-prompt .net-choices select { flex: 1; }

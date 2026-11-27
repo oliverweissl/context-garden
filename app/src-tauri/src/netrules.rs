@@ -54,11 +54,15 @@ pub struct NetConfig {
     /// garden id -> list ids. A garden not listed uses the built-in list only.
     #[serde(default)]
     pub gardens: BTreeMap<String, Vec<String>>,
+    /// Linux: the user agreed to the Landlock fallback and its hole (design 3.1).
+    /// Cleared when namespace mode works again, so a later fallback asks anew.
+    #[serde(default)]
+    pub fallback_agreed: bool,
 }
 
 impl Default for NetConfig {
     fn default() -> Self {
-        let mut c = NetConfig { enabled: false, lists: vec![], gardens: BTreeMap::new() };
+        let mut c = NetConfig { enabled: false, lists: vec![], gardens: BTreeMap::new(), fallback_agreed: false };
         c.ensure_builtin();
         c
     }

@@ -127,6 +127,8 @@ const handlers = {
   // Network rules (#81): just enough to click through the Network tabs in a browser.
   net_config: () => mockNet,
   net_set_enabled: ({ enabled }) => ((mockNet = { ...mockNet, enabled }), mockNet),
+  net_mode: () => ({ mode: "landlock", namespace_error: "user namespace: Operation not permitted", landlock_error: null, fallback_agreed: !!mockNet.fallback_agreed }),
+  net_agree_fallback: ({ agree }) => ((mockNet = { ...mockNet, fallback_agreed: agree }), mockNet),
   net_save_list: ({ list }) => {
     const id = list.id || `list-${mockNet.lists.length}`;
     const entries = list.entries.map((e) => e.trim().toLowerCase()).filter(Boolean);

@@ -1,0 +1,14 @@
+# ContextGarden's network security layer (#81) starts agent terminals in their
+# own network namespace, which needs an unprivileged user namespace. Ubuntu
+# 23.10 and later allow those only to programs with a profile like this one. It
+# grants that and confines nothing (flags=unconfined), the same pattern as the
+# profiles other apps ship (chrome, 1password, github-desktop).
+abi <abi/4.0>,
+include <tunables/global>
+
+profile context-garden-app /usr/bin/context-garden-app flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/context-garden-app>
+}

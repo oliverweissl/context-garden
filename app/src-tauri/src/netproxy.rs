@@ -8,10 +8,12 @@
 //!
 //! On Linux a listener serves only processes of the user running the app (the
 //! owner of the connecting socket, from /proc/net/tcp): other users of the
-//! machine cannot use it as a relay.
+//! machine cannot use it as a relay. Inside the sandbox a terminal reaches only
+//! its own listener (design section 3.1).
 //!
-//! Enforcement (the OS sandbox that leaves this proxy as the only way out) is a
-//! later step; until then programs that ignore the proxy variables bypass it.
+//! On Linux the OS sandbox (sandbox.rs) leaves this proxy as an agent
+//! terminal's only way out. Elsewhere it is not enforced yet: programs that
+//! ignore the proxy variables bypass it.
 
 use crate::netrules::{decide, Decision, List};
 use serde::Serialize;
@@ -628,5 +630,66 @@ mod tests {
         assert_eq!(split_host_port("a.com", 80), Some(("a.com".into(), 80)));
         assert_eq!(split_host_port("::1:80", 80), None);
         assert_eq!(split_host_port("a.com:x", 80), None);
+    }
+}
+
+/// Manual end-to-end harness (not run by default) for trying real programs and
+/// agents in the sandbox: a real proxy listener with the built-in agent list
+/// (none with CG_LIVE_EMPTY) plus CG_LIVE_ALLOW / CG_LIVE_DENY (comma
+/// separated). It writes its port to CG_LIVE_DIR/listener and every prompt to
+/// CG_LIVE_DIR/prompts, and takes answers ("<id> allow|deny") from
+/// CG_LIVE_DIR/answers. Run it with
+/// `cargo test --lib live_proxy -- --ignored --nocapture`, then for example
+/// `HTTPS_PROXY=http://127.0.0.1:<port> target/debug/context-garden-app --cg-sandbox landlock <port> -- claude -p hi`.
+#[cfg(test)]
+mod live {
+    use super::*;
+    use crate::netrules::{Kind, BUILTIN, AGENT_HOSTS};
+
+    struct Live {
+        dir: std::path::PathBuf,
+        lists: Vec<List>,
+    }
+    impl Env for Live {
+        fn lists(&self, _: &str) -> Vec<List> {
+            self.lists.clone()
+        }
+        fn ask(&self, p: &Prompt) {
+            let line = format!("{} {}:{} {:?}\n", p.id, p.host, p.port, p.ips);
+            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("prompts")).unwrap();
+            let _ = f.write_all(line.as_bytes());
+        }
+        fn done(&self, id: u64, a: Option<bool>) {
+            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("prompts")).unwrap();
+            let _ = writeln!(f, "done {id} {a:?}");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn live_proxy() {
+        let dir = std::path::PathBuf::from(std::env::var("CG_LIVE_DIR").unwrap());
+        let split = |v: &str| std::env::var(v).unwrap_or_default().split(',').filter(|s| !s.is_empty()).map(String::from).collect::<Vec<_>>();
+        let mut allow: Vec<String> = if std::env::var("CG_LIVE_EMPTY").is_ok() { vec![] } else { AGENT_HOSTS.iter().map(|s| s.to_string()).collect() };
+        allow.extend(split("CG_LIVE_ALLOW"));
+        let lists = vec![
+            List { id: BUILTIN.into(), name: "allow".into(), kind: Kind::Allow, entries: allow, builtin: false },
+            List { id: "deny".into(), name: "deny".into(), kind: Kind::Deny, entries: split("CG_LIVE_DENY"), builtin: false },
+        ];
+        let proxy = NetProxy::new(Arc::new(Live { dir: dir.clone(), lists }), PROMPT_TIMEOUT);
+        let port = proxy.listen("live", "g", "Live").unwrap();
+        std::fs::write(dir.join("listener"), format!("{port}")).unwrap();
+        eprintln!("listening on {port}");
+        loop {
+            std::thread::sleep(Duration::from_millis(200));
+            let Ok(a) = std::fs::read_to_string(dir.join("answers")) else { continue };
+            let _ = std::fs::remove_file(dir.join("answers"));
+            for l in a.lines() {
+                if let Some((id, what)) = l.split_once(' ') {
+                    let r = proxy.answer(id.parse().unwrap_or(0), what == "allow");
+                    eprintln!("answer {l}: {r:?}");
+                }
+            }
+        }
     }
 }
