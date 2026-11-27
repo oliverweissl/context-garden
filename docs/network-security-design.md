@@ -58,10 +58,10 @@ When A is unavailable (AppImage without the profile, or a hardened kernel), agen
 
 | Option | How | Tested | Bypass |
 |---|---|---|---|
-| **A. Seatbelt** (`sandbox-exec` with an SBPL profile) | `(deny network*)`, then allow `network-outbound` only to `localhost:<proxy port>` (and the Unix socket path). The shell in the PTY starts under `sandbox-exec -p <profile>`, and every child inherits it. Codex and Claude Code's sandbox use this mechanism. | **Not tested** (no Mac available). | Kernel-enforced (Sandbox.kext), inherited and cannot be lifted by the child. `sandbox-exec` is marked deprecated, but it ships and works on current macOS and is what the other agent tools rely on. |
+| **A. Seatbelt** (`sandbox-exec` with an SBPL profile) | `(allow default)` then `(deny network-outbound)`, no IP bind or inbound, Unix sockets allowed except mDNSResponder's (so names resolve only through the proxy), and outbound allowed only to `localhost:<proxy port>` and `localhost:<control port>`. The shell in the PTY starts under `sandbox-exec -p <profile>`, and every child inherits it (`app/src-tauri/src/seatbelt.rs`). | **Tested on the GitHub macOS runner** (macOS 26.7): the allowed localhost port works; other localhost ports, TCP to 1.1.1.1 (also on the proxy's port number: the filter matches the address, so no hole), UDP DNS, name resolution, `nslookup`, `ping`, TCP bind (127.0.0.1 and 0.0.0.0) are refused; `curl`, `git` and `claude` work through an HTTP proxy; grandchildren inherit it. **Limit:** sandboxes cannot be nested, so a program inside that starts its own `sandbox-exec` (Codex does for its commands by default) fails with `sandbox_apply: Operation not permitted`. | Kernel-enforced (Sandbox.kext), inherited and cannot be lifted by the child. `sandbox-exec` is marked deprecated, but it ships and works on current macOS and is what the other agent tools rely on. |
 | B. NetworkExtension content filter (`NEFilterDataProvider`) | System extension that sees every flow with its process. | Not tested. | Strongest and per-process, but needs an Apple Developer ID, Apple-granted entitlements, notarization and the user approving a system extension. The app is **not code-signed yet** (README), so this is not feasible now. |
 
-**Recommendation for macOS:** A (Seatbelt). Revisit B if the app is ever signed and notarized.
+**Decision for macOS:** A (Seatbelt). If `sandbox-exec` does not work (probed at app start), agent terminals do not start while the feature is on. Revisit B if the app is ever signed and notarized.
 
 ### 3.3 Windows
 

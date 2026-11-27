@@ -63,10 +63,19 @@ export async function networkPanel() {
           : "Until you agree, agent terminals do not start while the layer is on."),
         h("div", { class: "row end" }, agree));
     }
+    if (mode.mode === "seatbelt") {
+      return h("div", { class: "card net-mode" },
+        h("p", { class: "small" }, h("span", { class: "chip ok" }, "Seatbelt"), " No network except through the app."),
+        h("p", { class: "faint small" }, "Agent terminals run under the macOS sandbox. Inside them, programs cannot open TCP ports of "
+          + "their own, names resolve only through the proxy, and programs that start a sandbox of their own (sandbox-exec, "
+          + "as Codex does for its commands by default) fail, because macOS sandboxes cannot be nested."));
+    }
     if (mode.mode === "none") {
       return h("div", { class: "card net-mode" },
-        h("p", { class: "small warn" }, "Neither sandbox works on this system, so agent terminals do not start while the layer is on."),
-        why("Namespace mode", mode.namespace_error), why("Landlock fallback", mode.landlock_error));
+        h("p", { class: "small warn" }, mode.error
+          ? "The macOS sandbox does not work on this Mac, so agent terminals do not start while the layer is on."
+          : "Neither sandbox works on this system, so agent terminals do not start while the layer is on."),
+        why("Reason", mode.error), why("Namespace mode", mode.namespace_error), why("Landlock fallback", mode.landlock_error));
     }
     return h("div", { class: "card net-mode" },
       h("p", { class: "small" }, h("span", { class: "chip" }, "Proxy only"),

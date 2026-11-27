@@ -9,6 +9,8 @@ mod pty;
 mod relocate;
 #[cfg(target_os = "linux")]
 pub mod sandbox;
+#[cfg(any(target_os = "macos", test))]
+mod seatbelt;
 mod skills;
 mod sources;
 mod stats;
@@ -974,17 +976,26 @@ fn terminal_spawn(
         Some(_) => Some(sandbox_mode(&store)?),
         None => None,
     };
-    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
+    // macOS: Seatbelt (sandbox-exec), likewise required.
+    #[cfg(target_os = "macos")]
+    if net_key.is_some() {
+        seatbelt_ready()?;
+    }
+    #[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(unused_mut))]
     let mut sandbox = vec![];
     if let Some(k) = &net_key {
         let port = net.listen(k, &g.id, title.as_deref().unwrap_or(k))?;
         env.extend(proxy_env(port));
+        // The proxy, and the control endpoint for the garden-control tools.
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let ports: Vec<u16> = std::iter::once(port).chain(control.addr().and_then(|a| a.rsplit(':').next()?.parse::<u16>().ok())).collect();
         #[cfg(target_os = "linux")]
         if let Some(mode) = sandbox_mode {
-            // The proxy, and the control endpoint for the garden-control tools.
-            let mut ports = vec![port];
-            ports.extend(control.addr().and_then(|a| a.rsplit(':').next()?.parse::<u16>().ok()));
             sandbox = sandbox::wrap(mode, &ports)?;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            sandbox = seatbelt::wrap(&ports);
         }
     }
     if let (Some(k), Some((agent, account))) = (&control_key, &who) {
@@ -1159,12 +1170,33 @@ fn sandbox_mode_for(support: &sandbox::Support, fallback_agreed: bool) -> Result
     }
 }
 
+/// Whether Seatbelt works on this Mac; probed once per app start.
+#[cfg(target_os = "macos")]
+fn seatbelt_support() -> &'static Result<(), String> {
+    static SUPPORT: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
+    SUPPORT.get_or_init(seatbelt::probe)
+}
+
+/// macOS: no Seatbelt, no agent terminal while the layer is on.
+#[cfg(target_os = "macos")]
+fn seatbelt_ready() -> Result<(), String> {
+    seatbelt_support().clone().map_err(|why| {
+        format!(
+            "The network security layer is on, but the macOS sandbox does not work on this Mac, so agent terminals do not start ({why}). \
+             Turn the layer off in Settings → Network to run them without it."
+        )
+    })
+}
+
 /// What Settings → Network shows about enforcement on this machine.
 #[derive(Serialize)]
 struct NetMode {
-    /// "namespace", "landlock", "none" (Linux, neither works) or "unenforced"
-    /// (no OS sandbox on this platform yet: the proxy variables only).
+    /// "namespace", "landlock" (Linux), "seatbelt" (macOS), "none" (the
+    /// platform's sandbox does not work here) or "unenforced" (no OS sandbox on
+    /// this platform yet: the proxy variables only).
     mode: String,
+    /// macOS: why Seatbelt does not work here.
+    error: Option<String>,
     /// Why namespace mode / the fallback do not work here (Linux).
     namespace_error: Option<String>,
     landlock_error: Option<String>,
@@ -1190,12 +1222,27 @@ fn net_mode(store: State<Store>) -> Result<NetMode, String> {
         } else {
             store.net()?
         };
-        Ok(NetMode { mode, namespace_error: s.namespace.clone().err(), landlock_error: s.landlock.clone().err(), fallback_agreed: cfg.fallback_agreed })
+        Ok(NetMode {
+            mode,
+            error: None,
+            namespace_error: s.namespace.clone().err(),
+            landlock_error: s.landlock.clone().err(),
+            fallback_agreed: cfg.fallback_agreed,
+        })
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     {
         let _ = store;
-        Ok(NetMode { mode: "unenforced".into(), namespace_error: None, landlock_error: None, fallback_agreed: false })
+        let (mode, error) = match seatbelt_support() {
+            Ok(()) => ("seatbelt", None),
+            Err(e) => ("none", Some(e.clone())),
+        };
+        Ok(NetMode { mode: mode.into(), error, namespace_error: None, landlock_error: None, fallback_agreed: false })
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = store;
+        Ok(NetMode { mode: "unenforced".into(), error: None, namespace_error: None, landlock_error: None, fallback_agreed: false })
     }
 }
 
