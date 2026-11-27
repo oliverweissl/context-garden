@@ -1,6 +1,6 @@
 # Network security layer: design (#81)
 
-Status: **proposal for review**. Nothing is implemented yet. Implementation starts after this design is confirmed.
+Status: **confirmed by the owner** (2026-11-27), with the decisions in section 8. Implementation follows the PR breakdown in section 7.
 
 ## 1. Requirements (from the owner, not reinterpreted)
 
@@ -46,7 +46,13 @@ What I could test: a Linux machine (Ubuntu 24.04.4, kernel 7.0.0, AppArmor, no r
 | D. nftables/iptables per uid, cgroup eBPF `connect4/6` | Kernel filtering by uid/cgroup. | `nft` present but needs root. | Strong, but needs root at runtime or a privileged service. **Rejected** for a desktop app. |
 | E. Proxy variables only | Set `HTTPS_PROXY` etc. | n/a | Yes, trivially. Not enough (requirement 1). |
 
-**Recommendation for Linux:** A (network namespace) as the primary. The `.deb`/`.rpm` installs an AppArmor profile granting `userns` to the app's sandbox helper only, the same pattern as the apps above. Where A is unavailable (AppImage without the profile, or a hardened kernel), fall back to **B** and show a one-line notice in Settings: "Linux: Landlock mode, a connection to another host on the proxy port is not blocked". If neither A nor B is available (kernel < 6.7 and no userns), **refuse to start agent terminals while the feature is on**, with an error that says why. It does not silently run unprotected.
+**Decision for Linux:** A (network namespace) is the primary. The `.deb`/`.rpm` installs an AppArmor profile granting `userns` to the app's sandbox helper only, the same pattern as the apps above.
+
+**Fallback B is explicit, never silent.** Settings → Network always shows the active mode:
+- "Namespace mode: no network except through the app"
+- "Landlock fallback: a TCP connection to *any* host on the proxy's port number is not blocked"
+
+When A is unavailable (AppImage without the profile, or a hardened kernel), agent terminals do **not** start in mode B until the user has seen that text and agreed to it. The agreement is stored, and asked again when the detected mode changes. Until the user agrees, or if neither A nor B works (kernel < 6.7 and no userns), the app **refuses to start agent terminals while the feature is on**, with an error that says why.
 
 ### 3.2 macOS
 
@@ -98,27 +104,55 @@ What I could test: a Linux machine (Ubuntu 24.04.4, kernel 7.0.0, AppArmor, no r
 - **Timeout: 60 s, then decline once.** A toast says so, with a link to the lists. Fail-closed. Most clients' own connect timeouts are longer than 60 s, so they see a refusal, not a hang. Open question: is 60 s right?
 - Declines answer with HTTP `403` (CONNECT/HTTP) or SOCKS reply `0x02` (connection not allowed by ruleset). Programs then fail with a clear error.
 
-## 6. Agent API endpoints
+## 6. Agent API endpoints (allowed by default)
 
-The agent CLIs (`claude`, `codex`) run **inside** the sandbox too: requirement 1 says everything agents run, and their tool calls are child processes of the CLI. So their own API traffic (`api.anthropic.com`, `chatgpt.com` / `api.openai.com`, login and telemetry hosts) goes through the proxy like everything else. Both CLIs honour `HTTPS_PROXY`. This still has to be verified for each agent in the Linux PR; a CLI that does not would simply fail to connect, which is fail-closed and visible.
+The agent CLIs (`claude`, `codex`) run **inside** the sandbox too: requirement 1 says everything agents run, and their tool calls are child processes of the CLI. Their own traffic goes through the proxy. Both honour `HTTPS_PROXY` (verified, see below).
 
-Because there are **no preset groups**, the app does **not** pre-allow these hosts. The first start of an agent in a garden with no matching list opens the popup for its API host, and "accept and add to allow list" once puts it in a list the user can reuse in every garden. A garden with no allow list at all is usable after a few clicks.
+**Owner decision:** the hosts an agent needs to run are allowed **by default, without a prompt**. They live in one **built-in allow list, "Agent endpoints"**:
+- shown in Settings → Network like any other list, marked *built-in*
+- **editable**: entries can be removed or added, and there is a "reset to defaults" button
+- cannot be deleted, only edited
+- selected in every garden by default; a garden can deselect it
+- evaluated like any other allow list, so a user deny list still wins over it
 
-Open question for the owner: is this first-run prompting acceptable, or may the app add (visibly, editable, removable) the agent's own API host to a list the user names when they turn the feature on?
+It is not a preset group to pick from: it is a single visible list that exists so the agents work out of the box.
+
+Default entries, determined with `claude` 2.1.332 and `codex-cli` 0.150.1 on Linux. Method:
+- **live**: the CLI was run through a logging CONNECT proxy (`HTTPS_PROXY`) and every host it connected to was recorded
+- **binary**: the hostnames the CLI's binary references; only those for its own sign-in, API and update paths were kept, not documentation links or optional third-party integrations
+
+| Agent | Host | Why | Source |
+|---|---|---|---|
+| Claude Code | `api.anthropic.com` | model API | live (`claude -p`, 13 connections) |
+| Claude Code | `mcp-proxy.anthropic.com` | claude.ai connectors / MCP proxy | live (5 connections) |
+| Claude Code | `claude.ai` | sign-in (OAuth) with a Claude account | binary |
+| Claude Code | `platform.claude.com` | sign-in with a Console account | binary |
+| Claude Code | `downloads.claude.ai` | the CLI's own auto-update | binary |
+| Claude Code | `http-intake.logs.us5.datadoghq.com` | Claude Code's telemetry (optional: removing it does not stop the CLI) | live (1 connection) |
+| Codex | `chatgpt.com` | model API with a ChatGPT sign-in | live (20 connections) |
+| Codex | `auth.openai.com` | sign-in and token refresh | live (2 connections) |
+| Codex | `api.openai.com` | model API with an API key | binary |
+| Codex | `ab.chatgpt.com` | Codex's feature-flag service (optional) | binary |
+
+Caveats:
+- The Codex login on the test machine had expired, so its live run stopped after the token refresh. A signed-in run may reach more hosts; that is checked again in PR 4.
+- Cloud-provider back ends (Bedrock, Vertex, Azure, custom gateways) are **not** in the defaults. Users who configure one add its host to a list.
+
+**Loopback:** Codex sent a request to `http://127.0.0.1:<port>` (its own local service) through the proxy. Agent terminals therefore get `NO_PROXY=localhost,127.0.0.1,::1`, and loopback stays inside the sandbox (its own loopback in namespace mode). In the Landlock fallback, loopback TCP connections to anything but the proxy port are blocked; this is listed with the fallback's limits.
 
 ## 7. PR breakdown
 
 1. **This design doc.**
-2. **Rules engine + storage + Settings UI.** `netrules.rs` (entries, list model, evaluation, unit tests incl. CIDR v4/v6, `*.domain`, deny-wins, rebinding). Settings → Network: global on/off (default off), list editor. Per-garden list selection. No enforcement yet; the switch is labelled as such until PR 4.
+2. **Rules engine + storage + Settings UI.** `netrules.rs` (entries, list model, evaluation, unit tests incl. CIDR v4/v6, `*.domain`, deny-wins, rebinding). Settings → Network: global on/off (default off), list editor. Per-garden list selection. The built-in "Agent endpoints" allow list (section 6). No enforcement yet; the switch is labelled as such until PR 4.
 3. **Proxy + prompt.** `netproxy.rs`: per-terminal listener, HTTP CONNECT / plain HTTP / SOCKS5h, DNS in the proxy, hold-and-ask, coalescing, 60 s timeout. `net-prompt` event, popup with the four choices, "add to list" writes through PR 2's store. Tested with a local client and server.
 4. **Linux enforcement.** Network-namespace mode (sandbox helper, Unix-socket bridge, AppArmor profile in the `.deb`/`.rpm`) and Landlock + seccomp fallback. Refuse to start when neither is available. Integration tests: inside the sandbox `curl` with and without the proxy, UDP DNS and raw sockets all fail except via the proxy. Verify that `claude` and `codex` work through the proxy.
 5. **macOS enforcement.** Seatbelt profile and launcher; the same integration tests on a macOS runner (the existing `app-macos` workflow).
 6. **Windows enforcement.** Starts with the spike (sandbox user + firewall rule + ConPTY). Either it is implemented with tests on the `app-windows` runner, or the feature is reported as unavailable on Windows.
 7. **Docs and polish.** README/app README section, "terminals started before the change" marker, help text with the limitations (section 4, Linux fallback).
 
-## 8. Open questions for the owner
+## 8. Owner decisions (2026-11-27)
 
-1. Agent API hosts: prompt on first use (current design), or let the user put them in a list when turning the feature on? (section 6)
-2. Prompt timeout of 60 s, then decline once: OK? (section 5)
-3. Linux fallback B has the "other host on the proxy port" hole. Accept it as a fallback with a visible notice, or require namespace mode (and refuse to start otherwise)?
-4. Windows needs a one-time elevated setup (UAC) and a separate sandbox user. Acceptable?
+1. **Agent API hosts are allowed by default**, through the visible, editable built-in "Agent endpoints" list (section 6). No first-use prompt for them.
+2. **Prompt timeout 60 s**, then decline once (section 5).
+3. **Linux Landlock + seccomp fallback is allowed, but only explicitly.** The active mode is always shown, the fallback's address hole is stated, and the fallback applies only after the user has seen that and agreed. If neither mode works, agent terminals do not start while the feature is on (section 3.1).
+4. **Windows: a separate sandbox user with a one-time elevated setup** is accepted (section 3.3).
