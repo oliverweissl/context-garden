@@ -44,6 +44,19 @@ fn refs() -> Result<Refs, String> {
     Ok(refs)
 }
 
+/// The tag of release `version` (tagged `0.7.0` or `v0.7.0`) and the commit it points at.
+pub fn release_tag(version: &str) -> Result<Option<(String, String)>, String> {
+    Ok(release_in(version, &refs()?))
+}
+
+fn release_in(version: &str, refs: &Refs) -> Option<(String, String)> {
+    [version.to_string(), format!("v{version}")].into_iter().find_map(|tag| {
+        let name = format!("refs/tags/{tag}");
+        // An annotated tag is listed twice, its peeled commit (`^{}`) last.
+        refs.iter().rev().find(|(_, n)| *n == name).map(|(sha, _)| (tag, sha.clone()))
+    })
+}
+
 /// Latest commit on main.
 pub fn main_commit() -> Result<String, String> {
     refs()?
@@ -107,6 +120,19 @@ pub fn open_repo_page(url: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_release_tag_and_its_commit() {
+        let refs: Refs = vec![
+            ("m".into(), "refs/heads/main".into()),
+            ("obj".into(), "refs/tags/v0.8.0".into()),
+            ("peeled".into(), "refs/tags/v0.8.0".into()),
+            ("c3".into(), "refs/tags/0.7.0".into()),
+        ];
+        assert_eq!(release_in("0.7.0", &refs), Some(("0.7.0".into(), "c3".into())));
+        assert_eq!(release_in("0.8.0", &refs), Some(("v0.8.0".into(), "peeled".into())));
+        assert_eq!(release_in("0.9.0", &refs), None);
+    }
 
     #[test]
     fn picks_the_newest_higher_tag() {

@@ -13,6 +13,7 @@ import { setCrumbs, h, toast, errText } from "./ui.js";
 import { api } from "./api.js";
 import { initControl } from "./terminals.js";
 import { initOutdated } from "./views/outdated.js";
+import { askReleaseSkills } from "./views/release.js";
 
 const app = document.getElementById("app");
 initControl();
@@ -95,3 +96,6 @@ api.appUpdate().then(async (release) => {
 
 // Accounts with older context-garden skills, and terminals running old ones (#64).
 initOutdated();
+
+// Accounts without this release's skills: ask once per app version (#90).
+askReleaseSkills();

@@ -124,6 +124,100 @@ fn claude_enabled(dir: &Path, plugin: &str) -> bool {
     read_json(&dir.join("settings.json")).is_some_and(|s| s["enabledPlugins"][plugin] == true)
 }
 
+/// The git ref an account's marketplace is pinned to (a release tag), if any.
+pub fn marketplace_ref(agent: &str, dir: &Path, marketplace: &str) -> Option<String> {
+    match agent {
+        "claude" => read_json(&dir.join("plugins/known_marketplaces.json"))?[marketplace]["source"]["ref"]
+            .as_str()
+            .map(String::from),
+        "codex" => {
+            let text = std::fs::read_to_string(dir.join("config.toml")).ok()?;
+            let head = format!("[marketplaces.{marketplace}]");
+            let mut lines = text.lines().skip_while(|l| l.trim() != head).skip(1);
+            lines
+                .by_ref()
+                .take_while(|l| !l.trim_start().starts_with('['))
+                .find_map(|l| l.trim().strip_prefix("ref")?.trim_start().strip_prefix('=')?.trim().strip_prefix('"')?.strip_suffix('"').map(String::from))
+        }
+        _ => None,
+    }
+}
+
+/// Claude's saved userConfig options of a plugin, as `key=value` for `--config`.
+fn claude_options(dir: &Path, plugin: &str) -> Vec<String> {
+    let Some(settings) = read_json(&dir.join("settings.json")) else { return vec![] };
+    let Some(options) = settings["pluginConfigs"][plugin]["options"].as_object() else { return vec![] };
+    options
+        .iter()
+        .filter_map(|(k, v)| match v {
+            serde_json::Value::String(s) => Some(format!("{k}={s}")),
+            serde_json::Value::Bool(_) | serde_json::Value::Number(_) => Some(format!("{k}={v}")),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Point an account's marketplace at release `tag` of `repo` (owner/repo) and
+/// install the plugin from there. Neither agent can change the ref of a
+/// marketplace in place, so it is removed and added again. Claude's removal
+/// also uninstalls the plugin and deletes its saved options and data folder:
+/// both are kept aside and restored, and Claude keeps whether the plugin was
+/// switched on account-wide. Codex keeps its plugin entry; our hooks get
+/// trusted again. Returns a line for the UI when there is more to say.
+pub fn pin(agent: &str, dir: &Path, plugin: &str, repo: &str, tag: &str) -> Result<Option<String>, String> {
+    let marketplace = plugin.split_once('@').map(|(_, m)| m).ok_or("plugin id needs <plugin>@<marketplace>")?;
+    let dir_text = dir.to_string_lossy();
+    match agent {
+        "claude" => {
+            if which("claude").is_none() {
+                return Err("`claude` is not installed".into());
+            }
+            let env = [("CLAUDE_CONFIG_DIR", dir_text.as_ref())];
+            let was_on = claude_enabled(dir, plugin);
+            let options = claude_options(dir, plugin);
+            let data = dir.join("plugins/data").join(plugin.replace(['@', '/'], "-"));
+            let aside = dir.join("plugins").join(format!(".cg-keep-{}", std::process::id()));
+            let kept = data.is_dir() && std::fs::rename(&data, &aside).is_ok();
+            let result = (|| {
+                if read_json(&dir.join("plugins/known_marketplaces.json")).is_some_and(|k| k.get(marketplace).is_some()) {
+                    run_env("claude", &["plugin", "marketplace", "remove", marketplace], None, &env)?;
+                }
+                run_env("claude", &["plugin", "marketplace", "add", &format!("{repo}#{tag}")], None, &env)?;
+                let mut args = vec!["plugin", "install", plugin, "--scope", "user"];
+                for o in &options {
+                    args.extend(["--config", o.as_str()]);
+                }
+                run_env("claude", &args, None, &env).map(|_| ())
+            })();
+            if kept {
+                let _ = std::fs::remove_dir_all(&data);
+                if let Err(e) = std::fs::rename(&aside, &data) {
+                    eprintln!("restoring {}: {e} (kept in {})", data.display(), aside.display());
+                }
+            }
+            if !was_on {
+                let _ = run_env("claude", &["plugin", "disable", plugin, "--scope", "user"], None, &env);
+            }
+            result.map(|_| None)
+        }
+        "codex" => {
+            if which("codex").is_none() {
+                return Err("`codex` is not installed".into());
+            }
+            let env = [("CODEX_HOME", dir_text.as_ref())];
+            let known = std::fs::read_to_string(dir.join("config.toml"))
+                .is_ok_and(|t| t.lines().any(|l| l.trim() == format!("[marketplaces.{marketplace}]")));
+            if known {
+                run_env("codex", &["plugin", "marketplace", "remove", marketplace], None, &env)?;
+            }
+            run_env("codex", &["plugin", "marketplace", "add", repo, "--ref", tag], None, &env)?;
+            run_env("codex", &["plugin", "add", plugin], None, &env)?;
+            Ok((plugin == crate::skills::PLUGIN).then(|| codex_trust_note(dir, plugin)))
+        }
+        other => Err(format!("'{other}' has no plugin support")),
+    }
+}
+
 /// Refresh the plugin's marketplace and install its newest version, with the
 /// agent's own plugin commands. Claude keeps whether it was switched on
 /// account-wide (gardens switch theirs on per folder). Returns a line for
@@ -516,6 +610,40 @@ mod tests {
         assert_eq!((got[0].version.as_str(), got[0].latest.as_deref()), ("1.0.0", Some("1.1.0")));
         assert_eq!(got[0].stamp, "1.0.0|abc|t");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Pins a real account to a release (network, the agent's CLI):
+    /// CG_TEST_PIN_AGENT=claude|codex CG_TEST_PIN_DIR=<config dir> CG_TEST_PIN_TAG=0.7.0 cargo test -- --ignored pin_live
+    #[test]
+    #[ignore]
+    fn pin_live() {
+        let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("set {k}"));
+        let (agent, dir, tag) = (var("CG_TEST_PIN_AGENT"), PathBuf::from(var("CG_TEST_PIN_DIR")), var("CG_TEST_PIN_TAG"));
+        let note = pin(&agent, &dir, crate::skills::PLUGIN, "oliverweissl/context-garden", &tag).unwrap();
+        println!("note: {note:?}");
+        println!("ref: {:?}", marketplace_ref(&agent, &dir, "context-garden"));
+        println!("commit: {:?}", installed_commit(&agent, &dir, crate::skills::PLUGIN));
+    }
+
+    #[test]
+    fn pinned_refs_are_read_from_each_agents_config() {
+        let dir = scratch("pinned");
+        std::fs::create_dir_all(dir.join("plugins")).unwrap();
+        std::fs::write(
+            dir.join("plugins/known_marketplaces.json"),
+            r#"{"m":{"source":{"source":"github","repo":"o/r","ref":"0.7.0"}},"n":{"source":{"source":"github","repo":"o/n"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(marketplace_ref("claude", &dir, "m").as_deref(), Some("0.7.0"));
+        assert_eq!(marketplace_ref("claude", &dir, "n"), None);
+        std::fs::write(
+            dir.join("config.toml"),
+            "[marketplaces.n]\nsource = \"x\"\n\n[marketplaces.m]\nsource_type = \"git\"\nref = \"0.7.0\"\n\n[plugins.\"p@m\"]\nref = \"no\"\n",
+        )
+        .unwrap();
+        assert_eq!(marketplace_ref("codex", &dir, "m").as_deref(), Some("0.7.0"));
+        assert_eq!(marketplace_ref("codex", &dir, "n"), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
