@@ -9,10 +9,14 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::process::Command;
 
-const BIN: &str = env!("CARGO_BIN_EXE_context-garden-app");
+/// The binary under test; CG_SANDBOX_BIN points at another copy, e.g. one an
+/// AppArmor profile covers, to run namespace mode on Ubuntu ≥ 23.10.
+fn bin() -> String {
+    std::env::var("CG_SANDBOX_BIN").unwrap_or_else(|_| env!("CARGO_BIN_EXE_context-garden-app").into())
+}
 
 fn supported(mode: &str) -> bool {
-    let out = Command::new(BIN).args(["--cg-sandbox", mode, "probe"]).output().unwrap();
+    let out = Command::new(bin()).args(["--cg-sandbox", mode, "probe"]).output().unwrap();
     if !out.status.success() {
         eprintln!("skipping {mode} mode: {}", String::from_utf8_lossy(&out.stderr).trim());
     }
@@ -64,7 +68,7 @@ t("unix", lambda: socket.socket(socket.AF_UNIX, socket.SOCK_STREAM))
 
 fn run(mode: &str) -> String {
     let (allowed, other) = (greeter(), greeter());
-    let out = Command::new(BIN)
+    let out = Command::new(bin())
         .args(["--cg-sandbox", mode, &allowed.to_string(), "--", "python3", "-c", PROBES, &allowed.to_string(), &other.to_string()])
         .output()
         .unwrap();
@@ -113,7 +117,7 @@ fn the_program_never_runs_without_its_sandbox() {
         if mode != "bogus" && supported(mode) {
             continue;
         }
-        let out = Command::new(BIN).args(["--cg-sandbox", mode, "1", "--", "sh", "-c", &touch]).output().unwrap();
+        let out = Command::new(bin()).args(["--cg-sandbox", mode, "1", "--", "sh", "-c", &touch]).output().unwrap();
         assert_eq!(out.status.code(), Some(126), "{mode}");
         assert!(String::from_utf8_lossy(&out.stderr).contains("the agent was not started"), "{mode}");
         assert!(!marker.exists(), "{mode}: the program ran");
@@ -123,7 +127,7 @@ fn the_program_never_runs_without_its_sandbox() {
 #[test]
 fn exit_codes_and_output_pass_through() {
     let mode = if supported("namespace") { "namespace" } else if supported("landlock") { "landlock" } else { return };
-    let mut child = Command::new(BIN)
+    let mut child = Command::new(bin())
         .args(["--cg-sandbox", mode, "", "--", "sh", "-c", "read x; echo got $x; exit 7"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
