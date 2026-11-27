@@ -145,6 +145,28 @@ ui("resuming terminals opens agent panes with icon, title and a detected checkli
   await page.waitForSelector(".checklist-chip:not([hidden])", { timeout: 8000 }); // the mock agent prints steps
 });
 
+ui("an uncovered connection asks in the terminal's window with four answers (#81)", async () => {
+  await open("#/garden/payments-platform");
+  await page.waitForSelector(".resume-bar");
+  await clickText(".resume-bar button", "Resume all");
+  await page.waitForSelector(".pane");
+  // A prompt for a terminal this window does not hold is not shown here.
+  await page.evaluate(() => window.cgMockEmit("net-prompt", { id: 1, key: "elsewhere", garden: "payments-platform", terminal: "X", host: "x.example", port: 443, ips: [], timeout_secs: 60 }));
+  await wait(300);
+  assert.equal(await page.$(".net-prompt"), null);
+  await page.evaluate(() => window.cgMockEmit("net-prompt", { id: 2, key: "a", garden: "payments-platform", terminal: "Claude Code", host: "api.github.com", port: 443, ips: ["140.82.112.6"], timeout_secs: 60 }));
+  await page.waitForSelector(".net-prompt");
+  const body = await text(".net-prompt");
+  assert.match(body, /Claude Code/);
+  assert.match(body, /api\.github\.com:443/);
+  assert.match(body, /Declined in \d+ s/);
+  const labels = await page.$$eval(".net-prompt .net-choices button", (bs) => bs.map((b) => b.textContent));
+  assert.deepEqual(labels, ["Accept once", "Accept and add to", "Decline once", "Decline and add to"]);
+  assert.ok(body.includes("*.github.com"), "domain suggestion");
+  await clickText(".net-prompt button", "Accept once");
+  await page.waitForFunction(() => !document.querySelector(".net-prompt"));
+});
+
 ui("the Orchestrate view lists the open agent terminals", async () => {
   await open("#/garden/payments-platform");
   await page.waitForSelector(".resume-bar");

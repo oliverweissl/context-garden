@@ -2,6 +2,7 @@
 
 mod accounts;
 mod control;
+mod netproxy;
 mod netrules;
 mod plugins;
 mod pty;
@@ -882,6 +883,7 @@ fn terminal_spawn(
     ptys: State<Ptys>,
     session_worktrees: State<worktrees::Session>,
     control: State<Control>,
+    net: State<netproxy::NetProxy>,
     garden: String,
     key: Option<String>,
     title: Option<String>,
@@ -954,6 +956,19 @@ fn terminal_spawn(
     // Agent terminals can be linked under a manager (or manage others) through the app's
     // control endpoint; plain shells never get the secret.
     let control_key = key.filter(|k| !k.is_empty()).filter(|_| who.is_some());
+    // Network security layer (#81): with it on, an agent terminal reaches the network
+    // through its own proxy listener, which applies the garden's lists and asks about
+    // the rest. Not enforced yet: the OS sandbox that leaves no other way out comes next.
+    let net_key = match (&who, &control_key) {
+        (Some(_), Some(k)) => Some(k.clone()),
+        (Some(_), None) => Some(format!("pty-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0))),
+        _ => None,
+    };
+    let net_key = net_key.filter(|_| store.net().is_ok_and(|c| c.enabled));
+    if let Some(k) = &net_key {
+        let port = net.listen(k, &g.id, title.as_deref().unwrap_or(k))?;
+        env.extend(proxy_env(port));
+    }
     if let (Some(k), Some((agent, account))) = (&control_key, &who) {
         let term = control::Term {
             garden: g.id.clone(),
@@ -974,7 +989,25 @@ fn terminal_spawn(
     if let Some(k) = &control_key {
         control.set_pty(k, id);
     }
+    if let Some(k) = &net_key {
+        net.set_pty(k, id);
+    }
     Ok(Spawned { id, worktree })
+}
+
+/// The proxy variables of an agent terminal: every common spelling, and loopback
+/// left direct (agents talk to local services of their own, design section 6).
+fn proxy_env(port: u16) -> Vec<(String, String)> {
+    let url = format!("http://127.0.0.1:{port}");
+    let mut out = Vec::new();
+    for name in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"] {
+        out.push((name.to_string(), url.clone()));
+        out.push((name.to_lowercase(), url.clone()));
+    }
+    for name in ["NO_PROXY", "no_proxy"] {
+        out.push((name.to_string(), "localhost,127.0.0.1,::1".to_string()));
+    }
+    out
 }
 
 /// Codex runs a plugin's hooks only while config.toml trusts their current
@@ -1276,8 +1309,9 @@ fn terminal_resize(ptys: State<Ptys>, id: u32, cols: u16, rows: u16) -> Result<(
 }
 
 #[tauri::command]
-fn terminal_kill(ptys: State<Ptys>, id: u32) {
-    ptys.kill(id)
+fn terminal_kill(ptys: State<Ptys>, net: State<netproxy::NetProxy>, id: u32) {
+    ptys.kill(id);
+    net.close_pty(id);
 }
 
 /// Open another ContextGarden window, optionally on a page (`#/garden/<id>`).
@@ -1323,6 +1357,57 @@ fn control_reply(control: State<Control>, id: u64, ok: bool, text: String) {
 }
 
 /// Control calls reach the rest of the app through the handle.
+/// The proxy's view of the app: a garden's lists, and prompts through the windows.
+struct AppNet(AppHandle);
+
+impl netproxy::Env for AppNet {
+    fn lists(&self, garden: &str) -> Vec<netrules::List> {
+        self.0.state::<Store>().net().map(|c| c.garden_lists(garden).into_iter().cloned().collect()).unwrap_or_default()
+    }
+    fn ask(&self, prompt: &netproxy::Prompt) {
+        let _ = self.0.emit("net-prompt", prompt);
+    }
+    fn done(&self, id: u64, allowed: Option<bool>) {
+        let _ = self.0.emit("net-prompt-done", serde_json::json!({ "id": id, "allowed": allowed }));
+    }
+}
+
+/// The user's answer to a `net-prompt`: `accept_once`, `accept_add`, `decline_once`
+/// or `decline_add`; the `_add` answers first add `entry` to list `list`.
+#[tauri::command]
+fn net_prompt_answer(
+    store: State<Store>,
+    net: State<netproxy::NetProxy>,
+    id: u64,
+    choice: String,
+    list: Option<String>,
+    entry: Option<String>,
+) -> Result<netrules::NetConfig, String> {
+    let (allow, add) = match choice.as_str() {
+        "accept_once" => (true, false),
+        "accept_add" => (true, true),
+        "decline_once" => (false, false),
+        "decline_add" => (false, true),
+        other => return Err(format!("unknown answer '{other}'")),
+    };
+    let cfg = if add {
+        let list = list.filter(|l| !l.is_empty()).ok_or("pick a list to add it to")?;
+        let entry = entry.filter(|e| !e.trim().is_empty()).ok_or("enter the host, *.domain or IP range to add")?;
+        store.update_net(|c| {
+            let kind = c.lists.iter().find(|l| l.id == list).map(|l| l.kind).ok_or("that list no longer exists")?;
+            if (kind == netrules::Kind::Allow) != allow {
+                return Err(format!("that is {} list", if allow { "not an allow" } else { "not a deny" }));
+            }
+            c.add_entry(&list, &entry)?;
+            Ok(c.clone())
+        })?
+    } else {
+        store.net()?
+    };
+    net.answer(id, allow)?;
+    Ok(cfg)
+}
+
 struct AppWorld(AppHandle);
 
 impl control::World for AppWorld {
@@ -1368,6 +1453,10 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             app.manage(Store::new(dir));
+            app.manage(netproxy::NetProxy::new(
+                std::sync::Arc::new(AppNet(app.handle().clone())),
+                netproxy::PROMPT_TIMEOUT,
+            ));
             let control = app.state::<Control>().inner().clone();
             if let Err(e) = control::start(control, std::sync::Arc::new(AppWorld(app.handle().clone()))) {
                 eprintln!("agent control endpoint: {e}"); // terminals still work, just unlinked
@@ -1437,6 +1526,7 @@ pub fn run() {
             net_delete_list,
             net_reset_builtin,
             net_add_entry,
+            net_prompt_answer,
             net_set_garden_lists,
             net_check,
             set_settings,

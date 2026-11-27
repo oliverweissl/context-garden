@@ -927,6 +927,9 @@ export function staleTerminals() {
     .map((p) => ({ garden, title: p.opts.title, why: p.state.stale })));
 }
 
+/** Whether terminal `key` lives in this window. */
+export const paneHere = (key) => [...workspaces.values()].some((w) => w.panes.some((p) => p.opts.key === key));
+
 /**
  * Answer the prompts and screen reads a manager agent sends to a terminal that
  * lives in this window (see control.rs). Other windows stay silent.

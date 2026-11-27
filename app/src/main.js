@@ -12,11 +12,13 @@ import { openSettings, setPageSettings } from "./views/settings.js";
 import { setCrumbs, h, toast, errText } from "./ui.js";
 import { api } from "./api.js";
 import { initControl } from "./terminals.js";
+import { initNetPrompt } from "./views/netprompt.js";
 import { initOutdated } from "./views/outdated.js";
 import { askReleaseSkills } from "./views/release.js";
 
 const app = document.getElementById("app");
 initControl();
+initNetPrompt();
 let cleanup = null;
 
 async function route() {
