@@ -10,11 +10,15 @@ Terminals are real pseudo-terminals (`portable-pty`, ConPTY on Windows).
 
 Download the installer for your OS from
 [Releases](https://github.com/oliverweissl/context-garden/releases): `.dmg` (macOS),
-`.msi` / `.exe` (Windows), `.deb` / `.rpm` / `.AppImage` (Linux). The builds are not
-code-signed yet, so the first start needs one extra step:
+`.msi` / `.exe` (Windows), `.deb` / `.rpm` / `.AppImage` (Linux). macOS builds are
+signed and notarized once the release pipeline has its Apple certificate
+([CONTRIBUTING.md](../CONTRIBUTING.md#signed-macos-releases)); until then they are ad-hoc signed only.
+On macOS the simplest install is Homebrew, which clears the warning for you:
+`brew install --cask oliverweissl/tap/contextgarden`. Otherwise, and on Windows,
+the first start needs one extra step:
 
-- **macOS:** right-click ContextGarden in Applications, then Open (or run
-  `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
+- **macOS** ("Apple could not verify ContextGarden…"): right-click ContextGarden in
+  Applications, then Open (or run `xattr -dr com.apple.quarantine /Applications/ContextGarden.app`).
 - **Windows:** SmartScreen, then "More info", then "Run anyway".
 
 **Updates:** when a newer release exists, the app shows an update button. Builds that carry an

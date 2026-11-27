@@ -21,7 +21,7 @@ jobs:
     # Installers are only built and kept for release tags, never for branches.
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
-      contents: write
+      contents: write # releases, and the gh-pages apt repository
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +48,63 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: npm ci
         working-directory: app
+      # Signed and notarized macOS builds (#52) once the repo has the Apple
+      # secrets (CONTRIBUTING.md, "Signed macOS releases"); without them the
+      # build stays unsigned as before. Half a setup fails the job instead of
+      # shipping an app Gatekeeper still blocks.
+      - name: macOS signing keychain and notarization key
+        if: runner.os == 'macOS'
+        env:
+          CERT_P12: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$CERT_P12" ]; then
+            echo "::warning::No APPLE_CERTIFICATE secret: this macOS build is ad-hoc signed, not notarized."
+            # "-" makes tauri ad-hoc sign: no Developer ID, but arm64 builds
+            # need some signature or macOS reports the app as damaged.
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ -z "$CERT_PASSWORD" ] || [ -z "$IDENTITY" ]; then
+            echo "::error::APPLE_CERTIFICATE needs APPLE_CERTIFICATE_PASSWORD and APPLE_SIGNING_IDENTITY too."
+            exit 1
+          fi
+          # Our own keychain, kept for the whole job: tauri signs the app from
+          # it and the dmg step signs the disk image afterwards.
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -base64 24)"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$keychain" | grep -F "$IDENTITY" > /dev/null || {
+            echo "::error::APPLE_SIGNING_IDENTITY is not in the imported certificate (security find-identity lists what is)."
+            exit 1
+          }
+          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          # tauri notarizes and staples the app with either credential set.
+          if [ -n "$API_KEY" ] && [ -n "$API_ISSUER" ] && [ -n "$API_KEY_P8" ]; then
+            key_path="$RUNNER_TEMP/AuthKey_$API_KEY.p8"
+            printf '%s\n' "$API_KEY_P8" > "$key_path"
+            { echo "APPLE_API_KEY=$API_KEY"; echo "APPLE_API_ISSUER=$API_ISSUER"; echo "APPLE_API_KEY_PATH=$key_path"; } >> "$GITHUB_ENV"
+          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            { echo "APPLE_ID=$APPLE_ID"; echo "APPLE_PASSWORD=$APPLE_PASSWORD"; echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"; } >> "$GITHUB_ENV"
+          else
+            echo "::error::Signing is set up but notarization is not: add APPLE_API_KEY, APPLE_API_ISSUER and APPLE_API_KEY_P8 (or APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID)."
+            exit 1
+          fi
+          echo "MACOS_SIGNED=1" >> "$GITHUB_ENV"
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,3 +117,36 @@ jobs:
           releaseName: ContextGarden ${{ github.ref_name }}
           releaseDraft: true
           args: ${{ matrix.args }} ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/updater.conf.json' || '' }}
+      - name: Notarize the dmg and replace it in the release
+        if: runner.os == 'macOS' && env.MACOS_SIGNED == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dmg="$(scripts/macos-notarize-dmg.sh app/src-tauri/target/universal-apple-darwin/release/bundle | tail -n 1)"
+          gh release upload "$GITHUB_REF_NAME" "$dmg" --clobber
+      # apt repository on GitHub Pages (branch gh-pages), signed with the
+      # APT_GPG_PRIVATE_KEY secret (CONTRIBUTING.md, "apt repository").
+      # Without the key, the .deb is only attached to the release.
+      - name: Publish the .deb to the apt repository
+        if: runner.os == 'Linux'
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APT_GPG_PRIVATE_KEY" ]; then
+            echo "::warning::No APT_GPG_PRIVATE_KEY secret: the .deb is not published to the apt repository."
+            exit 0
+          fi
+          sudo apt-get install -y apt-utils
+          APT_GPG_KEY_ID="$(echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import-options import-show --import 2>/dev/null | awk '/^sec/{getline; print $1; exit}')"
+          export APT_GPG_KEY_ID
+          deb="$(ls app/src-tauri/target/release/bundle/deb/*.deb | head -n 1)"
+          git fetch origin gh-pages || true
+          git worktree add "$RUNNER_TEMP/pages" gh-pages 2>/dev/null || git worktree add --orphan -b gh-pages "$RUNNER_TEMP/pages"
+          scripts/apt-repo.sh "$RUNNER_TEMP/pages" "$deb"
+          cd "$RUNNER_TEMP/pages"
+          touch .nojekyll
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -m "apt: $GITHUB_REF_NAME"
+          git push origin gh-pages
