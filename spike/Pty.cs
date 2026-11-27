@@ -26,7 +26,7 @@ public static class Pty {
     IntPtr list = Marshal.AllocHGlobal(lsize);
     if (!InitializeProcThreadAttributeList(list, 1, 0, ref lsize)) return "InitAttr " + Marshal.GetLastWin32Error();
     if (!UpdateProcThreadAttribute(list, 0, (IntPtr)0x00020016, hpc, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero)) return "UpdateAttr " + Marshal.GetLastWin32Error();
-    var si = new SIEX(); si.si.cb = Marshal.SizeOf(typeof(SIEX)); si.attrs = list; si.si.flags = 0x100; // STARTF_USESTDHANDLES with no handles: nothing inherited PI pi; bool ok;
+    var si = new SIEX(); si.si.cb = Marshal.SizeOf(typeof(SIEX)); si.attrs = list; si.si.flags = 0x100; /* STARTF_USESTDHANDLES, no handles */ PI pi; bool ok;
     uint flags = 0x00080000; // EXTENDED_STARTUPINFO_PRESENT
     if (how == "self") ok = CreateProcessW(null, new StringBuilder(cmd), IntPtr.Zero, IntPtr.Zero, false, flags, IntPtr.Zero, "C:\\cgspike", ref si, out pi);
     else if (how == "logon") ok = CreateProcessWithLogonW(user, ".", pw, 1, null, new StringBuilder(cmd), flags, IntPtr.Zero, "C:\\cgspike", ref si, out pi);
