@@ -3,11 +3,6 @@ on:
   push:
     branches: ["spike/81-sandbox-platforms"]
 jobs:
-  macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: bash spike/macos.sh
   windows:
     runs-on: windows-latest
     steps:
