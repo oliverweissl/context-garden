@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
-    "test": "node --test src/checklist.test.js src/inbox.test.js src/mentions.test.js src/links.test.js",
+    "test": "node --test src/checklist.test.js src/inbox.test.js src/mentions.test.js src/links.test.js src/launch-catalog.test.js",
     "test:ui": "node --test e2e/ui.test.js"
   },
   "dependencies": {

@@ -5,6 +5,7 @@ import { h, toast, errText, badge, modal, agentIcon } from "./ui.js";
 import { openOrchestrate } from "./views/orchestrate.js";
 import { makeInbox } from "./inbox.js";
 import { parseMention, makeDraft, frameForWorker, noteForManager } from "./mentions.js";
+import { CATALOG, addItem, removeItem as removeLaunchItem, findItem, joinWords, splitFlags } from "./launch-catalog.js";
 import { detectChecklist, carryOver, formatResults, formatReference, removeItem, onlyItem } from "./checklist.js";
 
 const THEME = {
@@ -369,14 +370,7 @@ const record = (o) => ({
   env: o.env || [],
 });
 
-/** Split a flags line like a shell would: spaces separate, quotes group (also mid-word, as in FOO="a b"). */
-export function splitFlags(line) {
-  const out = [];
-  for (const [word] of line.matchAll(/(?:"[^"]*"|'[^']*'|[^\s"'])+/g)) {
-    out.push(word.replace(/"([^"]*)"|'([^']*)'/g, (_, d, q) => d ?? q));
-  }
-  return out;
-}
+export { splitFlags };
 
 const QUICK_FLAGS = { claude: [["--chrome", "Claude in Chrome"], ["--ide", "Connect to your IDE"]], codex: [["--search", "Web search"]] };
 const FLAGS_KEY = (agent) => `cg.flags.${agent}`;
@@ -1006,6 +1000,7 @@ export async function terminalArea(garden) {
   const drawFlags = () => {
     const agent = agentOf();
     launch.hidden = !agent;
+    refreshFlagsBtn();
     command.textContent = agent || "";
     env.value = agent ? loadEnv(agent) : "";
     flags.value = agent ? loadFlags(agent) : "";
@@ -1020,6 +1015,64 @@ export async function terminalArea(garden) {
       },
     }, flag.replace(/^--/, ""))));
   };
+  const flagsBtn = h("button", {
+    class: "btn small", title: "Documented flags and environment variables: click to add or remove",
+    onclick: () => openFlagPicker(),
+  }, "Flags");
+  const openFlagPicker = () => {
+    const agent = agentOf();
+    const cat = CATALOG[agent];
+    if (!cat) return;
+    const search = h("input", { class: "mono", placeholder: "search flags", type: "search" });
+    const list = h("div", { class: "flag-catalog" });
+    const typed = new Map(); // value the user typed per entry, kept while the picker is open
+    const apply = (item, kind, on, value) => {
+      const input = kind === "env" ? env : flags;
+      const words = splitFlags(input.value);
+      const next = on ? addItem(words, item, kind, value) : removeLaunchItem(words, item, kind);
+      input.value = joinWords(next);
+      (kind === "env" ? storeEnv : storeFlags)(agent, input.value);
+      drawFlags();
+      draw();
+    };
+    const row = (item, kind) => {
+      const words = splitFlags((kind === "env" ? env : flags).value);
+      const at = findItem(words, item, kind);
+      const on = at >= 0;
+      const key = kind + item.name;
+      let valueInput = null;
+      if (item.value !== undefined) {
+        const current = on ? (words[at].includes("=") ? words[at].split("=").slice(1).join("=") : words[at + 1]) : null;
+        valueInput = h("input", { class: "mono flag-value", value: typed.get(key) ?? current ?? item.value, title: "Value" });
+        valueInput.addEventListener("input", () => typed.set(key, valueInput.value));
+        valueInput.addEventListener("change", () => { if (on) apply(item, kind, true, valueInput.value.trim()); });
+      }
+      return h("div", { class: "flag-row" },
+        h("button", {
+          class: `chip toggle${on ? " on" : ""}${item.danger ? " danger" : ""}`, title: item.doc,
+          onclick: () => apply(item, kind, !on, valueInput ? valueInput.value.trim() : undefined),
+        }, item.name),
+        valueInput,
+        h("span", { class: "faint small" }, item.doc));
+    };
+    const draw = () => {
+      const q = search.value.trim().toLowerCase();
+      const match = (i) => !q || i.name.toLowerCase().includes(q) || i.doc.toLowerCase().includes(q);
+      const flagRows = cat.flags.filter(match).map((i) => row(i, "flag"));
+      const envRows = cat.env.filter(match).map((i) => row(i, "env"));
+      list.replaceChildren(
+        ...(flagRows.length ? [h("h4", {}, "Flags"), ...flagRows] : []),
+        ...(envRows.length ? [h("h4", {}, "Environment variables"), ...envRows] : []),
+        ...(flagRows.length || envRows.length ? [] : [h("div", { class: "faint" }, "Nothing matches.")]));
+    };
+    search.addEventListener("input", draw);
+    draw();
+    modal(`${agent} launch options`, h("div", {},
+      h("p", { class: "faint small" }, "Click a tag to add it to the launch line, click again to remove it. Anything else can be typed into the launch line itself."),
+      search, list), { wide: true });
+    search.focus();
+  };
+  const refreshFlagsBtn = () => { flagsBtn.hidden = !CATALOG[agentOf()]; };
   flags.addEventListener("change", () => { const a = agentOf(); if (a) storeFlags(a, flags.value.trim()); drawFlags(); });
   env.addEventListener("change", () => { const a = agentOf(); if (a) storeEnv(a, env.value.trim()); drawFlags(); });
   what.addEventListener("change", drawFlags);
@@ -1142,7 +1195,7 @@ export async function terminalArea(garden) {
   const el = h("div", { class: "workspace" },
     h("div", { class: "toolbar" },
       recent,
-      what, launch, quick, h("span", { class: "faint small" }, "in"), where.el,
+      what, launch, flagsBtn, quick, h("span", { class: "faint small" }, "in"), where.el,
       h("button", { class: "btn primary", onclick: open }, "Open"),
       h("span", { class: "grow" }),
       h("button", {

@@ -364,6 +364,11 @@ th .sort .arrow { font-size: 8px; min-width: 8px; }
 .recent-what { min-width: 0; }
 .recent-list .row.end { padding-top: 10px; border-top: 1px solid var(--line); }
 .quick-flags { display: inline-flex; gap: 4px; }
+.flag-catalog h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint, #888); }
+.flag-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.flag-row .chip { flex: none; }
+.flag-row .flag-value { width: 130px; flex: none; font-size: 12px; }
+.chip.toggle.danger.on { color: var(--danger, #ff7a8f); border-color: var(--danger, #ff7a8f); background: none; }
 .chip.toggle { background: none; cursor: pointer; font: 600 11px var(--body); }
 .chip.toggle.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); background: var(--accent-soft); }
 
