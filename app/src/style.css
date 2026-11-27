@@ -433,3 +433,10 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .og-role { display: flex; gap: 4px; min-height: 18px; }
 .og-handle { position: absolute; right: -7px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface-2); cursor: crosshair; }
 .og-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; pointer-events: none; }
+
+/* Network rules (#81) */
+.network .net-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.network .net-list textarea { width: 100%; font-size: 12px; }
+.network .row input[type=text] { flex: 1; }
+.network .chip.warn { color: var(--amber); }
+.network .ok { color: var(--accent); }

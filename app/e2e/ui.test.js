@@ -116,6 +116,22 @@ ui("settings open and close", async () => {
   assert.equal(await page.$("dialog.modal[open]"), null);
 });
 
+ui("the Network settings tab shows the built-in agent list and adds a list (#81)", async () => {
+  await open();
+  await page.click("#settings");
+  await page.waitForSelector("dialog.modal[open]");
+  await clickText(".settings-tabs button", "Network");
+  await page.waitForSelector(".network .net-list");
+  const body = await text(".settings-body");
+  assert.match(body, /Network security layer/);
+  assert.match(body, /built-in/);
+  assert.equal(await page.$eval(".network input[type=checkbox]", (b) => b.checked), false, "off by default");
+  const before = (await page.$$(".network .net-list")).length;
+  await clickText(".network button", "+ Deny list");
+  await page.waitForFunction((n) => document.querySelectorAll(".network .net-list").length === n + 1, {}, before);
+  await page.click("dialog.modal[open] .modal-head .icon");
+});
+
 ui("resuming terminals opens agent panes with icon, title and a detected checklist", async () => {
   await open("#/garden/payments-platform");
   await page.waitForSelector(".resume-bar");

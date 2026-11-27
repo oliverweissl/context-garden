@@ -2,6 +2,7 @@ import { h, modal, toast, errText } from "../ui.js";
 import { api } from "../api.js";
 import { accountsPanel } from "./accounts.js";
 import { checklistSettings } from "../terminals.js";
+import { networkPanel } from "./network.js";
 
 /** App-wide terminal settings. */
 async function terminalsPanel() {
@@ -36,7 +37,7 @@ export function openSettings(start) {
     const el = h("div");
     cleanup = await accountsPanel(el);
     return el;
-  } }, { name: "Terminals", build: terminalsPanel }];
+  } }, { name: "Terminals", build: terminalsPanel }, { name: "Network", build: networkPanel }];
   const bar = h("div", { class: "seg settings-tabs" });
   const m = modal("Settings", h("div", {}, bar, body), { wide: true, onClose: () => cleanup?.() });
   const show = async (tab) => {
