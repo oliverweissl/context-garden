@@ -109,6 +109,8 @@ export const api = {
   netDeleteList: (id) => invoke("net_delete_list", { id }),
   netResetBuiltin: () => invoke("net_reset_builtin"),
   netAddEntry: (id, entry) => invoke("net_add_entry", { id, entry }),
+  /** Answer a `net-prompt`: choice accept_once | accept_add | decline_once | decline_add (+ list id and entry for _add). */
+  netAnswer: (id, choice, list, entry) => invoke("net_prompt_answer", { id, choice, list: list || null, entry: entry || null }),
   netSetGardenLists: (garden, ids) => invoke("net_set_garden_lists", { garden, ids }),
   /** { decision: "allow" | "deny", list } or { decision: "ask" } for one host or IP in a garden. */
   netCheck: (garden, host) => invoke("net_check", { garden, host }),

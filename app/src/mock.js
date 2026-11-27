@@ -137,11 +137,14 @@ const handlers = {
   net_reset_builtin: () => mockNet,
   net_set_garden_lists: ({ garden, ids }) => ((mockNet = { ...mockNet, gardens: { ...mockNet.gardens, [garden]: ids } }), mockNet),
   net_check: () => ({ decision: "ask" }),
+  net_prompt_answer: ({ id, choice }) => (setTimeout(() => emit("net-prompt-done", { id, allowed: choice.startsWith("accept") }), 0), mockNet),
   set_settings: () => null,
 };
 
 const listeners = new Map();
 const emit = (name, payload) => (listeners.get(name) || []).forEach((cb) => cb({ payload }));
+// Lets the UI suite fire backend events (e.g. the network prompt).
+if (typeof window !== "undefined") window.cgMockEmit = emit;
 
 export async function mockListen(name, cb) {
   listeners.set(name, [...(listeners.get(name) || []), cb]);

@@ -48,9 +48,10 @@ export async function networkPanel() {
     root.replaceChildren(
       h("label", { class: "check" }, box, "Network security layer"),
       h("p", { class: "faint small" },
-        "Off by default. When on, agent terminals will only reach the network through the app, which applies the open "
-        + "garden's lists and asks about anything they do not cover. Not enforced yet: the sandbox and the prompt "
-        + "come in the next steps; for now the lists are stored and can be tested per garden (garden settings → Network)."),
+        "Off by default. When on, agent terminals started or resumed afterwards reach the network through the app's "
+        + "proxy, which applies the open garden's lists and asks about anything they do not cover (declined after 60 s "
+        + "without an answer). Not enforced yet: until the sandbox step, a program that ignores the proxy settings "
+        + "(HTTPS_PROXY and friends) is not stopped."),
       h("p", { class: "muted small" }, HELP),
       ...cfg.lists.map(listCard),
       h("div", { class: "row" },
